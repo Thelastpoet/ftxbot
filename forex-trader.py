@@ -384,6 +384,41 @@ class TradeManager:
             max_spread = 30  # 3 pips for other pairs
             
         return spread_points <= max_spread
+    
+    def estimate_stop_distance(self, symbol, trade_direction, ltf_break_level, current_price):
+        """
+        Estimate stop distance BEFORE full trade calculation
+        This lets us check if there's enough room for 1.5:1 RR
+        """
+        pip_size = self.market_data.get_pip_size()
+        symbol_info = mt5.symbol_info(symbol)
+        spread = symbol_info.spread * symbol_info.point
+        
+        # Same logic as calculate_sl_tp but simplified
+        if 'JPY' in symbol:
+            base_noise_buffer = 15 * pip_size
+        elif any(curr in symbol for curr in ['GBP', 'AUD']):
+            base_noise_buffer = 12 * pip_size
+        else:
+            base_noise_buffer = 10 * pip_size
+        
+        # For estimation, use normal session buffer
+        noise_buffer = base_noise_buffer
+        
+        if trade_direction == 'buy':
+            # Stop would be below break level
+            estimated_stop = ltf_break_level - noise_buffer - spread
+            estimated_stop_distance = current_price - estimated_stop
+        else:  # sell
+            # Stop would be above break level
+            estimated_stop = ltf_break_level + noise_buffer + spread
+            estimated_stop_distance = estimated_stop - current_price
+        
+        # Ensure minimum 20 pips (broker minimum)
+        min_stop = 20 * pip_size
+        estimated_stop_distance = max(estimated_stop_distance, min_stop)
+        
+        return estimated_stop_distance / pip_size  # Return in pips
 
     def check_for_signals(self, symbol):
         """Main signal checking method with synchronized data fetching"""
@@ -439,6 +474,58 @@ class TradeManager:
                 return False, f"[{symbol}] No break of structure on LTF", None
 
             logging.info(f"[{symbol}] LTF {ltf_analysis['entry_type']} confirmed!")
+            
+            # ========== NEW VALIDATION SECTION ==========
+            # 4. CHECK IF THERE'S ROOM FOR PROFIT
+            current_price = data[self.tf_lower]['close'].iloc[-1]
+            pip_size = self.market_data.get_pip_size()
+            
+            # Estimate what our stop distance would be
+            estimated_stop_pips = self.estimate_stop_distance(
+                symbol,
+                trade_direction,
+                ltf_analysis.get('break_level'),
+                current_price
+            )
+            
+            logging.info(f"[{symbol}] Estimated stop: {estimated_stop_pips:.1f} pips")
+            
+            # Simple check: Is there enough room to the next major level?
+            if trade_direction == 'buy':
+                # Check distance to H1 resistance
+                h1_resistance = htf_analysis.get('last_swing_high')
+                if h1_resistance:
+                    room_to_target = h1_resistance - current_price
+                    room_in_pips = room_to_target / pip_size
+                    
+                    # Need at least 1.5x stop distance for good RR
+                    min_room_required = estimated_stop_pips * 1.5
+                    
+                    if room_in_pips < min_room_required:
+                        actual_rr = room_in_pips / estimated_stop_pips
+                        logging.warning(f"[{symbol}] Poor RR - Room: {room_in_pips:.1f} pips, "
+                                    f"Need: {min_room_required:.1f} pips, "
+                                    f"Potential RR: 1:{actual_rr:.1f}")
+                        return False, f"[{symbol}] Insufficient RR (1:{actual_rr:.1f})", None
+                                                
+            else:  # sell
+                # Check distance to H1 support
+                h1_support = htf_analysis.get('last_swing_low')
+                if h1_support:
+                    room_to_target = current_price - h1_support
+                    room_in_pips = room_to_target / pip_size
+                    
+                    min_room_required = estimated_stop_pips * 1.5
+            
+                    if room_in_pips < min_room_required:
+                        actual_rr = room_in_pips / estimated_stop_pips
+                        logging.warning(f"[{symbol}] Poor RR - Room: {room_in_pips:.1f} pips, "
+                                    f"Need: {min_room_required:.1f} pips, "
+                                    f"Potential RR: 1:{actual_rr:.1f}")
+                        return False, f"[{symbol}] Insufficient RR (1:{actual_rr:.1f})", None
+                                    
+            logging.info(f"[{symbol}] Room check passed - Potential RR: 1:{(room_in_pips/estimated_stop_pips):.1f}")
+            # ========== END OF NEW SECTION ==========
 
             # All conditions met - prepare trade
             account_info = self.client.get_account_info()
@@ -748,104 +835,89 @@ class OrderManager:
         
     def calculate_lot_size(self, symbol, account_info, stop_loss_pips, risk_percent=0.01):
         """
-        Professional lot size calculation with real risk management
+        Professional lot size calculation that actually works in live trading
         
         Args:
             symbol: Trading symbol
             account_info: MT5 account info
             stop_loss_pips: Stop loss distance in pips
-            risk_percent: Base risk percentage (will be adjusted)
+            risk_percent: Base risk percentage (default 1%)
         """
         # Get symbol specifics
         symbol_data = self.get_symbol_info(symbol)
         symbol_info = symbol_data['info']
         pip_value_per_lot = symbol_data['pip_value_per_lot']
         
-        # 1. ACCOUNT STATE ADJUSTMENT
+        # CRITICAL: Use equity, not balance
+        # If you're in drawdown, equity < balance, so you risk less
+        # If you're in profit, equity > balance, compound naturally
         equity = account_info.equity
-        balance = account_info.balance
         
-        # Calculate current drawdown
-        drawdown_percent = ((balance - equity) / balance) * 100 if balance > 0 else 0
+        # Start with base risk - no arbitrary adjustments without data
+        adjusted_risk = risk_percent
         
-        # Adjust risk based on account state
-        if drawdown_percent > 10:
-            # In significant drawdown - reduce risk
-            risk_multiplier = 0.5
-            logging.info(f"[{symbol}] Drawdown {drawdown_percent:.1f}% - Reducing risk")
-        elif equity > balance * 1.1:
-            # Up over 10% - can be slightly more aggressive
-            risk_multiplier = 1.2
-        else:
-            # Normal state
-            risk_multiplier = 1.0
+        # TODO: After collecting performance data, implement adjustments based on:
+        # - Actual stop-out rates per pair
+        # - Win rate at different stop distances  
+        # - Real volatility measurements during your trading hours
+        # For now, we trade all pairs with same risk % and let results guide us
         
-        # 2. CORRELATION ADJUSTMENT
-        correlation_factor = self.check_correlation_exposure(symbol)
-        risk_percent = risk_percent * risk_multiplier * correlation_factor
+        # Stop loss reality check - based on market mechanics, not arbitrary numbers
+        # With structure-based stops + noise buffer:
+        # - Stops < 20 pips: Broker minimum or forced entry, higher chance of noise stop-out
+        # - Stops 20-40 pips: Normal, healthy distance for day trading
+        # - Stops > 40 pips: Either high volatility period or poor entry timing
         
-        # 3. PAIR VOLATILITY ADJUSTMENT
-        if 'JPY' in symbol or 'GBP' in symbol:
-            # High volatility pairs - reduce position size
-            risk_percent *= 0.8
-        elif symbol in ['EURUSD', 'USDCHF']:
-            # Low volatility, high liquidity - can use full size
-            risk_percent *= 1.0
-        else:
-            # Medium volatility pairs
-            risk_percent *= 0.9
+        if stop_loss_pips < 20:
+            # Tight stop = higher probability of random stop-out
+            # Reduce risk to compensate for lower win rate
+            adjusted_risk *= 0.8
+            logging.info(f"[{symbol}] Tight stop {stop_loss_pips:.1f} pips - reducing size by 20%")
+        elif stop_loss_pips > 40:
+            # Wide stop = either poor entry or extreme volatility
+            # Both cases warrant risk reduction
+            adjusted_risk *= 0.7
+            logging.info(f"[{symbol}] Wide stop {stop_loss_pips:.1f} pips - reducing size by 30%")
+            
+            if stop_loss_pips > 60:
+                # Very wide stop = something's wrong with this setup
+                adjusted_risk *= 0.5  # Total 35% of original risk
+                logging.info(f"[{symbol}] Very wide stop {stop_loss_pips:.1f} pips - using minimal size")
         
-        # 4. SESSION-BASED ADJUSTMENT
-        current_hour = self.get_trading_hour()
-        if 20 <= current_hour or current_hour < 7:
-            # Asian session - reduce size (tighter stops might get hit)
-            risk_percent *= 0.8
-        elif 7 <= current_hour < 9 or 13 <= current_hour < 15:
-            # Major market opens - reduce size (volatility spikes)
-            risk_percent *= 0.9
+        # Calculate risk amount
+        risk_amount = equity * adjusted_risk
         
-        # 5. STOP LOSS QUALITY ADJUSTMENT
-        if stop_loss_pips > 30:
-            # Wide stop = poor entry, reduce size
-            risk_percent *= 0.7
-            logging.info(f"[{symbol}] Wide stop {stop_loss_pips:.1f} pips - Reducing size")
-        elif stop_loss_pips < 15:
-            # Very tight stop = higher chance of stopping out
-            risk_percent *= 0.8
-            logging.info(f"[{symbol}] Tight stop {stop_loss_pips:.1f} pips - Reducing size")
-        
-        # 6. MAXIMUM RISK CAPS
-        # Never risk more than 2% adjusted (even on best setups)
-        risk_percent = min(risk_percent, 0.02)
-        
-        # During news or high-impact events (you'd need a news calendar)
-        if self.is_high_impact_news_soon():
-            risk_percent = min(risk_percent, 0.005)  # Max 0.5% during news
-        
-        # 7. CALCULATE BASE LOT SIZE
-        risk_amount = equity * risk_percent  # Use equity, not balance
+        # Basic lot calculation
         lot_size = risk_amount / (stop_loss_pips * pip_value_per_lot)
         
-        # 8. LEVERAGE AND MARGIN CHECK
-        # Check if we're over-leveraging
-        position_value = lot_size * symbol_info.trade_contract_size
-        leverage_used = position_value / equity
-        
-        max_leverage = 30  # Professional day traders rarely exceed 30:1
-        if leverage_used > max_leverage:
-            # Reduce to maximum acceptable leverage
-            lot_size = (equity * max_leverage) / symbol_info.trade_contract_size
-            logging.warning(f"[{symbol}] Leverage cap applied: {leverage_used:.1f}x -> {max_leverage}x")
-        
-        # 9. BROKER CONSTRAINTS
-        # Round to lot step
+        # Round to broker's lot step
         lot_step = symbol_info.volume_step
         lot_size = math.floor(lot_size / lot_step) * lot_step
         
-        # Apply min/max
+        # Apply broker constraints
         lot_size = max(symbol_info.volume_min, min(lot_size, symbol_info.volume_max))
         
-        # 10. MARGIN REQUIREMENT CHECK
+        # CRITICAL: Leverage check - prevent catastrophic over-leveraging
+        # Professional day traders think in terms of total exposure
+        # With proper stops, 30:1 on a single position is acceptable
+        # But this assumes you're not maxing out on every trade
+        position_value = lot_size * symbol_info.trade_contract_size
+        leverage_used = position_value / equity
+        
+        # Maximum acceptable leverage per position
+        # This isn't arbitrary - it's based on surviving a 3-4 trade losing streak
+        max_leverage_per_position = 30
+        
+        if leverage_used > max_leverage_per_position:
+            # Scale down to maximum acceptable leverage
+            lot_size = (equity * max_leverage_per_position) / symbol_info.trade_contract_size
+            lot_size = math.floor(lot_size / lot_step) * lot_step
+            lot_size = max(symbol_info.volume_min, lot_size)
+            
+            new_leverage = (lot_size * symbol_info.trade_contract_size) / equity
+            logging.warning(f"[{symbol}] Leverage cap: {leverage_used:.1f}x -> {new_leverage:.1f}x")
+        
+        # Margin requirement check - ensure we have enough free margin
         margin_required = mt5.order_calc_margin(
             mt5.ORDER_TYPE_BUY,
             symbol,
@@ -853,107 +925,39 @@ class OrderManager:
             symbol_data['tick'].ask
         )
         
-        if margin_required and margin_required > equity * 0.5:
-            # Never use more than 50% of equity for margin
-            lot_size *= (equity * 0.5) / margin_required
+        if margin_required:
+            free_margin = account_info.margin_free
+            # Never use more than 40% of free margin for a single position
+            if margin_required > free_margin * 0.4:
+                lot_size = (free_margin * 0.4 / margin_required) * lot_size
+                lot_size = math.floor(lot_size / lot_step) * lot_step
+                lot_size = max(symbol_info.volume_min, lot_size)
+                logging.warning(f"[{symbol}] Margin constraint applied")
+        
+        # Final sanity check - ensure actual risk doesn't exceed 2%
+        actual_risk_amount = lot_size * stop_loss_pips * pip_value_per_lot
+        actual_risk_percent = (actual_risk_amount / equity) * 100
+        
+        if actual_risk_percent > 2.0:
+            # Hard cap at 2% regardless of calculations
+            lot_size = (equity * 0.02) / (stop_loss_pips * pip_value_per_lot)
             lot_size = math.floor(lot_size / lot_step) * lot_step
-            logging.warning(f"[{symbol}] Margin constraint applied")
+            lot_size = max(symbol_info.volume_min, lot_size)
+            logging.warning(f"[{symbol}] Risk cap applied: {actual_risk_percent:.1f}% -> 2.0%")
         
-        # 11. FINAL SAFETY CHECK
-        # Ensure the calculated risk doesn't exceed our maximum
-        actual_risk = lot_size * stop_loss_pips * pip_value_per_lot
-        actual_risk_percent = actual_risk / equity
+        # Recalculate final metrics for logging
+        final_risk_amount = lot_size * stop_loss_pips * pip_value_per_lot
+        final_risk_percent = (final_risk_amount / equity) * 100
+        final_leverage = (lot_size * symbol_info.trade_contract_size) / equity
         
-        if actual_risk_percent > 0.02:  # Hard cap at 2%
-            lot_size *= 0.02 / actual_risk_percent
-            lot_size = math.floor(lot_size / lot_step) * lot_step
-        
-        # Log the decision
-        logging.info(f"[{symbol}] Lot calculation:")
-        logging.info(f"  - Base risk: {risk_percent*100:.2f}%")
-        logging.info(f"  - Risk amount: ${risk_amount:.2f}")
-        logging.info(f"  - Final lots: {lot_size:.2f}")
-        logging.info(f"  - Actual risk: {actual_risk_percent*100:.2f}%")
+        logging.info(f"[{symbol}] Position sizing:")
+        logging.info(f"  - Equity: ${equity:.2f}")
+        logging.info(f"  - Stop: {stop_loss_pips:.1f} pips")
+        logging.info(f"  - Risk: {final_risk_percent:.2f}% (${final_risk_amount:.2f})")
+        logging.info(f"  - Lots: {lot_size:.2f}")
+        logging.info(f"  - Leverage: {final_leverage:.1f}x")
         
         return lot_size
-
-    def check_correlation_exposure(self, symbol):
-        """
-        Check existing positions for correlation risk
-        Returns a factor to reduce position size if correlated pairs exist
-        """
-        positions = mt5.positions_get()
-        if not positions:
-            return 1.0
-        
-        # Define correlation groups
-        correlation_groups = {
-            'USD_LONG': ['EURUSD', 'GBPUSD', 'AUDUSD', 'NZDUSD'],  # Sell these = USD long
-            'USD_SHORT': ['USDCAD', 'USDCHF', 'USDJPY'],  # Buy these = USD long
-            'EUR_CROSS': ['EURUSD', 'EURGBP', 'EURJPY', 'EURAUD'],
-            'GBP_CROSS': ['GBPUSD', 'GBPJPY', 'EURGBP', 'GBPAUD'],
-            'JPY_CROSS': ['USDJPY', 'EURJPY', 'GBPJPY', 'AUDJPY'],
-            'COMMODITY': ['AUDUSD', 'NZDUSD', 'USDCAD', 'AUDCAD']
-        }
-        
-        # Check which groups the new symbol belongs to
-        symbol_groups = []
-        for group, symbols in correlation_groups.items():
-            if symbol in symbols:
-                symbol_groups.append(group)
-        
-        # Count existing positions in same groups
-        correlated_positions = 0
-        for pos in positions:
-            if pos.symbol == symbol:
-                continue  # Don't count positions in same symbol
-                
-            for group, symbols in correlation_groups.items():
-                if group in symbol_groups and pos.symbol in symbols:
-                    correlated_positions += 1
-                    break
-        
-        # Reduce size based on correlation exposure
-        if correlated_positions == 0:
-            return 1.0
-        elif correlated_positions == 1:
-            return 0.7  # 30% reduction for one correlated pair
-        elif correlated_positions == 2:
-            return 0.5  # 50% reduction for two correlated pairs
-        else:
-            return 0.3  # 70% reduction for three or more
-        
-    def get_trading_hour(self):
-        """Get current trading hour in GMT"""
-        from datetime import datetime
-        import pytz
-        
-        # Convert server time to GMT (adjust based on your server)
-        gmt = pytz.timezone('GMT')
-        current_time = datetime.now(gmt)
-        return current_time.hour
-
-    def is_high_impact_news_soon(self):
-        """
-        Check if high-impact news is coming in next 30 minutes
-        In production, this would connect to a news calendar API
-        """
-        # Simplified version - you'd integrate with ForexFactory or similar
-        current_hour = self.get_trading_hour()
-        
-        # Common high-impact news times (GMT)
-        news_times = [
-            8,   # European data
-            9,   # More European data  
-            13,  # US data
-            14,  # More US data
-            18   # FOMC minutes (Wednesdays)
-        ]
-        
-        if current_hour in news_times or (current_hour + 1) in news_times:
-            return True
-        
-        return False
         
     def place_order(self, symbol, lots_size, order_type, stop_loss, take_profit):
         """Place market order with proper error handling"""
