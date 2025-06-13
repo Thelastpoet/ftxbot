@@ -182,95 +182,101 @@ class TradeManager:
         try:
             df = data.copy()
             
-            if len(df) < 50:  # Need sufficient data for analysis
+            if len(df) < 100:
                 return {'valid_setup': False, 'fib_level': None}
             
             trend = htf_context['trend']
             if trend == 'unclear':
                 return {'valid_setup': False, 'fib_level': None}
             
-            # Find recent swing points for Fibonacci calculation
-            swing_highs, swing_lows = self.find_swing_points(df, window=5)  # Smaller window for M15
-            
-            if len(swing_highs) == 0 or len(swing_lows) == 0:
-                return {'valid_setup': False, 'fib_level': None}
-            
             current_price = df['close'].iloc[-1]
             spread = self.get_current_spread()
+            pip_size = self.market_data.get_pip_size()
+            
+            # Use talib ATR for consistency with the rest of your code
+            atr_values = ATR(df['high'].values, df['low'].values, df['close'].values, timeperiod=14)
+            current_atr = atr_values[-1]
             
             if trend == 'uptrend':
-                # Find the most recent significant swing high and low
-                if len(swing_highs) == 0:
-                    return {'valid_setup': False, 'fib_level': None}
-                    
-                recent_high = swing_highs.iloc[-1]['price']
-                recent_high_index = swing_highs.iloc[-1]['index']
+                # FIXED: Find the most recent high first
+                lookback_start = max(0, len(df) - 50)
+                recent_data = df.iloc[lookback_start:]
                 
-                # Find the low before this high
-                low_before_high = swing_lows[swing_lows['index'] < recent_high_index]
+                # Find the highest high in recent data
+                trend_end_idx = recent_data['high'].idxmax()
+                trend_end_price = recent_data.loc[trend_end_idx, 'high']
                 
-                if len(low_before_high) == 0:
+                # Find the lowest low BEFORE that high
+                data_before_high = df.loc[:trend_end_idx]
+                search_start = max(0, len(data_before_high) - 50)
+                
+                trend_start_idx = data_before_high.iloc[search_start:]['low'].idxmin()
+                trend_start_price = data_before_high.loc[trend_start_idx, 'low']
+                
+                # Ensure we have a meaningful trend move (use ATR instead of fixed pips)
+                swing_range = trend_end_price - trend_start_price
+                if swing_range < current_atr:  # Must be at least 1 ATR
                     return {'valid_setup': False, 'fib_level': None}
-                    
-                recent_low = low_before_high.iloc[-1]['price']
-                swing_range = recent_high - recent_low
                 
                 # Calculate Fibonacci levels
                 fib_levels = {
-                    '0.382': recent_high - (swing_range * 0.382),
-                    '0.500': recent_high - (swing_range * 0.500),
-                    '0.618': recent_high - (swing_range * 0.618)
+                    '0.382': trend_end_price - (swing_range * 0.382),
+                    '0.500': trend_end_price - (swing_range * 0.500),
+                    '0.618': trend_end_price - (swing_range * 0.618)
                 }
                 
-                # Check if we're at a Fibonacci level with dynamic tolerance
-                pip_size = self.market_data.get_pip_size()
-                tolerance = max(5 * pip_size, swing_range * 0.02)  # 5 pips or 2% of range
+                # Tighter tolerance
+                tolerance = max(3 * pip_size, swing_range * 0.01)  # Reduced from 5 pips/2%
                 
                 for level_name, level_price in fib_levels.items():
                     if abs(current_price - level_price) <= tolerance + spread:
-                        # Additional confirmation: price should be pulling back from recent high
-                        bars_since_high = len(df) - swing_highs.iloc[-1]['index']
-                        if 3 <= bars_since_high <= 20:  # Reasonable pullback duration
+                        bars_since_high = len(df) - df.index.get_loc(trend_end_idx)
+                        if bars_since_high >= 5:
                             return {
                                 'valid_setup': True, 
                                 'fib_level': level_name,
-                                'entry_zone': (level_price - tolerance, level_price + tolerance)
+                                'entry_zone': (level_price - tolerance, level_price + tolerance),
+                                'trend_start': trend_start_price,
+                                'trend_end': trend_end_price
                             }
                             
-            elif trend == 'downtrend':
-                if len(swing_lows) == 0:
+            else:  # downtrend
+                # Find the most recent low first
+                lookback_start = max(0, len(df) - 50)
+                recent_data = df.iloc[lookback_start:]
+                
+                trend_end_idx = recent_data['low'].idxmin()
+                trend_end_price = recent_data.loc[trend_end_idx, 'low']
+                
+                # Find the highest high BEFORE that low
+                data_before_low = df.loc[:trend_end_idx]
+                search_start = max(0, len(data_before_low) - 50)
+                
+                trend_start_idx = data_before_low.iloc[search_start:]['high'].idxmax()
+                trend_start_price = data_before_low.loc[trend_start_idx, 'high']
+                
+                swing_range = trend_start_price - trend_end_price
+                if swing_range < current_atr:
                     return {'valid_setup': False, 'fib_level': None}
-                    
-                recent_low = swing_lows.iloc[-1]['price']
-                recent_low_index = swing_lows.iloc[-1]['index']
                 
-                # Find the high before this low
-                high_before_low = swing_highs[swing_highs['index'] < recent_low_index]
-                
-                if len(high_before_low) == 0:
-                    return {'valid_setup': False, 'fib_level': None}
-                    
-                recent_high = high_before_low.iloc[-1]['price']
-                swing_range = recent_high - recent_low
-                
-                # Calculate Fibonacci levels for downtrend (measured from low)
                 fib_levels = {
-                    '0.382': recent_low + (swing_range * 0.382),
-                    '0.500': recent_low + (swing_range * 0.500),
-                    '0.618': recent_low + (swing_range * 0.618)
+                    '0.382': trend_end_price + (swing_range * 0.382),
+                    '0.500': trend_end_price + (swing_range * 0.500),
+                    '0.618': trend_end_price + (swing_range * 0.618)
                 }
                 
-                pip_size = self.market_data.get_pip_size()
-                tolerance = max(5 * pip_size, swing_range * 0.02)
+                tolerance = max(3 * pip_size, swing_range * 0.01)
                 
                 for level_name, level_price in fib_levels.items():
                     if abs(current_price - level_price) <= tolerance + spread:
-                        bars_since_low = len(df) - swing_lows.iloc[-1]['index']
-                        if 3 <= bars_since_low <= 20:
+                        bars_since_low = len(df) - df.index.get_loc(trend_end_idx)
+                        if bars_since_low >= 5:
                             return {
                                 'valid_setup': True, 
                                 'fib_level': level_name,
-                                'entry_zone': (level_price - tolerance, level_price + tolerance)
+                                'entry_zone': (level_price - tolerance, level_price + tolerance),
+                                'trend_start': trend_start_price,
+                                'trend_end': trend_end_price
                             }
             
             return {'valid_setup': False, 'fib_level': None}
@@ -278,9 +284,11 @@ class TradeManager:
         except Exception as e:
             logging.error(f"Error in analyze_medium_timeframe: {str(e)}")
             return {'valid_setup': False, 'fib_level': None}
-
+    
     def analyze_lower_timeframe(self, data, trade_direction):
-        """Detect Break of Structure (BOS) for precise entries - wait for candle close"""
+        """
+        Detect Break of Structure (BOS) for precise entries - FIXED timing issue
+        """
         try:
             df = data.copy()
             
@@ -288,55 +296,65 @@ class TradeManager:
                 return {'valid_entry': False, 'entry_type': None}
             
             # Find recent swing points on M5
-            swing_highs, swing_lows = self.find_swing_points(df, window=3)  # Tight window for M5
+            swing_highs, swing_lows = self.find_swing_points(df, window=3)
             
             if len(swing_highs) == 0 or len(swing_lows) == 0:
                 return {'valid_entry': False, 'entry_type': None}
             
-            # Look at the last CLOSED candle (not current)
-            last_closed = df.iloc[-2]  # -1 is current, -2 is last closed
+            # Look at the last CLOSED candle only
+            last_closed = df.iloc[-2]
             prev_candle = df.iloc[-3]
             
-            # Add spread consideration
+            # Get current market data
+            symbol_tick = mt5.symbol_info_tick(self.market_data.symbol)
+            if not symbol_tick:
+                logging.error(f"Failed to get tick data for {self.market_data.symbol}")
+                return {'valid_entry': False, 'entry_type': None}
+            
             spread = self.get_current_spread()
+            pip_size = self.market_data.get_pip_size()
             
             if trade_direction == 'buy':
-                # Get the most recent swing high
                 last_swing_high = swing_highs.iloc[-1]['price']
                 
-                # Check if last closed candle broke above swing high BY MORE THAN SPREAD
+                # Check if last closed candle broke above swing high
                 break_occurred = (
                     prev_candle['close'] <= last_swing_high and  
-                    last_closed['close'] > last_swing_high + spread and  # Must break by more than spread
-                    last_closed['close'] > last_closed['open']           # Bullish candle
+                    last_closed['close'] > last_swing_high + spread and
+                    last_closed['close'] > last_closed['open']
                 )
                 
                 if break_occurred:
-                    # Calculate candle strength
                     candle_range = last_closed['high'] - last_closed['low']
                     if candle_range > 0:
                         body_size = abs(last_closed['close'] - last_closed['open'])
                         candle_strength = body_size / candle_range
                         
-                        if candle_strength > 0.6:  # Strong bullish candle
-                            # Verify current price still above break level
-                            current_price = df.iloc[-1]['close']
-                            if current_price > last_swing_high:
+                        if candle_strength > 0.6:
+                            # FIX: Enter at break level + small buffer, not current market price
+                            entry_price = last_swing_high + spread + (2 * pip_size)
+                            
+                            # Only enter if current price hasn't run away
+                            if symbol_tick.ask <= entry_price + (3 * pip_size):
                                 return {
                                     'valid_entry': True, 
                                     'entry_type': 'break_of_resistance',
-                                    'break_level': last_swing_high
+                                    'break_level': last_swing_high,
+                                    'entry_price': min(symbol_tick.ask, entry_price),  # Better of the two
+                                    'candle_close': last_closed['close'],
+                                    'candle_strength': candle_strength,
+                                    'spread_at_signal': spread
                                 }
+                            else:
+                                logging.info(f"Price ran away from break: {symbol_tick.ask:.5f} vs {entry_price:.5f}")
                                 
             else:  # sell
-                # Get the most recent swing low
                 last_swing_low = swing_lows.iloc[-1]['price']
                 
-                # Check if last closed candle broke below swing low BY MORE THAN SPREAD
                 break_occurred = (
                     prev_candle['close'] >= last_swing_low and   
-                    last_closed['close'] < last_swing_low - spread and   # Must break by more than spread
-                    last_closed['close'] < last_closed['open']           # Bearish candle
+                    last_closed['close'] < last_swing_low - spread and
+                    last_closed['close'] < last_closed['open']
                 )
                 
                 if break_occurred:
@@ -345,21 +363,77 @@ class TradeManager:
                         body_size = abs(last_closed['close'] - last_closed['open'])
                         candle_strength = body_size / candle_range
                         
-                        if candle_strength > 0.6:  # Strong bearish candle
-                            # Verify current price still below break level
-                            current_price = df.iloc[-1]['close']
-                            if current_price < last_swing_low:
+                        if candle_strength > 0.6:
+                            # FIX: Enter at break level - small buffer, not current market price
+                            entry_price = last_swing_low - spread - (2 * pip_size)
+                            
+                            # Only enter if current price hasn't run away
+                            if symbol_tick.bid >= entry_price - (3 * pip_size):
                                 return {
                                     'valid_entry': True, 
                                     'entry_type': 'break_of_support',
-                                    'break_level': last_swing_low
+                                    'break_level': last_swing_low,
+                                    'entry_price': max(symbol_tick.bid, entry_price),  # Better of the two
+                                    'candle_close': last_closed['close'],
+                                    'candle_strength': candle_strength,
+                                    'spread_at_signal': spread
                                 }
+                            else:
+                                logging.info(f"Price ran away from break: {symbol_tick.bid:.5f} vs {entry_price:.5f}")
             
             return {'valid_entry': False, 'entry_type': None}
             
         except Exception as e:
             logging.error(f"Error in analyze_lower_timeframe: {str(e)}")
             return {'valid_entry': False, 'entry_type': None}
+    
+    def check_m5_momentum(self, data, trade_direction):
+        """
+        Quick momentum check on M5 - don't need full structure break
+        Just avoid entering on extended moves
+        """
+        df = data.copy()
+        if len(df) < 20:
+            return False
+            
+        # Simple momentum check using recent candles
+        recent_candles = df.tail(5)
+        
+        if trade_direction == 'buy':
+            # Count consecutive bullish candles properly
+            consecutive_bulls = 0
+            max_consecutive = 0
+            
+            for i in range(len(recent_candles)):
+                if recent_candles.iloc[i]['close'] > recent_candles.iloc[i]['open']:
+                    consecutive_bulls += 1
+                    max_consecutive = max(max_consecutive, consecutive_bulls)
+                else:
+                    consecutive_bulls = 0  # Reset on bearish candle
+                    
+            # Also check if we're not too extended from recent low
+            recent_low = df.tail(10)['low'].min()
+            current_price = df.iloc[-1]['close']
+            extension = (current_price - recent_low) / self.market_data.get_pip_size()
+            
+            return max_consecutive < 3 and extension < 30
+            
+        else:  # sell
+            consecutive_bears = 0
+            max_consecutive = 0
+            
+            for i in range(len(recent_candles)):
+                if recent_candles.iloc[i]['close'] < recent_candles.iloc[i]['open']:
+                    consecutive_bears += 1
+                    max_consecutive = max(max_consecutive, consecutive_bears)
+                else:
+                    consecutive_bears = 0  # Reset on bullish candle
+                    
+            recent_high = df.tail(10)['high'].max()
+            current_price = df.iloc[-1]['close']
+            extension = (recent_high - current_price) / self.market_data.get_pip_size()
+            
+            return max_consecutive < 3 and extension < 30
 
     def get_current_spread(self):
         """Get current spread in price units"""
@@ -385,32 +459,22 @@ class TradeManager:
             
         return spread_points <= max_spread
     
-    def estimate_stop_distance(self, symbol, trade_direction, ltf_break_level, current_price):
+    def estimate_stop_distance(self, symbol, trade_direction, ltf_break_level, current_price, atr_value):
         """
         Estimate stop distance BEFORE full trade calculation
-        This lets us check if there's enough room for 1.5:1 RR
+        Must match calculate_sl_tp() logic EXACTLY
         """
         pip_size = self.market_data.get_pip_size()
         symbol_info = mt5.symbol_info(symbol)
         spread = symbol_info.spread * symbol_info.point
         
-        # Same logic as calculate_sl_tp but simplified
-        if 'JPY' in symbol:
-            base_noise_buffer = 15 * pip_size
-        elif any(curr in symbol for curr in ['GBP', 'AUD']):
-            base_noise_buffer = 12 * pip_size
-        else:
-            base_noise_buffer = 10 * pip_size
-        
-        # For estimation, use normal session buffer
-        noise_buffer = base_noise_buffer
+        # EXACT same logic as calculate_sl_tp()
+        noise_buffer = atr_value * 0.2  # 20% of H1 ATR
         
         if trade_direction == 'buy':
-            # Stop would be below break level
             estimated_stop = ltf_break_level - noise_buffer - spread
             estimated_stop_distance = current_price - estimated_stop
         else:  # sell
-            # Stop would be above break level
             estimated_stop = ltf_break_level + noise_buffer + spread
             estimated_stop_distance = estimated_stop - current_price
         
@@ -471,67 +535,30 @@ class TradeManager:
             trade_direction = 'buy' if htf_analysis['trend'] == 'uptrend' else 'sell'
             ltf_analysis = self.analyze_lower_timeframe(data[self.tf_lower], trade_direction)
             if not ltf_analysis['valid_entry']:
-                return False, f"[{symbol}] No break of structure on LTF", None
+                if self.check_m5_momentum(data[self.tf_lower], trade_direction):
+                    # Enter at Fib level with momentum confirmation
+                    # Use appropriate side of the Fib zone
+                    if trade_direction == 'buy':
+                        break_level = mtf_analysis['entry_zone'][0]  # Lower bound for buys
+                    else:
+                        break_level = mtf_analysis['entry_zone'][1]  # Upper bound for sells
+                        
+                    symbol_tick = mt5.symbol_info_tick(symbol)
+                    current_spread = self.get_current_spread()
+                        
+                    ltf_analysis = {
+                        'valid_entry': True,
+                        'entry_type': 'fib_with_momentum',
+                        'break_level': break_level,
+                        'entry_price': symbol_tick.ask if trade_direction == 'buy' else symbol_tick.bid,
+                        'spread_at_signal': current_spread,
+                        'candle_strength': 0.0,  # Not applicable for momentum
+                        'break_distance_pips': 0.0  # Not applicable
+                    }
+                else:
+                    return False, f"[{symbol}] Waiting for better M5 entry", None
 
-            logging.info(f"[{symbol}] LTF {ltf_analysis['entry_type']} confirmed!")
-            
-            # ========== NEW VALIDATION SECTION ==========
-            # 4. CHECK IF THERE'S ROOM FOR PROFIT
-            current_price = data[self.tf_lower]['close'].iloc[-1]
-            pip_size = self.market_data.get_pip_size()
-            
-            # Estimate what our stop distance would be
-            estimated_stop_pips = self.estimate_stop_distance(
-                symbol,
-                trade_direction,
-                ltf_analysis.get('break_level'),
-                current_price
-            )
-            
-            logging.info(f"[{symbol}] Estimated stop: {estimated_stop_pips:.1f} pips")
-            
-            # Simple check: Is there enough room to the next major level?
-            if trade_direction == 'buy':
-                # Check distance to H1 resistance
-                h1_resistance = htf_analysis.get('last_swing_high')
-                if h1_resistance:
-                    room_to_target = h1_resistance - current_price
-                    room_in_pips = room_to_target / pip_size
-                    
-                    # Need at least 1.5x stop distance for good RR
-                    min_room_required = estimated_stop_pips * 1.5
-                    
-                    if room_in_pips < min_room_required:
-                        actual_rr = room_in_pips / estimated_stop_pips
-                        logging.warning(f"[{symbol}] Poor RR - Room: {room_in_pips:.1f} pips, "
-                                    f"Need: {min_room_required:.1f} pips, "
-                                    f"Potential RR: 1:{actual_rr:.1f}")
-                        return False, f"[{symbol}] Insufficient RR (1:{actual_rr:.1f})", None
-                                                
-            else:  # sell
-                # Check distance to H1 support
-                h1_support = htf_analysis.get('last_swing_low')
-                if h1_support:
-                    room_to_target = current_price - h1_support
-                    room_in_pips = room_to_target / pip_size
-                    
-                    min_room_required = estimated_stop_pips * 1.5
-            
-                    if room_in_pips < min_room_required:
-                        actual_rr = room_in_pips / estimated_stop_pips
-                        logging.warning(f"[{symbol}] Poor RR - Room: {room_in_pips:.1f} pips, "
-                                    f"Need: {min_room_required:.1f} pips, "
-                                    f"Potential RR: 1:{actual_rr:.1f}")
-                        return False, f"[{symbol}] Insufficient RR (1:{actual_rr:.1f})", None
-                                    
-            logging.info(f"[{symbol}] Room check passed - Potential RR: 1:{(room_in_pips/estimated_stop_pips):.1f}")
-            # ========== END OF NEW SECTION ==========
-
-            # All conditions met - prepare trade
-            account_info = self.client.get_account_info()
-            if account_info is None:
-                logging.error(f"[{symbol}] Failed to get account info")
-                return False, f"[{symbol}] Could not get account info", None
+            logging.info(f"[{symbol}] Entry signal: {ltf_analysis['entry_type']}")
             
             # Use talib ATR
             high = data[self.tf_higher]['high'].values
@@ -544,14 +571,68 @@ class TradeManager:
             if np.isnan(atr_value) or atr_value <= 0:
                 return False, f"[{symbol}] Invalid ATR calculation", None
             
+            # ========== NEW VALIDATION SECTION ==========
+            # 4. CHECK IF THERE'S ROOM FOR PROFIT
+            current_price = data[self.tf_lower]['close'].iloc[-1]
+            pip_size = self.market_data.get_pip_size()
+            
+            # Estimate what our stop distance would be
+            estimated_stop_pips = self.estimate_stop_distance(
+                symbol,
+                trade_direction,
+                ltf_analysis.get('break_level'),
+                current_price,
+                atr_value
+            )
+            
+            logging.info(f"[{symbol}] Estimated stop: {estimated_stop_pips:.1f} pips")
+            
+            # Simple check: Is there enough room to the next major level?
+            if trade_direction == 'buy':
+                target = mtf_analysis.get('trend_end')
+                room_to_target = target - current_price
+                room_in_pips = room_to_target / pip_size
+                    
+                # Need at least 1.5x stop distance for good RR
+                min_room_required = estimated_stop_pips * 1.5
+                    
+                if room_in_pips < min_room_required:
+                    actual_rr = room_in_pips / estimated_stop_pips
+                    logging.warning(f"[{symbol}] Poor RR - Room: {room_in_pips:.1f} pips, "
+                        f"Need: {min_room_required:.1f} pips, "
+                            f"Potential RR: 1:{actual_rr:.1f}")
+                    return False, f"[{symbol}] Insufficient RR (1:{actual_rr:.1f})", None
+                                                
+            else:  # sell
+                target = mtf_analysis.get('trend_end')
+                room_to_target = current_price - target
+                room_in_pips = room_to_target / pip_size
+                    
+                min_room_required = estimated_stop_pips * 1.5
+            
+                if room_in_pips < min_room_required:
+                    actual_rr = room_in_pips / estimated_stop_pips
+                    logging.warning(f"[{symbol}] Poor RR - Room: {room_in_pips:.1f} pips, "
+                        f"Need: {min_room_required:.1f} pips, "
+                        f"Potential RR: 1:{actual_rr:.1f}")
+                    return False, f"[{symbol}] Insufficient RR (1:{actual_rr:.1f})", None
+                                    
+            logging.info(f"[{symbol}] Room check passed - Potential RR: 1:{(room_in_pips/estimated_stop_pips):.1f}")
+            # ========== END OF NEW SECTION ==========
+
+            # All conditions met - prepare trade
+            account_info = self.client.get_account_info()
+            if account_info is None:
+                logging.error(f"[{symbol}] Failed to get account info")
+                return False, f"[{symbol}] Could not get account info", None
+                        
             entry_analysis = {
                 'ltf_break_level': ltf_analysis.get('break_level'),
-                'mtf_fib_zone': mtf_analysis.get('entry_zone'),  # (lower, upper) from Fib analysis
+                'mtf_fib_zone': mtf_analysis.get('entry_zone'),
                 'htf_swings': {
                     'last_swing_high': htf_analysis.get('last_swing_high'),
                     'last_swing_low': htf_analysis.get('last_swing_low')
                 },
-                'current_session': self.order_manager.get_current_session()
             }
             
             # Calculate trade parameters
@@ -640,198 +721,106 @@ class OrderManager:
             'pip_size': pip_size,
             'pip_value_per_lot': pip_value_per_lot
         }
-        
-    def calculate_sl_tp(self, symbol, order_type, atr_value, sl_multiplier=2.1, tp_multiplier=3.0):
-        """Calculate SL and TP with proper R:R ratio"""
-        symbol_data = self.get_symbol_info(symbol)
-        symbol_tick = symbol_data['tick']
-        pip_size = symbol_data['pip_size']
-        
-        # Get current price and spread
-        if order_type == 'buy':
-            current_price = symbol_tick.ask
-            stop_distance = atr_value * sl_multiplier
-            profit_distance = atr_value * tp_multiplier
             
-            stop_loss = current_price - stop_distance
-            take_profit = current_price + profit_distance
-        else:  # sell
-            current_price = symbol_tick.bid
-            stop_distance = atr_value * sl_multiplier
-            profit_distance = atr_value * tp_multiplier
-            
-            stop_loss = current_price + stop_distance
-            take_profit = current_price - profit_distance
-            
-        # Calculate stop loss in pips
-        stop_loss_pips = stop_distance / pip_size
-                    
-        return stop_loss, take_profit, stop_loss_pips
-    
     def calculate_sl_tp(self, symbol, order_type, atr_value, entry_analysis):
         """
-        Professional SL/TP calculation based on market structure and reality
-        
-        Args:
-            symbol: Trading symbol
-            order_type: 'buy' or 'sell' 
-            atr_value: Current ATR value from H1
-            entry_analysis: Dict containing structure levels from entry analysis
-                - ltf_break_level: The M5 break point that triggered entry
-                - mtf_fib_zone: The M15 Fibonacci zone we entered from
-                - htf_swings: Recent H1 swing highs/lows
-                - current_session: 'asian', 'london', 'newyork'
+        SL/TP calculation based on structure
         """
         symbol_data = self.get_symbol_info(symbol)
         symbol_tick = symbol_data['tick']
         symbol_info = symbol_data['info']
         pip_size = symbol_data['pip_size']
-        
-        # Get current spread in price units
-        spread = symbol_info.spread * symbol_info.point
-        
-        # Determine pair volatility characteristics
-        if 'JPY' in symbol:
-            volatility_multiplier = 1.5  # JPY pairs move more
-            base_noise_buffer = 15 * pip_size
-        elif any(curr in symbol for curr in ['GBP', 'AUD']):
-            volatility_multiplier = 1.3  # Commonwealth pairs are volatile
-            base_noise_buffer = 12 * pip_size
-        else:
-            volatility_multiplier = 1.0  # Majors like EURUSD
-            base_noise_buffer = 10 * pip_size
-        
-        # Adjust noise buffer based on session
-        session = entry_analysis.get('current_session', 'normal')
-        if session == 'london_open':  # 07:00-09:00 GMT
-            noise_buffer = base_noise_buffer * 1.5
-        elif session == 'newyork_open':  # 13:00-15:00 GMT
-            noise_buffer = base_noise_buffer * 1.8
-        elif session == 'asian':
-            noise_buffer = base_noise_buffer * 0.7
-        else:
-            noise_buffer = base_noise_buffer
-        
-        # Get structure levels from entry analysis
+               
+        # Get the M5 break level that triggered our entry
         ltf_break = entry_analysis.get('ltf_break_level')
-        mtf_fib_zone = entry_analysis.get('mtf_fib_zone')  # (lower, upper)
-        htf_swings = entry_analysis.get('htf_swings', {})
+        if not ltf_break:
+            raise ValueError("No break level found in entry analysis")
         
+        # Get current price for calculations
         if order_type == 'buy':
             current_price = symbol_tick.ask
             
-            # STOP LOSS: Structure-based with reality adjustments
-            # Option 1: Below the M5 structure that triggered entry
-            structure_stop = ltf_break - noise_buffer - spread
+            hunt_buffer = 12 * pip_size 
             
-            # Option 2: Below the M15 Fib zone we entered from
-            if mtf_fib_zone:
-                fib_stop = mtf_fib_zone[0] - (5 * pip_size) - spread
-                structure_stop = min(structure_stop, fib_stop)  # Use the higher/safer stop
+            # Find a cluster of lows (liquidity pool)
+            # Then place stop BELOW the entire cluster
+            structure_low = entry_analysis.get('structure_low', ltf_break)
+            dynamic_buffer = atr_value * 0.3 
             
-            # Option 3: ATR-based maximum (disaster prevention)
-            atr_stop = current_price - (atr_value * 0.75 * volatility_multiplier)
+            # Stop goes below the M5 structure we broke
+            stop_loss = structure_low - max(hunt_buffer, dynamic_buffer)
             
-            # Use the tighter stop (closer to entry) but not too tight
-            stop_loss = max(structure_stop, atr_stop)
+            remainder = (stop_loss / pip_size) % 10
+            if remainder < 2 or remainder > 8:
+                stop_loss -= 3 * pip_size
+                
+            # Take profit: Use H1 swing high or 2x ATR, whichever is closer
+            htf_resistance = entry_analysis.get('htf_swings', {}).get('last_swing_high')
+            atr_target = current_price + (atr_value * 2.0)
             
-            # Ensure minimum stop distance (broker requirement + sanity)
-            min_stop_distance = max(
-                symbol_info.trade_stops_level * symbol_info.point,  # Broker minimum
-                20 * pip_size  # Our minimum (20 pips)
-            )
-            if current_price - stop_loss < min_stop_distance:
-                stop_loss = current_price - min_stop_distance
-            
-            # TAKE PROFIT: Realistic targets
-            # Primary target: Next M15/H1 resistance
-            if htf_swings.get('last_swing_high'):
-                resistance_target = htf_swings['last_swing_high'] - (3 * pip_size) - spread
+            if htf_resistance and htf_resistance > current_price:
+                # Use the closer target
+                take_profit = min(htf_resistance - (3 * pip_size), atr_target)
             else:
-                # Fallback: Use ATR projection
-                resistance_target = current_price + (atr_value * 1.2 * volatility_multiplier)
-            
-            # Ensure minimum 1.5:1 RR ratio
-            min_profit = (current_price - stop_loss) * 1.5
-            take_profit = max(resistance_target, current_price + min_profit)
-            
-            # But cap at realistic day trading target
-            max_profit = atr_value * 2.0 * volatility_multiplier
-            take_profit = min(take_profit, current_price + max_profit)
-            
-        else:  # SELL
+                take_profit = atr_target
+                
+        else:  # sell
             current_price = symbol_tick.bid
             
-            # STOP LOSS: Structure-based with reality adjustments
-            structure_stop = ltf_break + noise_buffer + spread
+            hunt_buffer = 12 * pip_size
+            structure_high = entry_analysis.get('structure_high', ltf_break)
+            dynamic_buffer = atr_value * 0.3
             
-            if mtf_fib_zone:
-                fib_stop = mtf_fib_zone[1] + (5 * pip_size) + spread
-                structure_stop = max(structure_stop, fib_stop)
+            stop_loss = structure_high + max(hunt_buffer, dynamic_buffer)
+                        
+            # Round to ugly price
+            remainder = (stop_loss / pip_size) % 10
+            if remainder < 2 or remainder > 8:
+                stop_loss += 3 * pip_size
+                
+            # Take profit: Use H1 swing low or 2x ATR, whichever is closer
+            htf_support = entry_analysis.get('htf_swings', {}).get('last_swing_low')
+            atr_target = current_price - (atr_value * 2.0)
             
-            atr_stop = current_price + (atr_value * 0.75 * volatility_multiplier)
-            stop_loss = min(structure_stop, atr_stop)
-            
-            # Ensure minimum stop distance
-            min_stop_distance = max(
-                symbol_info.trade_stops_level * symbol_info.point,
-                20 * pip_size
-            )
-            if stop_loss - current_price < min_stop_distance:
-                stop_loss = current_price + min_stop_distance
-            
-            # TAKE PROFIT: Realistic targets
-            if htf_swings.get('last_swing_low'):
-                support_target = htf_swings['last_swing_low'] + (3 * pip_size) + spread
+            if htf_support and htf_support < current_price:
+                take_profit = max(htf_support + (3 * pip_size), atr_target)
             else:
-                support_target = current_price - (atr_value * 1.2 * volatility_multiplier)
-            
-            # Ensure minimum 1.5:1 RR ratio
-            min_profit = (stop_loss - current_price) * 1.5
-            take_profit = min(support_target, current_price - min_profit)
-            
-            # Cap at realistic target
-            max_profit = atr_value * 2.0 * volatility_multiplier
-            take_profit = max(take_profit, current_price - max_profit)
+                take_profit = atr_target
         
-        # Normalize prices to tick size
+        # Ensure minimum stop distance (broker requirement)
+        min_stop_distance = max(
+            symbol_info.trade_stops_level * symbol_info.point,
+            20 * pip_size
+        )
+        
+        if order_type == 'buy' and current_price - stop_loss < min_stop_distance:   
+            stop_loss = current_price - min_stop_distance
+        elif order_type == 'sell' and stop_loss - current_price < min_stop_distance:
+            stop_loss = current_price + min_stop_distance
+        
+        # Ensure minimum 1.5:1 RR
+        stop_distance = abs(current_price - stop_loss)
+        profit_distance = abs(take_profit - current_price)
+        
+        if profit_distance < stop_distance * 1.5:
+            if order_type == 'buy':
+                take_profit = current_price + (stop_distance * 1.5)
+            else:
+                take_profit = current_price - (stop_distance * 1.5)
+        
+        # Normalize to tick size
         tick_size = symbol_info.trade_tick_size
         stop_loss = round(stop_loss / tick_size) * tick_size
         take_profit = round(take_profit / tick_size) * tick_size
         
-        # Calculate actual risk metrics
-        stop_distance = abs(current_price - stop_loss)
-        profit_distance = abs(take_profit - current_price)
-        actual_rr_ratio = profit_distance / stop_distance if stop_distance > 0 else 0
-        stop_loss_pips = stop_distance / pip_size
+        # Calculate metrics
+        stop_loss_pips = abs(current_price - stop_loss) / pip_size
+        actual_rr = abs(take_profit - current_price) / abs(current_price - stop_loss)
         
-        # Log the decision process
-        logging.info(f"[{symbol}] SL/TP Calculation:")
-        logging.info(f"  - Spread: {spread/pip_size:.1f} pips")
-        logging.info(f"  - Noise buffer: {noise_buffer/pip_size:.1f} pips")
-        logging.info(f"  - Stop: {stop_loss:.5f} ({stop_loss_pips:.1f} pips)")
-        logging.info(f"  - Target: {take_profit:.5f}")
-        logging.info(f"  - Actual RR: 1:{actual_rr_ratio:.1f}")
+        logging.info(f"[{symbol}] SL: {stop_loss:.5f} ({stop_loss_pips:.1f} pips), "
+                    f"TP: {take_profit:.5f}, RR: 1:{actual_rr:.1f}")
         
         return stop_loss, take_profit, stop_loss_pips
-
-    def get_current_session(self):
-        """Determine current trading session for volatility adjustments"""
-        from datetime import datetime
-        
-        current_hour = datetime.now().hour  # This is server time
-        
-        # Adjust these based on your server timezone
-        if 7 <= current_hour < 9:
-            return 'london_open'
-        elif 13 <= current_hour < 15:
-            return 'newyork_open'
-        elif 0 <= current_hour < 7:
-            return 'asian'
-        elif 20 <= current_hour <= 23:
-            return 'sydney'
-        else:
-            return 'normal'
         
     def calculate_lot_size(self, symbol, account_info, stop_loss_pips, risk_percent=0.01):
         """
@@ -1000,14 +989,14 @@ class OrderManager:
         else:
             logging.error(f"Order failed for {symbol}: {result.comment}")
 
-        return result
+        return result  
 
 def main():
     client = MetaTrader5Client()
     if not client.is_initialized():
         logging.error("Failed to connect to MetaTrader 5")
         return
-        
+            
     symbols = DEFAULT_SYMBOLS
     timeframes = DEFAULT_TIMEFRAMES
 

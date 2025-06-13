@@ -1,0 +1,27 @@
+datetime_utc,currency,impact,event_name
+2025-06-11 20:30,USD,High,Core CPI m/m
+2025-06-11 20:30,USD,High,CPI m/m
+2025-06-11 20:30,USD,High,CPI y/y
+2025-06-12 14:00,GBP,High,GDP m/m
+2025-06-12 20:30,USD,High,Core PPI m/m
+2025-06-12 20:30,USD,High,PPI m/m
+2025-06-12 20:30,USD,High,Unemployment Claims
+2025-06-13 12:00,CNY,Medium,New Loans
+2025-06-13 22:00,USD,High,Prelim UoM Consumer Sentiment
+2025-06-13 22:00,USD,High,Prelim UoM Inflation Expectations
+2025-06-16 10:00,CNY,Medium,Industrial Production y/y
+2025-06-16 10:00,CNY,Medium,Retail Sales y/y
+2025-06-16 20:30,USD,Medium,Empire State Manufacturing Index
+2025-06-17 12:00,JPY,High,BOJ Policy Rate
+2025-06-17 12:00,JPY,High,Monetary Policy Statement
+2025-06-17 12:00,JPY,High,BOJ Press Conference
+2025-06-17 17:00,EUR,Medium,German ZEW Economic Sentiment
+2025-06-17 20:30,USD,High,Core Retail Sales m/m
+2025-06-17 20:30,USD,High,Retail Sales m/m
+2025-06-18 14:00,GBP,High,CPI y/y
+2025-06-18 20:30,USD,High,Unemployment Claims
+2025-06-18 23:15,CAD,High,BOC Gov Macklem Speaks
+2025-06-19 02:00,USD,High,Federal Funds Rate
+2025-06-19 02:00,USD,High,FOMC Economic Projections
+2025-06-19 02:00,USD,High,FOMC Statement
+2025-06-19 02:30,USD,High,FOMC Press Conference
