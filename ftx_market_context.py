@@ -195,3 +195,56 @@ class MarketContext:
     def reload_calendar(self):
         """Force reload calendar from file"""
         self.news_events = self._load_news_calendar(self.calendar_file)
+        
+    @staticmethod
+    def get_amd_session(current_time=None):
+        """
+        Get AMD-specific session grouping for Accumulation/Manipulation/Distribution phases.
+        
+        AMD Theory Session Groupings:
+        - ASIAN_SESSION (22:00-09:00 UTC): Sydney + Tokyo = Accumulation phase
+        - LONDON_SESSION (09:00-13:00 UTC): Pure London = Manipulation phase  
+        - NY_SESSION (13:00-22:00 UTC): NY + overlaps = Distribution phase
+        
+        Note: These are broader than the granular market sessions and specifically
+        designed for AMD phase identification.
+        """
+        now = current_time or datetime.now(timezone.utc)
+        hour = now.hour
+        
+        # Asian Session: Sydney open through Tokyo close (11 hours)
+        # Covers 22:00-23:59 and 00:00-08:59
+        if hour >= 22 or hour < 9:
+            return {
+                'name': 'ASIAN_SESSION',
+                'description': 'Accumulation Phase',
+                'start_hour': 22,
+                'end_hour': 9
+            }
+        
+        # London Session: After Tokyo close through London main (4 hours)
+        elif 9 <= hour < 13:
+            return {
+                'name': 'LONDON_SESSION', 
+                'description': 'Manipulation Phase',
+                'start_hour': 9,
+                'end_hour': 13
+            }
+        
+        # NY Session: London/NY overlap through NY close (9 hours)
+        elif 13 <= hour < 22:
+            return {
+                'name': 'NY_SESSION',
+                'description': 'Distribution Phase',
+                'start_hour': 13,
+                'end_hour': 22
+            }
+        
+        # This shouldn't happen with 24-hour coverage, but just in case
+        else:
+            return {
+                'name': 'TRANSITION',
+                'description': 'Market Transition',
+                'start_hour': hour,
+                'end_hour': hour
+            }

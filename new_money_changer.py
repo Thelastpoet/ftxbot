@@ -5,31 +5,48 @@ import MetaTrader5 as mt5
 import pandas as pd
 import numpy as np
 import traceback
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from talib import ATR, EMA, RSI, ADX, PLUS_DI, MINUS_DI
 from collections import deque
 
 from market_regime import MarketRegimeDetector
-from market_context import MarketContext
+from ftx_market_context import MarketContext
 
 # Initialize logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 class AMDAnalyzer:
     
-    def __init__(self, market_data):
+    def __init__(self, market_data, market_context):
         self.market_data = market_data
         self.pip_size = market_data.get_pip_size()
         self.asian_range_cache = {}
+        self.market_context = market_context
         
     def get_session_range(self, df, session_name, current_day):
-        # The session range is relative to the date of the data being analyzed
+        """Calculate high/low range for a given session"""
+        
         if session_name == 'ASIAN_SESSION':
-            start = datetime.combine(current_day, datetime.min.time()).replace(hour=0, tzinfo=timezone.utc)
-            end = datetime.combine(current_day, datetime.min.time()).replace(hour=7, tzinfo=timezone.utc)
-        elif session_name in ['LONDON_OPEN', 'LONDON_MAIN']:
-            start = datetime.combine(current_day, datetime.min.time()).replace(hour=7, tzinfo=timezone.utc)
-            end = datetime.combine(current_day, datetime.min.time()).replace(hour=12, tzinfo=timezone.utc)
+            # Asian session: 22:00 previous day to 09:00 current day
+            # Need to handle the day boundary
+            if current_day == df.index[-1].date():
+                # For today, we might not have complete data
+                start = datetime.combine(current_day - timedelta(days=1), 
+                                    datetime.min.time()).replace(hour=22, tzinfo=timezone.utc)
+            else:
+                # For previous days
+                start = datetime.combine(current_day - timedelta(days=1), 
+                                    datetime.min.time()).replace(hour=22, tzinfo=timezone.utc)
+                end = datetime.combine(current_day, 
+                                datetime.min.time()).replace(hour=9, tzinfo=timezone.utc)
+                                
+        elif session_name in ['LONDON_SESSION']:
+            start = datetime.combine(current_day, datetime.min.time()).replace(hour=9, tzinfo=timezone.utc)
+            end = datetime.combine(current_day, datetime.min.time()).replace(hour=13, tzinfo=timezone.utc)
+            
+        elif session_name in ['NY_SESSION']:
+            start = datetime.combine(current_day, datetime.min.time()).replace(hour=13, tzinfo=timezone.utc)
+            end = datetime.combine(current_day, datetime.min.time()).replace(hour=22, tzinfo=timezone.utc)
         else:
             return None
             
@@ -48,8 +65,13 @@ class AMDAnalyzer:
     def identify_amd_context(self, df, current_time, current_session, market_structure):
         today = current_time.date()
         
+        # Get AMD session grouping
+        amd_session_info = self.market_context.get_amd_session(current_time)
+        amd_session = amd_session_info['name']
+        
+        # Get Asian range
         asian_range = self.asian_range_cache.get(today)
-        if not asian_range and current_time.hour >= 7:
+        if not asian_range and current_time.hour >= 9:  # After Asian session ends
             asian_range = self.get_session_range(df, 'ASIAN_SESSION', today)
             if asian_range:
                 self.asian_range_cache[today] = asian_range
@@ -63,15 +85,21 @@ class AMDAnalyzer:
         
         current_price = df['close'].iloc[-1]
         
-        if current_session['name'] == 'ASIAN_SESSION':
+        # ACCUMULATION PHASE (Asian Session: 22:00-09:00 UTC)
+        if amd_session == 'ASIAN_SESSION':
+            amd_context['phase'] = 'ACCUMULATION'
             if market_structure['regime'] == 'RANGING':
-                amd_context['phase'] = 'ACCUMULATION'
-                amd_context['setup_bias'] = None  # No directional bias in ranging accumulation
+                amd_context['setup_bias'] = None  # No directional bias
+            else:
+                # Even in trending markets, Asian often consolidates
+                amd_context['setup_bias'] = 'avoid_momentum'
                 
-        elif current_session['name'] in ['LONDON_OPEN', 'LONDON_MAIN']:
+        # MANIPULATION PHASE (London Session: 09:00-13:00 UTC)
+        elif amd_session == 'LONDON_SESSION':
             if asian_range:
                 if current_price > asian_range['high'] or current_price < asian_range['low']:
                     recent_bars = df.iloc[-10:]
+                    # Check for false breakout (manipulation)
                     if current_price > asian_range['high'] and any(recent_bars['close'] < asian_range['high']):
                         amd_context['phase'] = 'MANIPULATION_CONFIRMED'
                         amd_context['setup_bias'] = 'sell'
@@ -83,24 +111,23 @@ class AMDAnalyzer:
                 else:
                     amd_context['phase'] = 'AWAITING_MANIPULATION'
                     
-        elif current_session['name'] in ['NY_MAIN', 'LONDON_NY_OVERLAP']:
+        # DISTRIBUTION PHASE (NY Session: 13:00-22:00 UTC)
+        elif amd_session == 'NY_SESSION':
+            amd_context['phase'] = 'DISTRIBUTION'
             if market_structure['regime'] in ['STRONG_TREND', 'NORMAL_TREND']:
-                amd_context['phase'] = 'DISTRIBUTION'
                 # Convert trend direction to buy/sell
                 trend_dir = market_structure['trend']['direction']
-                if trend_dir == 'uptrend':
+                if trend_dir == 'buy':
                     amd_context['setup_bias'] = 'buy'
-                elif trend_dir == 'downtrend':
+                elif trend_dir == 'sell':
                     amd_context['setup_bias'] = 'sell'
                 else:
                     amd_context['setup_bias'] = None
-                    
             elif asian_range:
+                # Check if we've extended beyond Asian range
                 if current_price > asian_range['high'] + (asian_range['range'] * 0.5):
-                    amd_context['phase'] = 'DISTRIBUTION'
-                    amd_context['setup_bias'] = 'buy'  # Changed from 'uptrend'
+                    amd_context['setup_bias'] = 'buy'
                 elif current_price < asian_range['low'] - (asian_range['range'] * 0.5):
-                    amd_context['phase'] = 'DISTRIBUTION'
                     amd_context['setup_bias'] = 'sell'
                     
         return amd_context
@@ -167,7 +194,7 @@ class AdaptiveTradeManager:
         self.regime_detector = MarketRegimeDetector()
         
         # --- NEW: Instantiate AMDAnalyzer once as a component ---
-        self.amd_analyzer = AMDAnalyzer(self.market_data)
+        self.amd_analyzer = AMDAnalyzer(self.market_data, self.market_context)
         
         self.setup_history = deque(maxlen=100)
         self.last_trade_time = {}
@@ -176,7 +203,7 @@ class AdaptiveTradeManager:
         self.tf_medium = sorted(self.timeframes)[1] 
         self.tf_lower = min(self.timeframes)
         
-    # --- REFACTORED: Single, Clear Analysis Pipeline ---
+    # --- Analysis Pipeline ---
     def analyze_market_structure(self, data):
         """
         Comprehensive market structure analysis including AMD context.
@@ -258,10 +285,10 @@ class AdaptiveTradeManager:
             
             # Trend direction
             if price > ema_fast > ema_slow:
-                direction = 'uptrend'
+                direction = 'buy'
                 strength_base = 1.0
             elif price < ema_fast < ema_slow:
-                direction = 'downtrend'
+                direction = 'sell'
                 strength_base = 1.0
             else:
                 direction = 'unclear'
@@ -270,7 +297,7 @@ class AdaptiveTradeManager:
             # Calculate pullback depth if in trend
             if direction != 'unclear':
                 # Find recent extreme
-                if direction == 'uptrend':
+                if direction == 'buy':
                     recent_high = df['high'].iloc[-20:].max()
                     recent_low = df['low'].iloc[-20:].min()
                     pullback_depth = (recent_high - price) / (recent_high - recent_low) if recent_high > recent_low else 0
@@ -284,7 +311,7 @@ class AdaptiveTradeManager:
             # Momentum analysis
             rsi = df['rsi'].iloc[-1]
             rsi_ma = df['rsi'].rolling(10).mean().iloc[-1]
-            momentum_aligned = (direction == 'uptrend' and rsi > 50) or (direction == 'downtrend' and rsi < 50)
+            momentum_aligned = (direction == 'buy' and rsi > 50) or (direction == 'sell' and rsi < 50)
             
             # Final strength calculation
             strength = strength_base
@@ -364,9 +391,19 @@ class AdaptiveTradeManager:
         regime = market_structure['regime']
         params = market_structure['regime_params']
         
+        if regime in ['TREND_EXHAUSTION', 'VOLATILE_EXPANSION']:
+            logging.info(f"Blocking all setups due to {regime} regime")
+            return []  # Return empty list, no setups allowed
+        
+        # NEW: Check if we should avoid certain setups
+        avoid_setups = market_structure.get('avoid_setups', [])
+        
         # Get appropriate entry methods for current regime
         entry_methods = params['entry_methods']
         
+        # Filter out avoided setups
+        entry_methods = [m for m in entry_methods if m not in avoid_setups]
+                
         # 1. Check Fibonacci setups (if applicable)
         if 'fibonacci' in entry_methods:
             fib_setups = self.find_fibonacci_setups(
@@ -400,8 +437,30 @@ class AdaptiveTradeManager:
             )
             setups.extend(range_setups)
             
+        # 5. NEW: Check shallow pullback setups (for strong trends)
+        if 'shallow_pullback' in entry_methods:
+            shallow_setups = self.find_shallow_pullback_setups(
+                timeframe_data,
+                market_structure
+            )
+            setups.extend(shallow_setups)
+        
+        # 6. NEW: Check structure break setups
+        if 'structure_break' in entry_methods:
+            break_setups = self.find_structure_break_setups(
+                timeframe_data,
+                market_structure
+            )
+            setups.extend(break_setups)
+            
         # Score and filter setups
         scored_setups = self.score_setups(setups, market_structure, timeframe_data)
+        
+        # Apply preferred direction filter
+        preferred_dir = market_structure.get('preferred_direction')
+        if preferred_dir:
+            # Filter setups to only preferred direction
+            scored_setups = [s for s in scored_setups if s['direction'] == preferred_dir]
         
         # Return only high-quality setups
         min_score = params['confluence_required']
@@ -412,7 +471,7 @@ class AdaptiveTradeManager:
         setups = []
         trend = market_structure['trend']['direction']
         
-        if trend not in ['uptrend', 'downtrend']:
+        if trend not in ['buy', 'sell']:
             return setups
             
         # Get recent swing points
@@ -421,7 +480,7 @@ class AdaptiveTradeManager:
             return setups
             
         # Determine impulse move
-        if trend == 'uptrend':
+        if trend == 'buy':
             last_high = swing_highs.iloc[-1]
             # Find swing lows that occurred BEFORE this high
             valid_lows = swing_lows[swing_lows.index < swing_highs.index[-1]]
@@ -444,7 +503,7 @@ class AdaptiveTradeManager:
         
         # Check each Fib level
         for ratio in fib_levels:
-            if trend == 'uptrend':
+            if trend == 'buy':
                 fib_price = impulse_end - (swing_range * ratio)
             else:
                 fib_price = impulse_start + (swing_range * ratio)
@@ -461,7 +520,7 @@ class AdaptiveTradeManager:
                         'type': 'fibonacci',
                         'level': f'{int(ratio*100)}%',
                         'zone': zone,
-                        'direction': 'buy' if trend == 'uptrend' else 'sell',
+                        'direction': 'buy' if trend == 'buy' else 'sell',
                         'entry_price': current_price,
                         'rejection_strength': rejection_strength,
                         'base_score': 0.7
@@ -475,7 +534,7 @@ class AdaptiveTradeManager:
         setups = []
         trend = market_structure['trend']['direction']
         
-        if trend not in ['uptrend', 'downtrend'] or market_structure['regime'] != 'STRONG_TREND':
+        if trend not in ['buy', 'sell'] or market_structure['regime'] != 'STRONG_TREND':
             return setups
             
         current_price = df['close'].iloc[-1]
@@ -487,19 +546,18 @@ class AdaptiveTradeManager:
         
         # Check if price is currently touching the dynamic zone
         if zone.contains_price(current_price):
-            # --- NON-REPAINTING MOMENTUM CHECK ---
             # Check the momentum on the two most recent CLOSED candles.
             last_closed_bar = df.iloc[-2]
             prev_closed_bar = df.iloc[-3]
             momentum_confirmed = False
             
-            if trend == 'uptrend':
+            if trend == 'buy':
                 # Bullish momentum: The last two closed candles made a higher low,
                 # and the most recent closed candle was bullish.
                 if (last_closed_bar['low'] > prev_closed_bar['low'] and 
                     last_closed_bar['close'] > last_closed_bar['open']):
                     momentum_confirmed = True
-            else: # downtrend
+            else: # sell
                 # Bearish momentum: The last two closed candles made a lower high,
                 # and the most recent closed candle was bearish.
                 if (last_closed_bar['high'] < prev_closed_bar['high'] and
@@ -510,7 +568,7 @@ class AdaptiveTradeManager:
                 setup = {
                     'type': 'momentum',
                     'zone': zone,
-                    'direction': 'buy' if trend == 'uptrend' else 'sell',
+                    'direction': 'buy' if trend == 'buy' else 'sell',
                     'entry_price': current_price,
                     'base_score': 0.8
                 }
@@ -525,27 +583,27 @@ class AdaptiveTradeManager:
         """
         setups = []
         trend = market_structure['trend']['direction']
-        if trend not in ['uptrend', 'downtrend']:
+        if trend not in ['buy', 'sell']:
             return setups
 
-        current_price = df['close'].iloc[-1]
+        df_copy = df.copy()
+        current_price = df_copy['close'].iloc[-1]
         atr = market_structure['atr']
         ma_periods = [20, 50]  # Check both 20 and 50 MAs
 
         for period in ma_periods:
-            if len(df) < period + 10:  # Ensure enough data for MA and pattern
+            if len(df_copy) < period + 10:  # Ensure enough data for MA and pattern
                 continue
 
             ma_col_name = f'ma_{period}'
-            df[ma_col_name] = df['close'].rolling(window=period).mean()
+            df_copy[ma_col_name] = df_copy['close'].rolling(window=period).mean()
 
-            if pd.isna(df[ma_col_name].iloc[-1]):
+            if pd.isna(df_copy[ma_col_name].iloc[-1]):
                 continue
 
-            # --- REVISED BOUNCE LOGIC ---
             # We look back over the last ~5 bars to find the bounce structure.
             lookback_window = 5
-            recent_bars = df.iloc[-lookback_window:]
+            recent_bars = df_copy.iloc[-lookback_window:]
             ma_on_last_bar = recent_bars[ma_col_name].iloc[-1]
 
             # Find the absolute low/high point of the recent test
@@ -556,16 +614,16 @@ class AdaptiveTradeManager:
             setup_direction = ''
             structural_level_for_sl = None
 
-            # UPTREND: Looking for a bounce off the MA from above
-            if trend == 'uptrend':
+            # buy: Looking for a bounce off the MA from above
+            if trend == 'buy':
                 # 1. Price must have touched or dipped slightly below the MA recently.
                 is_test = any(recent_bars['low'] <= recent_bars[ma_col_name])
                 # 2. The most recent CLOSED candle must show rejection (closed bullishly above the MA).
-                confirmation_candle = df.iloc[-2]
+                confirmation_candle = df_copy.iloc[-2]
                 is_confirmation = (confirmation_candle['close'] > confirmation_candle['open'] and
                                 confirmation_candle['close'] > confirmation_candle[ma_col_name])
                 # 3. The MA itself should be sloping upwards.
-                ma_slope = df[ma_col_name].iloc[-1] - df[ma_col_name].iloc[-lookback_window]
+                ma_slope = df_copy[ma_col_name].iloc[-1] - df_copy[ma_col_name].iloc[-lookback_window]
                 is_ma_sloping_up = ma_slope > 0
 
                 if is_test and is_confirmation and is_ma_sloping_up:
@@ -575,16 +633,16 @@ class AdaptiveTradeManager:
                         setup_direction = 'buy'
                         structural_level_for_sl = test_low_point  # The low of the bounce pattern
 
-            # DOWNTREND: Looking for a bounce off the MA from below
-            elif trend == 'downtrend':
+            # sell: Looking for a bounce off the MA from below
+            elif trend == 'sell':
                 # 1. Price must have touched or spiked slightly above the MA recently.
                 is_test = any(recent_bars['high'] >= recent_bars[ma_col_name])
                 # 2. The most recent CLOSED candle must show rejection (closed bearishly below the MA).
-                confirmation_candle = df.iloc[-2]
+                confirmation_candle = df_copy.iloc[-2]
                 is_confirmation = (confirmation_candle['close'] < confirmation_candle['open'] and
                                 confirmation_candle['close'] < confirmation_candle[ma_col_name])
                 # 3. The MA itself should be sloping downwards.
-                ma_slope = df[ma_col_name].iloc[-1] - df[ma_col_name].iloc[-lookback_window]
+                ma_slope = df_copy[ma_col_name].iloc[-1] - df_copy[ma_col_name].iloc[-lookback_window]
                 is_ma_sloping_down = ma_slope < 0
 
                 if is_test and is_confirmation and is_ma_sloping_down:
@@ -602,7 +660,6 @@ class AdaptiveTradeManager:
                     'zone': zone,
                     'direction': setup_direction,
                     'entry_price': current_price,
-                    # *** CRUCIAL ADDITION: Store the structural level for SL calculation ***
                     'stop_loss_level': structural_level_for_sl,
                     'base_score': 0.75  # Higher base score for this more robust pattern
                 }
@@ -658,6 +715,251 @@ class AdaptiveTradeManager:
                 }
                 setups.append(setup)
                 
+        return setups
+    
+    def find_shallow_pullback_setups(self, df, market_structure):
+        """Find shallow retracements in strong trends (23.6%-38.2%)"""
+        setups = []
+        trend = market_structure['trend']['direction']
+        
+        if trend not in ['buy', 'sell'] or market_structure['regime'] != 'STRONG_TREND':
+            return setups
+        
+        # Find recent trend extreme (last 20 bars)
+        lookback = 20
+        current_price = df['close'].iloc[-1]
+        atr = market_structure['atr']
+        
+        if trend == 'buy':
+            # In uptrend, find recent high and low
+            recent_high_idx = df['high'].iloc[-lookback:].idxmax()
+            recent_high = df['high'].iloc[-lookback:].max()
+            
+            # Find the low BEFORE this high
+            bars_before_high = df[df.index < recent_high_idx].iloc[-lookback:]
+            if len(bars_before_high) == 0:
+                return setups
+                
+            recent_low = bars_before_high['low'].min()
+            trend_range = recent_high - recent_low
+            
+            if trend_range < atr * 2:  # Trend too small
+                return setups
+            
+            # Shallow pullback zones (23.6% and 38.2%)
+            pullback_236 = recent_high - (trend_range * 0.236)
+            pullback_382 = recent_high - (trend_range * 0.382)
+            
+            # Check if we're in shallow pullback zone
+            if pullback_382 <= current_price <= pullback_236:
+                # Look for bullish reversal in last 3 closed bars
+                last_three_closed = df.iloc[-4:-1]
+                
+                # Check for reversal pattern
+                reversal_found = False
+                for i in range(len(last_three_closed)):
+                    bar = last_three_closed.iloc[i]
+                    # Bullish reversal: close > open and low near/below zone
+                    if (bar['close'] > bar['open'] and 
+                        bar['low'] <= pullback_236):
+                        reversal_found = True
+                        break
+                
+                if reversal_found:
+                    # Create zone around the shallow pullback area
+                    zone_center = (pullback_236 + pullback_382) / 2
+                    zone = PriceActionZone(zone_center, atr * 0.1, 'shallow')
+                    
+                    setup = {
+                        'type': 'shallow_pullback',
+                        'pullback_level': '23.6%-38.2%',
+                        'zone': zone,
+                        'direction': 'buy',
+                        'entry_price': current_price,
+                        'trend_high': recent_high,
+                        'trend_low': recent_low,
+                        'base_score': 0.75
+                    }
+                    setups.append(setup)
+                    
+        else:  # trend == 'sell'
+            # In downtrend, find recent low and high
+            recent_low_idx = df['low'].iloc[-lookback:].idxmin()
+            recent_low = df['low'].iloc[-lookback:].min()
+            
+            # Find the high BEFORE this low
+            bars_before_low = df[df.index < recent_low_idx].iloc[-lookback:]
+            if len(bars_before_low) == 0:
+                return setups
+                
+            recent_high = bars_before_low['high'].max()
+            trend_range = recent_high - recent_low
+            
+            if trend_range < atr * 2:  # Trend too small
+                return setups
+            
+            # Shallow pullback zones (23.6% and 38.2%)
+            pullback_236 = recent_low + (trend_range * 0.236)
+            pullback_382 = recent_low + (trend_range * 0.382)
+            
+            # Check if we're in shallow pullback zone
+            if pullback_236 <= current_price <= pullback_382:
+                # Look for bearish reversal in last 3 closed bars
+                last_three_closed = df.iloc[-4:-1]
+                
+                # Check for reversal pattern
+                reversal_found = False
+                for i in range(len(last_three_closed)):
+                    bar = last_three_closed.iloc[i]
+                    # Bearish reversal: close < open and high near/above zone
+                    if (bar['close'] < bar['open'] and 
+                        bar['high'] >= pullback_236):
+                        reversal_found = True
+                        break
+                
+                if reversal_found:
+                    # Create zone around the shallow pullback area
+                    zone_center = (pullback_236 + pullback_382) / 2
+                    zone = PriceActionZone(zone_center, atr * 0.1, 'shallow')
+                    
+                    setup = {
+                        'type': 'shallow_pullback',
+                        'pullback_level': '23.6%-38.2%',
+                        'zone': zone,
+                        'direction': 'sell',
+                        'entry_price': current_price,
+                        'trend_high': recent_high,
+                        'trend_low': recent_low,
+                        'base_score': 0.75
+                    }
+                    setups.append(setup)
+        
+        return setups
+
+    def find_structure_break_setups(self, df, market_structure):
+        """Find breaks of key horizontal levels with confirmation"""
+        setups = []
+        current_price = df['close'].iloc[-1]
+        atr = market_structure['atr']
+        
+        # Only look for structure breaks in trending markets
+        if market_structure['regime'] not in ['NORMAL_TREND', 'STRONG_TREND']:
+            return setups
+        
+        # Get key S/R levels from market structure
+        key_levels = [level for level in market_structure['structure_levels'] 
+                    if level['type'] in ['resistance', 'support'] and level['strength'] >= 0.7]
+        
+        if not key_levels:
+            return setups
+        
+        # Look at recent price action (last 20 bars)
+        lookback = 20
+        recent_bars = df.iloc[-lookback:]
+        
+        for level in key_levels:
+            level_price = level['price']
+            
+            # Skip levels too far from current price (more than 2 ATR away)
+            if abs(current_price - level_price) > atr * 2:
+                continue
+            
+            # RESISTANCE BREAK (Bullish)
+            if level['type'] == 'resistance' and current_price > level_price:
+                # Check if this is a recent break (within last 10 bars)
+                bars_below_level = recent_bars[recent_bars['high'] < level_price]
+                
+                if len(bars_below_level) >= 5:  # Was below for at least 5 bars
+                    # Find when the break occurred
+                    break_bar_idx = None
+                    for i in range(len(recent_bars) - 1):
+                        if (recent_bars.iloc[i]['high'] < level_price and 
+                            recent_bars.iloc[i + 1]['close'] > level_price):
+                            break_bar_idx = i + 1
+                            break
+                    
+                    if break_bar_idx and break_bar_idx >= len(recent_bars) - 10:
+                        # Recent break found, now check for confirmation
+                        bars_since_break = recent_bars.iloc[break_bar_idx:]
+                        
+                        # Confirmation criteria:
+                        # 1. Price stayed above level for at least 3 bars
+                        # 2. OR had a successful retest (came back to level and bounced)
+                        
+                        stayed_above = all(bar['low'] > level_price - (atr * 0.1) 
+                                        for _, bar in bars_since_break.iterrows())
+                        
+                        # Check for retest
+                        retest_found = False
+                        for _, bar in bars_since_break.iterrows():
+                            if (bar['low'] <= level_price + (atr * 0.1) and 
+                                bar['close'] > level_price):
+                                retest_found = True
+                                break
+                        
+                        if stayed_above or retest_found:
+                            zone = PriceActionZone(level_price, atr * 0.15, 'structure')
+                            
+                            setup = {
+                                'type': 'structure_break',
+                                'break_type': 'resistance_break',
+                                'zone': zone,
+                                'direction': 'buy',
+                                'entry_price': current_price,
+                                'level_strength': level['strength'],
+                                'retest': retest_found,
+                                'base_score': 0.8 if retest_found else 0.7
+                            }
+                            setups.append(setup)
+            
+            # SUPPORT BREAK (Bearish)
+            elif level['type'] == 'support' and current_price < level_price:
+                # Check if this is a recent break (within last 10 bars)
+                bars_above_level = recent_bars[recent_bars['low'] > level_price]
+                
+                if len(bars_above_level) >= 5:  # Was above for at least 5 bars
+                    # Find when the break occurred
+                    break_bar_idx = None
+                    for i in range(len(recent_bars) - 1):
+                        if (recent_bars.iloc[i]['low'] > level_price and 
+                            recent_bars.iloc[i + 1]['close'] < level_price):
+                            break_bar_idx = i + 1
+                            break
+                    
+                    if break_bar_idx and break_bar_idx >= len(recent_bars) - 10:
+                        # Recent break found, now check for confirmation
+                        bars_since_break = recent_bars.iloc[break_bar_idx:]
+                        
+                        # Confirmation criteria:
+                        # 1. Price stayed below level for at least 3 bars
+                        # 2. OR had a successful retest (came back to level and rejected)
+                        
+                        stayed_below = all(bar['high'] < level_price + (atr * 0.1) 
+                                        for _, bar in bars_since_break.iterrows())
+                        
+                        # Check for retest
+                        retest_found = False
+                        for _, bar in bars_since_break.iterrows():
+                            if (bar['high'] >= level_price - (atr * 0.1) and 
+                                bar['close'] < level_price):
+                                retest_found = True
+                                break
+                        
+                        if stayed_below or retest_found:
+                            zone = PriceActionZone(level_price, atr * 0.15, 'structure')
+                            
+                            setup = {
+                                'type': 'structure_break',
+                                'break_type': 'support_break',
+                                'zone': zone,
+                                'direction': 'sell',
+                                'entry_price': current_price,
+                                'level_strength': level['strength'],
+                                'retest': retest_found,
+                                'base_score': 0.8 if retest_found else 0.7
+                            }
+                            setups.append(setup)
+        
         return setups
         
     def score_setups(self, setups, market_structure, df):
@@ -717,7 +1019,7 @@ class AdaptiveTradeManager:
             session_info = self.market_context.get_trading_session()
             session = session_info['name']
             volatility_mult = session_info['volatility_multiplier']
-            if session in ['LONDON_OPEN', 'LONDON_NY_OVERLAP']:
+            if session in ['LONDON_TOKYO_OVERLAP', 'LONDON_NY_OVERLAP']:
                 score += 0.05
                 
             setup['score'] = min(score, 1.0)  # Cap score at 1.0
@@ -769,7 +1071,7 @@ class AdaptiveTradeManager:
         try:
             symbol = self.market_data.symbol
             if symbol in self.last_trade_time:
-                time_since_last = (datetime.now(timezone.utc) - self.last_trade_time[symbol]).seconds
+                time_since_last = (datetime.now(timezone.utc) - self.last_trade_time[symbol]).total_seconds()
                 if time_since_last < 3600:  # 1 hour cooldown
                     return False, "Too soon after last trade"    
             
@@ -848,6 +1150,19 @@ class AdaptiveTradeManager:
         elif setup['type'] == 'range_extreme':
             # Stop outside the range
             stop_distance = atr * 1.2
+        elif setup['type'] == 'shallow_pullback':
+            # Stop below the trend low for buys, above trend high for sells
+            if setup['direction'] == 'buy':
+                stop_distance = entry_price - setup['trend_low'] + (atr * 0.2)
+            else:
+                stop_distance = setup['trend_high'] - entry_price + (atr * 0.2)
+                
+        elif setup['type'] == 'structure_break':
+            # Stop beyond the broken level
+            if setup['direction'] == 'buy':
+                stop_distance = entry_price - setup['zone'].lower + (atr * 0.3)
+            else:
+                stop_distance = setup['zone'].upper - entry_price + (atr * 0.3)
         else:
             stop_distance = atr * 1.2
             
@@ -907,8 +1222,10 @@ class AdaptiveTradeManager:
         risk_amount = account_info.equity * risk_percent
         
         # Prevent division by zero if stop_distance is too small
-        if stop_distance < pip_size:
-            stop_distance = pip_size
+        min_stop_distance = pip_size * 10  # At least 10 pips
+        if stop_distance < min_stop_distance:
+            logging.warning(f"Stop distance too small ({stop_distance/pip_size:.1f} pips), using minimum")
+            stop_distance = min_stop_distance
 
         stop_distance_pips = stop_distance / pip_size
         
@@ -1240,7 +1557,8 @@ def check_symbol_adaptive(symbol, timeframes, market_context):
             if data[tf] is None:
                 return False, f"[{symbol}] Failed to fetch {tf} data", None    
         
-        analysis_time = data[mt5.TIMEFRAME_H1].index[-1]
+        latest_m5_time = data[mt5.TIMEFRAME_M5].index[-1]
+        analysis_time = latest_m5_time
         
         # Check for news
         news_check = market_context.is_news_time(
@@ -1304,12 +1622,14 @@ def check_symbol_adaptive(symbol, timeframes, market_context):
         timing_confirmed = False
         
         if best_setup['type'] == 'momentum':
-            # For momentum, just need price action confirmation
-            last_bar = m5_df.iloc[-2]
+            # Check last 3 closed M5 bars for momentum
+            last_three = m5_df.iloc[-4:-1]  # Last 3 closed bars
             if best_setup['direction'] == 'buy':
-                timing_confirmed = last_bar['close'] > last_bar['open']
+                bullish_bars = sum(1 for _, bar in last_three.iterrows() if bar['close'] > bar['open'])
+                timing_confirmed = bullish_bars >= 2  # At least 2 of 3 bullish
             else:
-                timing_confirmed = last_bar['close'] < last_bar['open']
+                bearish_bars = sum(1 for _, bar in last_three.iterrows() if bar['close'] < bar['open'])
+                timing_confirmed = bearish_bars >= 2  # At least 2 of 3 bearish
                 
         elif best_setup['type'] in ['fibonacci', 'ma_bounce']:
             # For reversal setups, need rejection confirmation
