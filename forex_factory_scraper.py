@@ -14,6 +14,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException, NoSuchElementException
 import pandas as pd
 import random
+import pytz
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -25,6 +26,10 @@ class ForexFactoryScraper:
         self.base_url = "https://www.forexfactory.com/calendar"
         self.events = []
         self.driver = None
+        
+        # Set up timezone objects
+        self.eastern_tz = pytz.timezone('US/Eastern')
+        self.utc_tz = pytz.UTC
         
     def setup_driver(self):
         """Setup undetected Chrome driver with anti-detection features"""
@@ -151,7 +156,7 @@ class ForexFactoryScraper:
                     previous_cell = row.find_elements(By.CLASS_NAME, "calendar__previous")
                     previous = previous_cell[0].text.strip() if previous_cell else ""
                     
-                    # Convert to UTC
+                    # Convert to UTC using proper timezone handling
                     event_datetime = self.parse_datetime(target_date, current_time)
                     
                     event = {
@@ -177,26 +182,28 @@ class ForexFactoryScraper:
             logging.error(f"Error scraping {target_date}: {e}")
             
     def parse_datetime(self, date, time_str):
-        """Parse ForexFactory time to UTC datetime"""
-        # ForexFactory times are in ET (Eastern Time)
+        """Parse ForexFactory time to UTC datetime using proper timezone conversion"""
+        # ForexFactory times are in Eastern Time (ET)
         if time_str.lower() == "all day":
             time_str = "11:59pm"
             
-        # Parse time
         try:
             # Handle format like "2:30pm" or "10:00am"
             time_parts = time_str.replace('am', ' AM').replace('pm', ' PM')
             datetime_str = f"{date.strftime('%Y-%m-%d')} {time_parts}"
             
-            # Parse as Eastern Time
-            et_time = datetime.strptime(datetime_str, '%Y-%m-%d %I:%M %p')
+            # Parse as naive datetime first
+            naive_dt = datetime.strptime(datetime_str, '%Y-%m-%d %I:%M %p')
             
-            # Convert to UTC (rough approximation - adjust for DST if needed)
-            # ET is UTC-5 (EST) or UTC-4 (EDT)
-            # For simplicity, using UTC-5
-            utc_time = et_time + timedelta(hours=5)
+            # Localize to Eastern timezone (this automatically handles EST/EDT)
+            eastern_dt = self.eastern_tz.localize(naive_dt)
             
-            return utc_time.replace(tzinfo=timezone.utc)
+            # Convert to UTC
+            utc_dt = eastern_dt.astimezone(self.utc_tz)
+            
+            logging.debug(f"Converted {time_str} ET on {date.date()} to {utc_dt.strftime('%H:%M UTC')}")
+            
+            return utc_dt
             
         except Exception as e:
             logging.warning(f"Error parsing time '{time_str}': {e}")
@@ -231,10 +238,16 @@ class ForexFactoryScraper:
                 
         logging.info(f"Saved {len(filtered_events)} events to {filename}")
         
+        # Log some examples of timezone conversion for verification
+        if filtered_events:
+            logging.info("Sample timezone conversions:")
+            for event in filtered_events[:3]:
+                logging.info(f"  {event['event_name']}: {event['datetime_utc']} UTC")
+        
     def update_calendar(self, days_ahead=7, days_back=1):
         """Update calendar with recent and upcoming events"""
-        end_date = datetime.now() + timedelta(days=days_ahead)
-        start_date = datetime.now() - timedelta(days=days_back)
+        end_date = datetime.now(timezone.utc) + timedelta(days=days_ahead)
+        start_date = datetime.now(timezone.utc) - timedelta(days=days_back) 
         
         logging.info(f"Updating calendar from {start_date.date()} to {end_date.date()}")
         
@@ -252,7 +265,8 @@ def daily_update():
         
         # Backup existing file
         backup_file = f"news_calendar_backup_{datetime.now().strftime('%Y%m%d')}.csv"
-        Path('news_calendar.csv').rename(backup_file)
+        if Path('news_calendar.csv').exists():
+            Path('news_calendar.csv').rename(backup_file)
         
         logging.info(f"Calendar updated successfully. Backup saved as {backup_file}")
         

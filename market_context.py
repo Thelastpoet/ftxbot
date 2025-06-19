@@ -170,6 +170,27 @@ class MarketContext:
             'volatility_multiplier': 0.5,
             'state': 'Market Closed'
         }
+        
+    @staticmethod
+    def get_amd_session(current_time=None):
+        """
+        Determines the trading session based on the AMD (Accumulation, Manipulation, Distribution) model.
+        - Asian Session (Accumulation): 22:00 - 09:00 UTC
+        - London Session (Manipulation): 09:00 - 13:00 UTC
+        - NY Session (Distribution): 13:00 - 22:00 UTC
+        """
+        now = current_time or datetime.now(timezone.utc)
+        hour = now.hour
+
+        if hour >= 22 or hour < 9:
+            # Asian Session (crosses midnight)
+            return {'name': 'ASIAN_SESSION'}
+        elif 9 <= hour < 13:
+            # London Session
+            return {'name': 'LONDON_SESSION'}
+        else: # Covers 13 <= hour < 22
+            # New York Session
+            return {'name': 'NY_SESSION'}
     
     def get_news_summary(self, hours_ahead=4, current_time=None):
         """Get upcoming high impact news within specified hours"""

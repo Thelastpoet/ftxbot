@@ -1,0 +1,22 @@
+2025-06-18 21:56:10,643 - __main__ - INFO - [main.run] - ================================================================================
+2025-06-18 21:56:10,644 - __main__ - INFO - [main.run] - Starting ICT Narrative Trading Bot
+2025-06-18 21:56:10,644 - __main__ - INFO - [main.run] - Symbols: ['EURUSD', 'GBPUSD', 'AUDUSD', 'USDCAD', 'USDJPY'], Timeframe: M15
+2025-06-18 21:56:10,644 - __main__ - INFO - [main.run] - ================================================================================
+2025-06-18 21:56:10,656 - bot_components - INFO - [bot_components.initialize] - Connected to account: 9988665, Server: FBS-Demo, Bal: 318.85 USD
+2025-06-18 21:56:10,657 - __main__ - INFO - [main._update_daily_tracking] - New trading day 2025-06-18: Counters reset.
+2025-06-18 21:56:10,660 - __main__ - INFO - [main.run_loop_iteration] - --- Analyzing EURUSD for ICT Narrative ---
+2025-06-18 21:56:10,672 - __main__ - INFO - [main.run_loop_iteration] - --- No complete narrative found for EURUSD ---
+2025-06-18 21:56:10,688 - __main__ - INFO - [main.run_loop_iteration] - --- Analyzing USDCAD for ICT Narrative ---
+2025-06-18 21:56:10,699 - __main__ - INFO - [main.run_loop_iteration] - --- No complete narrative found for USDCAD ---
+2025-06-18 21:56:10,704 - __main__ - INFO - [main.run_loop_iteration] - --- Analyzing USDJPY for ICT Narrative ---
+2025-06-18 21:56:10,715 - __main__ - INFO - [main.run_loop_iteration] - --- No complete narrative found for USDJPY ---
+2025-06-18 21:56:10,715 - __main__ - INFO - [main.run] - Iteration complete. Sleeping for 59.9 seconds.
+2025-06-18 21:57:10,660 - __main__ - INFO - [main.run_loop_iteration] - --- Analyzing EURUSD for ICT Narrative ---
+2025-06-18 21:57:10,678 - __main__ - INFO - [main.run_loop_iteration] - --- No complete narrative found for EURUSD ---
+2025-06-18 21:57:10,680 - __main__ - INFO - [main.run_loop_iteration] - --- Analyzing USDCAD for ICT Narrative ---
+2025-06-18 21:57:10,691 - __main__ - INFO - [main.run_loop_iteration] - --- No complete narrative found for USDCAD ---
+2025-06-18 21:57:10,692 - __main__ - INFO - [main.run_loop_iteration] - --- Analyzing USDJPY for ICT Narrative ---
+2025-06-18 21:57:10,702 - __main__ - INFO - [main.run_loop_iteration] - --- No complete narrative found for USDJPY ---
+2025-06-18 21:57:10,703 - __main__ - INFO - [main.run] - Iteration complete. Sleeping for 60.0 seconds.
+2025-06-18 21:57:31,761 - __main__ - INFO - [main.run] - Bot stopped by user.
+2025-06-18 21:57:31,761 - __main__ - INFO - [main.run] - Bot has been shut down.

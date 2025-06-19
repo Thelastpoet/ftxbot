@@ -102,7 +102,7 @@ class TradeExitManager:
         """Initialize position with full entry context"""
         
         # Determine exit strategy based on position size and market conditions
-        strategy_name = self._determine_exit_strategy(position, entry_context)
+        strategy, strategy_name = self._get_position_strategy(position)
         
         context = PositionContext(
             position=position,
@@ -923,6 +923,73 @@ class TradeExitManager:
             return True
             
         return False
+    
+    def _initialize_position_context(self, position):
+        """
+        Initialize context for a new or recovered position.
+        This now correctly parses the compact "BOT:XXX-YY-ZZZ" comment format
+        and dynamically assigns the best exit strategy.
+        """
+        # Default values in case parsing fails
+        entry_setup_type = 'unknown'
+        entry_market_regime = 'unknown'
+        entry_amd_phase = 'unknown'
+        
+        # Reverse mapping from short codes back to full names for context recovery
+        setup_names = {
+            'FIB': 'fibonacci', 'MOM': 'momentum', 'MAB': 'ma_bounce',
+            'RNG': 'range_extreme', 'SHP': 'shallow_pullback', 'BRK': 'structure_break'
+        }
+        regime_names = {
+            'ST': 'STRONG_TREND', 'NT': 'NORMAL_TREND', 'RG': 'RANGING',
+            'TE': 'TREND_EXHAUSTION', 'VE': 'VOLATILE_EXPANSION'
+        }
+        amd_names = {
+            'ACC': 'ACCUMULATION', 'AWM': 'AWAITING_MANIPULATION',
+            'DST': 'DISTRIBUTION', 'NCS': 'NO_CLEAR_SETUP', 'CLS': 'SESSION_CLOSE'
+        }
+
+        # Try to parse the new, compact comment format for context recovery
+        if position.comment and position.comment.startswith("BOT:"):
+            try:
+                # Remove the "BOT:" prefix and split by hyphen
+                tags = position.comment[4:]
+                parts = tags.split('-')
+                
+                if len(parts) == 3:
+                    setup_tag, regime_tag, amd_tag = parts
+                    # Look up the full name from the short code, providing a default if not found
+                    entry_setup_type = setup_names.get(setup_tag, 'unknown_setup')
+                    entry_market_regime = regime_names.get(regime_tag, 'unknown_regime')
+                    entry_amd_phase = amd_names.get(amd_tag, 'unknown_amd')
+                    logging.info(f"Recovered context for position {position.ticket} from comment: {entry_setup_type}, {entry_market_regime}, {entry_amd_phase}")
+                else:
+                    logging.warning(f"Could not parse comment for position {position.ticket}: '{position.comment}'")
+            except Exception as e:
+                logging.error(f"Error parsing comment for position {position.ticket}: {e}")
+
+        # Determine the exit strategy to use for this position
+        # This now uses the dedicated _get_position_strategy method for consistency
+        strategy, strategy_name = self._get_position_strategy(position)
+                
+        # Create the final context object
+        context = PositionContext(
+            position=position,
+            entry_setup_type=entry_setup_type,
+            entry_market_regime=entry_market_regime,
+            entry_amd_phase=entry_amd_phase,
+            entry_time=datetime.fromtimestamp(position.time, tz=timezone.utc),
+            highest_profit=0,
+            lowest_profit=0,
+            last_trail_update=datetime.now(timezone.utc),
+            partial_exits_done=0,
+            exit_strategy=strategy_name  # Use the determined strategy name
+        )
+        
+        # Store the context object in our tracking dictionary
+        self.position_contexts[position.ticket] = context
+        
+        logging.info(f"Exit manager context initialized for position {position.ticket} using '{strategy_name}' strategy.")
         
     def _initialize_position_context(self, position):
         """

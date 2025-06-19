@@ -28,17 +28,19 @@ class AMDAnalyzer:
         
         if session_name == 'ASIAN_SESSION':
             # Asian session: 22:00 previous day to 09:00 current day
-            # Need to handle the day boundary
+            start = datetime.combine(current_day - timedelta(days=1), 
+                                datetime.min.time()).replace(hour=22, tzinfo=timezone.utc)
+            end = datetime.combine(current_day, 
+                            datetime.min.time()).replace(hour=9, tzinfo=timezone.utc)
+            
+            # Special handling for incomplete current day data
             if current_day == df.index[-1].date():
-                # For today, we might not have complete data
-                start = datetime.combine(current_day - timedelta(days=1), 
-                                    datetime.min.time()).replace(hour=22, tzinfo=timezone.utc)
-            else:
-                # For previous days
-                start = datetime.combine(current_day - timedelta(days=1), 
-                                    datetime.min.time()).replace(hour=22, tzinfo=timezone.utc)
-                end = datetime.combine(current_day, 
-                                datetime.min.time()).replace(hour=9, tzinfo=timezone.utc)
+                current_time = datetime.now(timezone.utc)
+                
+                # If Asian session is still ongoing, we have incomplete data
+                if current_time < end:
+                    logging.debug(f"Asian session still ongoing until {end}, current time {current_time}")
+                    return None  # Wait for complete session data
                                 
         elif session_name in ['LONDON_SESSION']:
             start = datetime.combine(current_day, datetime.min.time()).replace(hour=9, tzinfo=timezone.utc)
