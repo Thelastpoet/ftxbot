@@ -18,13 +18,13 @@ MAX_TRADES_PER_DAY = 100 # Edited for demo
 MAX_CORRELATION_EXPOSURE = 2
 
 # ICT Structure Parameters
-SWING_LOOKBACK = 10  # For swing high/low detection
+SWING_LOOKBACK = 5  # For swing high/low detection
 STRUCTURE_LOOKBACK = 50  # For market structure analysis
-DATA_LOOKBACK = 200  # Total candles to fetch
+DATA_LOOKBACK = 1000  # Total candles to fetch
 
 # Stop Loss and Take Profit
-SL_ATR_MULTIPLIER = 1.5  # ATR multiplier for stop loss
-TP_RR_RATIO = 2.0  # Default risk:reward
+SL_ATR_MULTIPLIER = 2.0  # ATR multiplier for stop loss
+TP_RR_RATIO = 1.5 # Default risk:reward
 
 # ICT Session Times (UTC)
 ICT_SESSIONS = {
@@ -34,7 +34,7 @@ ICT_SESSIONS = {
 }
 
 # Bot Operation
-LOOP_SLEEP_SECONDS = 300  # Check every minute during active sessions
+LOOP_SLEEP_SECONDS = 60  # Check every minute during active sessions
 LOG_FILE = "ict_trading_bot.log"
 LOG_LEVEL = "INFO"
 MAGIC_NUMBER_PREFIX = 2025
@@ -46,3 +46,15 @@ PO3_ANALYSIS_CANDLES = 24  # Candles for Power of Three analysis (6 hours on M15
 
 REQUIRE_STRUCTURE_ALIGNMENT = True
 REQUIRE_KILLZONE = True
+
+# ICT Entry Parameters
+MIN_RETRACEMENT_PERCENT = 38.2  # Minimum retracement before entry
+REQUIRE_ENTRY_CONFIRMATION = True  # Require rejection patterns
+MIN_CONFIRMATIONS_REQUIRED = 1 
+ALLOW_PRE_MANIPULATION_LEVELS = True
+MAX_BARS_SINCE_MANIPULATION = 50  # Don't trade setups too old
+ENTRY_CONFIRMATION_LOOKBACK = 3  # Candles to check for confirmation
+RETRACEMENT_THRESHOLD_PERCENT = 25.0 
+ALLOW_MANIPULATION_PHASE_ENTRY = True
+MICRO_STRUCTURE_LOOKBACK = 15  # For structure continuation
+APPROACHING_LEVEL_TOLERANCE = 0.0005  # 5 pips

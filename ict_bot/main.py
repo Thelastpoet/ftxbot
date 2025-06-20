@@ -143,7 +143,8 @@ class ICTTradingBot:
             return
         
         # Check spread
-        if not self.symbol_manager.check_spread(symbol, config.MAX_SPREAD_POINTS):
+        current_spread = self.symbol_manager.check_spread(symbol, config.MAX_SPREAD_POINTS)
+        if current_spread is None: # Check if the spread was too high or failed to get
             return
         
         # Get market data
@@ -153,7 +154,7 @@ class ICTTradingBot:
             return
         
         # Generate signal following ICT narrative
-        signal, sl_price, tp_price, narrative = self.signal_generator.generate_signal(ohlc_df, symbol)
+        signal, sl_price, tp_price, narrative = self.signal_generator.generate_signal(ohlc_df, symbol, current_spread)
         
         if signal:
             # Log the narrative
@@ -215,23 +216,31 @@ class ICTTradingBot:
         
         # Determine if we should be active based on Kill Zones
         in_any_killzone = False
-        # Get the relaxation flag from config; default to True (strict)
         require_killzone = getattr(config, 'REQUIRE_KILLZONE', True)
 
-        if not require_killzone:
-            in_any_killzone = True # If KZ not required, we are always "active"
-        else:
+        if require_killzone:
+            in_any_killzone = False
             current_hour = datetime.now().hour
             for zone_name, zone_times in config.ICT_SESSIONS.items():
-                if zone_times['start'] <= current_hour < zone_times['end']:
-                    in_any_killzone = True
-                    logger.info(f"Active Kill Zone: {zone_name.upper()}")
-                    break
-        
-        # Only process symbols if we are in a kill zone or if the requirement is off
-        if not in_any_killzone:
-            logger.debug("Outside of all kill zones. Waiting...")
-            return
+                # Handle sessions that cross midnight
+                if zone_times['start'] > zone_times['end']:
+                    # Session crosses midnight
+                    if current_hour >= zone_times['start'] or current_hour < zone_times['end']:
+                        in_any_killzone = True
+                        logger.info(f"Active Kill Zone: {zone_name.upper()}")
+                        break
+                else:
+                    # Normal session
+                    if zone_times['start'] <= current_hour < zone_times['end']:
+                        in_any_killzone = True
+                        logger.info(f"Active Kill Zone: {zone_name.upper()}")
+                        break
+            
+            if not in_any_killzone:
+                logger.debug("Outside of all kill zones. Waiting...")
+                return
+        else:
+            logger.debug("Killzone requirement disabled, processing all symbols")
 
         # If we are active, then process each symbol
         for symbol in self.symbol_manager.symbols:
