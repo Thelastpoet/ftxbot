@@ -864,9 +864,9 @@ class smc:
                     low[i - 1] if i > 0 and low[i - 1] != 0 else float("inf"),
                 )
 
-        active = pd.Series(active, name="Active")
-        high = pd.Series(high, name="High")
-        low = pd.Series(low, name="Low")
+        active = pd.Series(active, name="Active", index=ohlc.index)
+        high = pd.Series(high, name="High", index=ohlc.index)
+        low = pd.Series(low, name="Low", index=ohlc.index)
 
         return pd.concat([active, high, low], axis=1)
 

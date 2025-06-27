@@ -1,321 +1,333 @@
+"""
+ICT Trading Bot - Main Entry Point
+Implements the Inner Circle Trader methodology with proper narrative sequencing.
+"""
+
 import logging
 import time
 import MetaTrader5 as mt5
-import pandas as pd
-from datetime import datetime
+from datetime import datetime, timezone, time as time_obj
 from collections import defaultdict
-from bot_components import MetaTrader5Client, MarketDataProvider, SMCAnalyzer, SignalGenerator, PositionSizer, TradeExecutor, global_config
 
+# Import our modules
+from bot_components import (
+    MetaTrader5Client, MarketDataProvider, PositionSizer, 
+    TradeExecutor, SymbolManager
+)
+from ict_bot import ICTSignalGenerator
+import config
+
+# Setup logging
 logging.basicConfig(
-    level=global_config.LOG_LEVEL,
-    format='%(asctime)s - %(name)s - %(levelname)s - [%(module)s.%(funcName)s] - %(message)s',
+    level=config.LOG_LEVEL,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler(global_config.LOG_FILE, mode='w'), # mode='w' to overwrite log each run
+        logging.FileHandler(config.LOG_FILE, mode='a'),
         logging.StreamHandler()
     ]
 )
-main_logger = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)
 
-class TradingBot:
-    def __init__(self, bot_config):
-        self.config = bot_config
+class ICTTradingBot:
+    """
+    Main trading bot that coordinates all components and follows ICT methodology.
+    """
+    
+    def __init__(self):
+        # Initialize components
         self.mt5_client = MetaTrader5Client()
         self.market_provider = MarketDataProvider(self.mt5_client)
+        self.symbol_manager = SymbolManager(self.mt5_client)
+        self.signal_generator = ICTSignalGenerator(config)
+        self.position_sizer = PositionSizer(self.mt5_client, config.RISK_PER_TRADE_PERCENT)
+        self.trade_executor = TradeExecutor(self.mt5_client, config.MAGIC_NUMBER_PREFIX)
         
-        self.smc_analyzer = SMCAnalyzer(
-            swing_lookback=bot_config.SMC_SWING_LOOKBACK,
-            structure_lookback=bot_config.SMC_STRUCTURE_LOOKBACK,
-            pd_fib_level=bot_config.PREMIUM_DISCOUNT_FIB_LEVEL
-        )
-        # SignalGenerator is now initialized without symbol-specific point size
-        self.signal_generator = SignalGenerator(
-            smc_analyzer=self.smc_analyzer,
-            sl_buffer_points=bot_config.SL_POINTS_DEFAULT,
-            tp_rr_ratio=bot_config.TP_RR_RATIO,
-            higher_timeframe=bot_config.HIGHER_TIMEFRAME,
-            sl_atr_multiplier=bot_config.SL_ATR_MULTIPLIER            
-        )
-        self.position_sizer = PositionSizer(
-            mt5_client=self.mt5_client,
-            risk_percent_per_trade=bot_config.RISK_PER_TRADE_PERCENT
-        )
-        self.trade_executor = TradeExecutor(
-            mt5_client=self.mt5_client,
-            magic_prefix=bot_config.MAGIC_NUMBER_PREFIX
-        )
+        # Trading state
+        self.daily_trades = 0
+        self.last_trade_date = None
+        self.session_trades = defaultdict(int)
+        self.active_narratives = {}
         
-        # Per-symbol state and data
-        self.symbol_data = {}
-
-    def _initialize_symbol_data(self):
-        """Fetches and stores static data like point size for each symbol."""
-        for symbol_name in self.config.SYMBOLS:
-            symbol_info = self.mt5_client.get_symbol_info(symbol_name)
-            if not symbol_info:
-                main_logger.error(f"Failed to get symbol info for {symbol_name}. It will be skipped.")
-                continue
-            
-            self.symbol_data[symbol_name] = {
-                'is_position_open': False,
-                'open_position_type': None,
-                'point': symbol_info.point,
-                'digits': symbol_info.digits,
-                'spread': symbol_info.spread,
-                'description': symbol_info.description
-            }
+    def initialize(self):
+        """Initialize the bot and all components."""
+        logger.info("="*60)
+        logger.info("ICT Trading Bot - Initialization")
+        logger.info("="*60)
         
-        # Filter out symbols for which info could not be fetched
-        self.config.SYMBOLS = [s for s in self.config.SYMBOLS if s in self.symbol_data]
-
-    def _update_open_position_status(self, symbol):
-        """Updates the open position status for a specific symbol."""
-        if symbol not in self.symbol_data: 
-            main_logger.warning(f"Symbol {symbol} not in symbol_data")
-            return
-
-        positions = self.mt5_client.get_current_positions(symbol=symbol)
-        current_symbol_state = self.symbol_data[symbol]
-        
-        if not positions:
-            if current_symbol_state['is_position_open']:
-                main_logger.info(f"Position for {symbol} appears closed.")
-            current_symbol_state['is_position_open'] = False
-            current_symbol_state['open_position_type'] = None
-        else:
-            # Log all positions for debugging
-            for pos in positions:
-                main_logger.debug(f"Position found for {symbol}: Ticket={pos.ticket}, Type={pos.type}, Volume={pos.volume}, SL={pos.sl}, TP={pos.tp}")
-            
-            if not current_symbol_state['is_position_open']:
-                 main_logger.info(f"Existing position found for {symbol} (Ticket: {positions[0].ticket}).")
-            current_symbol_state['is_position_open'] = True
-            current_symbol_state['open_position_type'] = "BUY" if positions[0].type == mt5.ORDER_TYPE_BUY else "SELL"
-
-    def _check_spread(self, symbol):
-        """Checks spread for a specific symbol."""
-        if symbol not in self.symbol_data: 
-            main_logger.warning(f"Symbol {symbol} not in symbol_data for spread check")
+        # Connect to MT5
+        if not self.mt5_client.initialize():
+            logger.error("Failed to initialize MT5 connection")
             return False
-
-        ticker = self.mt5_client.get_symbol_ticker(symbol)
-        symbol_info = self.mt5_client.get_symbol_info(symbol)
         
-        if not ticker or not symbol_info:
-            main_logger.warning(f"({symbol}) Could not get ticker/symbol_info for spread check.")
-            return False 
-
-        spread_points = int(round((ticker.ask - ticker.bid) / symbol_info.point))
-        max_spread = self.config.MAX_SPREAD_POINTS 
-        
-        if spread_points > max_spread:
-            main_logger.info(f"({symbol}) Spread {spread_points} points > max {max_spread}. Skipping.")
+        # Initialize symbols
+        valid_symbols = self.symbol_manager.initialize_symbols(config.SYMBOLS)
+        if not valid_symbols:
+            logger.error("No valid symbols to trade")
             return False
-            
-        main_logger.debug(f"({symbol}) Current spread: {spread_points} points (Ask={ticker.ask:.{self.symbol_data[symbol]['digits']}f}, Bid={ticker.bid:.{self.symbol_data[symbol]['digits']}f}).")
+        
+        logger.info(f"Initialized with {len(valid_symbols)} symbols")
+        logger.info(f"Risk per trade: {config.RISK_PER_TRADE_PERCENT}%")
+        logger.info(f"Max daily trades: {config.MAX_TRADES_PER_DAY}")
+        logger.info("="*60)
+        
         return True
     
-    def check_correlation_limit(self, new_symbol, new_direction):
-        """Simple correlation protection"""
-        # Define correlation groups
-        correlation_groups = {
-            'USD_LONGS': ['EURUSD', 'GBPUSD', 'AUDUSD', 'NZDUSD'],
-            'USD_SHORTS': ['USDCAD', 'USDCHF', 'USDJPY'],
-            'EUR_LONGS': ['EURUSD', 'EURJPY', 'EURCHF', 'EURAUD', 'EURCAD', 'EURNZD'],
-            'EUR_SHORTS': ['EURAUD', 'EURCAD', 'EURNZD'],  # Selling these = Short EUR
-            'GBP_LONGS': ['GBPUSD', 'GBPJPY', 'GBPCHF', 'GBPAUD', 'GBPCAD', 'GBPNZD'],
-            'JPY_SHORTS': ['USDJPY', 'EURJPY', 'GBPJPY', 'AUDJPY', 'CHFJPY'],
-        }
+    def check_daily_reset(self):
+        """Reset daily counters if new trading day."""
+        current_date = datetime.now().date()
         
-        # Get ALL positions (not just for current symbol)
-        current_positions = self.mt5_client.get_current_positions()
-        if not current_positions:
-            return True  # No positions, no correlation risk
+        if self.last_trade_date != current_date:
+            logger.info(f"New trading day: {current_date}")
+            self.daily_trades = 0
+            self.session_trades.clear()
+            self.last_trade_date = current_date
+    
+    def can_trade(self):
+        """Check if we can take more trades today."""
+        if self.daily_trades >= config.MAX_TRADES_PER_DAY:
+            logger.info(f"Daily trade limit reached ({self.daily_trades}/{config.MAX_TRADES_PER_DAY})")
+            return False
+        return True
+    
+    def check_correlations(self, trade_symbol, trade_direction):
+        """
+        Check if a new trade would exceed the maximum exposure for any single currency.
+        """
+        positions = self.mt5_client.get_current_positions()
+        currency_exposure = defaultdict(int)
+
+        # Map existing positions to currency exposure
+        for pos in positions:
+            base_curr, quote_curr = pos.symbol[:3], pos.symbol[3:]
+            # Long position (BUY) = long base, short quote
+            if pos.type == mt5.ORDER_TYPE_BUY:
+                currency_exposure[base_curr] += 1
+                currency_exposure[quote_curr] -= 1
+            # Short position (SELL) = short base, long quote
+            else:
+                currency_exposure[base_curr] -= 1
+                currency_exposure[quote_curr] += 1
         
-        # Count current exposure per group
-        group_exposure = defaultdict(int)
-        
-        for pos in current_positions:
-            for group, symbols in correlation_groups.items():
-                if pos.symbol in symbols:
-                    if 'LONGS' in group and pos.type == mt5.ORDER_TYPE_BUY:
-                        group_exposure[group] += 1
-                    elif 'SHORTS' in group and pos.type == mt5.ORDER_TYPE_SELL:
-                        group_exposure[group] += 1
-                    # Handle inverse correlations
-                    elif 'LONGS' in group and pos.type == mt5.ORDER_TYPE_SELL:
-                        group_exposure[group.replace('LONGS', 'SHORTS')] += 1
-                    elif 'SHORTS' in group and pos.type == mt5.ORDER_TYPE_BUY:
-                        group_exposure[group.replace('SHORTS', 'LONGS')] += 1
-        
-        # Check if new trade would exceed limit
-        for group, symbols in correlation_groups.items():
-            if new_symbol in symbols:
-                if new_direction == "BUY" and 'LONGS' in group:
-                    if group_exposure[group] >= 2:
-                        main_logger.warning(f"({new_symbol}) Blocking BUY signal - Already have {group_exposure[group]} positions in {group}")
-                        return False
-                elif new_direction == "SELL" and 'SHORTS' in group:
-                    if group_exposure[group] >= 2:
-                        main_logger.warning(f"({new_symbol}) Blocking SELL signal - Already have {group_exposure[group]} positions in {group}")
-                        return False
-        
-        # Log current exposure
-        if group_exposure:
-            main_logger.info(f"Current correlation exposure: {dict(group_exposure)}")
+        # Calculate the exposure of the PROPOSED trade
+        base_curr, quote_curr = trade_symbol[:3], trade_symbol[3:]
+        if trade_direction == "BUY":
+            new_exposure = {'base': (base_curr, 1), 'quote': (quote_curr, -1)}
+        else: # SELL
+            new_exposure = {'base': (base_curr, -1), 'quote': (quote_curr, 1)}
+
+        # Check if adding this trade would breach the limit for either currency
+        for leg in ['base', 'quote']:
+            currency, change = new_exposure[leg]
+            # Check the absolute exposure, as we want to limit both long and short over-exposure
+            if abs(currency_exposure[currency] + change) > config.MAX_CORRELATION_EXPOSURE:
+                logger.warning(
+                    f"Correlation limit for {currency} would be breached. "
+                    f"Current exposure: {currency_exposure[currency]}, "
+                    f"Proposed change: {change}. Trade on {trade_symbol} rejected."
+                )
+                return False
         
         return True
-
-    def run_loop_iteration(self):
-        """Runs one iteration of the trading loop for all symbols."""
-        main_logger.debug(f"Starting loop iteration at {datetime.now()}")
+    
+    def process_symbol(self, symbol):
+        """Process a single symbol following ICT methodology."""
+        logger.debug(f"\nProcessing {symbol}...")
         
-        for symbol_name in self.config.SYMBOLS:
-            main_logger.debug(f"Processing symbol: {symbol_name}")
+        # Check if symbol has position
+        self.symbol_manager.update_position_status(symbol)
+        symbol_data = self.symbol_manager.get_symbol_data(symbol)
+        
+        if symbol_data['has_position']:
+            logger.info(f"{symbol}: Position already open ({symbol_data['position_type']})")
+            return
+        
+        # Check spread
+        current_spread = self.symbol_manager.check_spread(symbol, config.MAX_SPREAD_POINTS)
+        if current_spread is None: # Check if the spread was too high or failed to get
+            return
+        
+        # Get market data - M15, Daily, AND H4
+        ohlc_df = self.market_provider.get_ohlc(symbol, config.TIMEFRAME_STR, config.DATA_LOOKBACK)
+        if ohlc_df is None or len(ohlc_df) < config.STRUCTURE_LOOKBACK:
+            logger.warning(f"{symbol}: Insufficient M15 data")
+            return
+        
+        # Get daily data for proper ICT bias analysis
+        daily_df = self.market_provider.get_daily_data(symbol, 50)
+        if daily_df is None or len(daily_df) < 20:
+            logger.warning(f"{symbol}: Insufficient daily data for bias analysis")
+            return
+        
+        # Get H4 data for HTF analysis
+        h4_df = self.market_provider.get_h4_data(symbol, 100)
+        if h4_df is None or len(h4_df) < 10:
+            logger.warning(f"{symbol}: Insufficient H4 data for HTF analysis")
+            # Don't return - continue without H4 data
+            h4_df = None
+        
+        # Generate signal following ICT narrative with daily AND H4 data
+        signal, sl_price, tp_price, narrative = self.signal_generator.generate_signal(
+            ohlc_df, symbol, current_spread, daily_df, h4_df  # ✅ Pass H4 data
+        )
+        
+        if signal:
+            # Log the narrative
+            self._log_narrative(symbol, narrative, signal, sl_price, tp_price)
             
-            if symbol_name not in self.symbol_data or self.symbol_data[symbol_name].get('point') is None:
-                main_logger.warning(f"Skipping {symbol_name} due to missing symbol data (point size).")
-                continue
-
-            self._update_open_position_status(symbol_name)
-            symbol_state = self.symbol_data[symbol_name]
-
-            if symbol_state['is_position_open']:
-                main_logger.info(f"Position for {symbol_name} is {symbol_state['open_position_type']}. Waiting...")
-                continue
-
-            if not self._check_spread(symbol_name):
-                continue
-
-            # Calculate number of candles needed
-            num_candles = self.config.SMC_STRUCTURE_LOOKBACK + self.config.SMC_SWING_LOOKBACK + 50
-            main_logger.debug(f"({symbol_name}) Requesting {num_candles} candles on {self.config.TIMEFRAME_STR}")
+            # Check correlations
+            if not self.check_correlations(symbol, signal):
+                return
             
-            ohlc_df = self.market_provider.get_ohlc(
-                symbol_name, self.config.TIMEFRAME_STR, num_candles
+            # Calculate position size
+            volume = self.position_sizer.calculate_volume(symbol, sl_price, signal)
+            if volume is None:
+                logger.error(f"{symbol}: Failed to calculate position size")
+                return
+            
+            # Place the trade
+            comment = f"ICT_{narrative.entry_model}"
+            result = self.trade_executor.place_market_order(
+                symbol, signal, volume, sl_price, tp_price, comment
             )
-
-            if ohlc_df is None or ohlc_df.empty:
-                main_logger.warning(f"({symbol_name}) No OHLC data returned. Skipping.")
-                continue
-                
-            if len(ohlc_df) < self.config.SMC_STRUCTURE_LOOKBACK:
-                main_logger.warning(f"({symbol_name}) Insufficient OHLC data. Got {len(ohlc_df)}, need {self.config.SMC_STRUCTURE_LOOKBACK}. Skipping.")
-                continue
             
-            # Debug OHLC data
-            main_logger.debug(f"({symbol_name}) OHLC shape: {ohlc_df.shape}, "
-                            f"Columns: {list(ohlc_df.columns)}, "
-                            f"Index type: {type(ohlc_df.index)}, "
-                            f"Time range: {ohlc_df['time'].min()} to {ohlc_df['time'].max()}")
-            
-            # Ensure proper index
-            if not isinstance(ohlc_df.index, pd.DatetimeIndex):
-                main_logger.debug(f"({symbol_name}) Converting time column to DatetimeIndex")
-                ohlc_df.set_index('time', inplace=True)
-
-            # Pass the specific symbol's point size to generate method
-            point_size = symbol_state['point']
-            signal, sl_price, tp_price = self.signal_generator.generate(ohlc_df, point_size, symbol_name)
-
-            if signal:
-                main_logger.info(f"*** SIGNAL GENERATED *** {signal} for {symbol_name}, SL={sl_price:.{symbol_state['digits']}f}, TP={tp_price:.{symbol_state['digits']}f}")
+            if result:
+                logger.info(f"{symbol}: Trade executed successfully!")
+                self.daily_trades += 1
+                self.active_narratives[symbol] = narrative
                 
-                # Check correlation limit
-                if not self.check_correlation_limit(symbol_name, signal):
-                    main_logger.warning(f"({symbol_name}) Signal blocked due to correlation limits")
-                    continue
-                
-                volume = self.position_sizer.calculate_volume(symbol_name, sl_price, signal)
-                if volume is None or volume == 0:
-                    main_logger.warning(f"({symbol_name}) Invalid volume ({volume}). Skipping trade.")
-                    continue
-                
-                main_logger.info(f"({symbol_name}) Calculated volume: {volume} lots.")
-                
-                # Final validation before trade
-                ticker = self.mt5_client.get_symbol_ticker(symbol_name)
-                if ticker:
-                    current_price = ticker.ask if signal == "BUY" else ticker.bid
-                    main_logger.info(f"({symbol_name}) Final check - Current: {current_price:.{symbol_state['digits']}f}, "
-                                   f"SL: {sl_price:.{symbol_state['digits']}f}, TP: {tp_price:.{symbol_state['digits']}f}")
-                
-                trade_result = self.trade_executor.place_market_order(
-                    symbol_name, signal, volume, sl_price, tp_price
-                )
-                if trade_result:
-                    main_logger.info(f"({symbol_name}) *** TRADE EXECUTED *** Order: {trade_result.order}, Deal: {trade_result.deal}")
-                    symbol_state['is_position_open'] = True 
-                    symbol_state['open_position_type'] = signal
-                else:
-                    main_logger.error(f"({symbol_name}) *** TRADE FAILED ***")
-            
-            time.sleep(0.1) # Small delay between symbols
-
-    def run(self):
-        main_logger.info("="*60)
-        main_logger.info(f"Starting SMC Trading Bot")
-        main_logger.info(f"Version: Professional SMC with Order Blocks, FVG, Liquidity")
-        main_logger.info(f"Symbols: {len(self.config.SYMBOLS)}")
-        main_logger.info(f"Timeframe: {self.config.TIMEFRAME_STR}")
-        main_logger.info(f"Risk per trade: {self.config.RISK_PER_TRADE_PERCENT}%")
-        main_logger.info("="*60)
+                # Update session trades
+                if narrative.in_killzone:
+                    self.session_trades[narrative.killzone_name] += 1
+            else:
+                logger.error(f"{symbol}: Trade execution failed")
+    
+    def _log_narrative(self, symbol, narrative, signal, sl, tp):
+        """Log the complete ICT narrative for the trade."""
+        logger.info(f"\n{'='*50}")
+        logger.info(f"ICT SIGNAL GENERATED: {symbol} - {signal}")
+        logger.info(f"{'='*50}")
+        logger.info(f"NARRATIVE:")
+        logger.info(f"  Daily Bias: {narrative.daily_bias.upper()}")
+        logger.info(f"  PO3 Phase: {narrative.po3_phase}")
+        logger.info(f"  Kill Zone: {narrative.killzone_name or 'None'}")
+        logger.info(f"  Entry Model: {narrative.entry_model}")
+        logger.info(f"\n TRADE DETAILS:")
+        logger.info(f"  Entry: {narrative.current_price:.5f}")
+        logger.info(f"  Stop Loss: {sl:.5f}")
+        logger.info(f"  Take Profit: {tp:.5f}")
+        risk_reward = abs(tp - narrative.current_price) / abs(narrative.current_price - sl)
+        logger.info(f"  Risk:Reward = 1:{risk_reward:.1f}")
+        logger.info(f"{'='*50}\n")
+    
+    def run_cycle(self):
+        """
+        Run one complete trading cycle with proper NY-based kill zone filtering.
+        """
+        self.check_daily_reset()
         
-        if not self.mt5_client.initialize():
-            main_logger.error("Halting bot: MT5 initialization failed.")
+        if not self.can_trade():
             return
+        
+        # Determine if we should be active based on Kill Zones
+        require_killzone = getattr(config, 'REQUIRE_KILLZONE', True)
 
-        self._initialize_symbol_data()
-        if not self.config.SYMBOLS:
-            main_logger.error("No symbols could be initialized. Halting bot.")
-            self.mt5_client.shutdown()
+        if require_killzone:
+            # Convert current UTC time to NY time for kill zone check
+            current_utc = datetime.now(timezone.utc)
+            current_ny = current_utc.astimezone(config.NY_TIMEZONE)
+            current_ny_time = current_ny.time()
+            
+            in_any_killzone = False
+            active_zone = None
+            
+            # Check London Kill Zone (2-5 AM NY)
+            if time_obj(2, 0) <= current_ny_time < time_obj(5, 0):
+                in_any_killzone = True
+                active_zone = "LONDON KILL ZONE"
+                
+            # Check New York Kill Zone (8:30-11 AM NY)
+            elif time_obj(8, 30) <= current_ny_time < time_obj(11, 0):
+                in_any_killzone = True
+                active_zone = "NEW YORK KILL ZONE"
+                
+            # Check London Close Kill Zone (3-5 PM NY)
+            elif time_obj(15, 0) <= current_ny_time < time_obj(17, 0):
+                in_any_killzone = True
+                active_zone = "LONDON CLOSE KILL ZONE"
+            
+            if in_any_killzone:
+                logger.info(f"Active Kill Zone: {active_zone} (NY Time: {current_ny_time.strftime('%H:%M')})")
+            else:
+                logger.debug(f"Outside kill zones. NY Time: {current_ny_time.strftime('%H:%M')}. Waiting...")
+                return
+        else:
+            logger.debug("Killzone requirement disabled, processing all symbols")
+
+        # If we are active, then process each symbol
+        for symbol in self.symbol_manager.symbols:
+            if not self.can_trade():
+                break
+            
+            try:
+                self.process_symbol(symbol)
+            except Exception as e:
+                logger.error(f"{symbol}: Error processing - {e}", exc_info=True)
+            
+            time.sleep(0.5)  # Small delay between symbols
+    
+    def run(self):
+        """Main bot loop."""
+        if not self.initialize():
             return
+        
+        logger.info("\n ICT Trading Bot Started\n")
         
         try:
-            iteration_count = 0
+            iteration = 0
             while True:
-                iteration_count += 1
-                loop_start_time = time.time()
+                iteration += 1
+                start_time = time.time()
                 
-                main_logger.info(f"\n{'='*40} ITERATION {iteration_count} {'='*40}")
-                main_logger.info(f"Loop start time: {datetime.now()}")
+                logger.info(f"\n{'='*30} Cycle {iteration} {'='*30}")
+                logger.info(f"Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
                 
-                # Check MT5 connection
-                if not self.mt5_client.is_connected() or not self.mt5_client.get_terminal_info():
-                    main_logger.error("MT5 connection lost. Attempting to re-initialize...")
-                    self.mt5_client.shutdown() 
-                    time.sleep(10) 
+                # Check connection
+                if not self.mt5_client.is_connected():
+                    logger.error("MT5 connection lost. Attempting reconnect...")
+                    self.mt5_client.shutdown()
+                    time.sleep(5)
                     if not self.mt5_client.initialize():
-                        main_logger.error("Re-initialization failed. Exiting.")
-                        break
-                    self._initialize_symbol_data()
-                    if not self.config.SYMBOLS: 
-                        main_logger.error("No symbols after re-initialization. Exiting.")
+                        logger.error("Failed to reconnect. Exiting.")
                         break
                 
-                # Run main trading logic
-                self.run_loop_iteration()
-
+                # Run trading cycle
+                self.run_cycle()
+                
                 # Calculate sleep time
-                loop_duration = time.time() - loop_start_time
-                sleep_time = max(0, self.config.LOOP_SLEEP_SECONDS - loop_duration)
-                main_logger.info(f"Loop iteration {iteration_count} completed in {loop_duration:.2f}s. "
-                               f"Sleeping for {sleep_time:.2f}s until next iteration.")
+                elapsed = time.time() - start_time
+                sleep_time = max(0, config.LOOP_SLEEP_SECONDS - elapsed)
                 
                 if sleep_time > 0:
-                    main_logger.debug(f"Next iteration will start at approximately {datetime.fromtimestamp(time.time() + sleep_time)}")
+                    logger.info(f"Cycle completed in {elapsed:.1f}s. "
+                               f"Sleeping for {sleep_time:.1f}s...")
+                    time.sleep(sleep_time)
                 
-                time.sleep(sleep_time)
-
         except KeyboardInterrupt:
-            main_logger.info("\nBot stopped by user (Ctrl+C).")
+            logger.info("\n Bot stopped by user")
         except Exception as e:
-            main_logger.error(f"Unhandled exception in TradingBot run loop: {e}", exc_info=True)
+            logger.error(f"Unexpected error: {e}", exc_info=True)
         finally:
-            self.mt5_client.shutdown()
-            main_logger.info(f"TradingBot has shut down. Total iterations: {iteration_count}")
-            main_logger.info("="*60)
+            self.shutdown()
+    
+    def shutdown(self):
+        """Clean shutdown of the bot."""
+        logger.info("\n Final Statistics:")
+        logger.info(f"  Total trades today: {self.daily_trades}")
+        logger.info(f"  Session breakdown: {dict(self.session_trades)}")
+        
+        self.mt5_client.shutdown()
+        logger.info("\n ICT Trading Bot Shutdown Complete\n")
 
 if __name__ == "__main__":
-    main_logger.info("SMC Trading Bot starting...")
-    bot = TradingBot(bot_config=global_config)
+    bot = ICTTradingBot()
     bot.run()

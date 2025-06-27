@@ -1,6 +1,5 @@
 """
-Simplified ICT/SMC Configuration
-Only includes parameters that are actively used by the trading system.
+ICT/SMC Configuration - UPDATED with proper ICT Kill Zone times
 """
 
 # Trading Parameters
@@ -26,11 +25,21 @@ DATA_LOOKBACK = 1000  # Total candles to fetch
 SL_ATR_MULTIPLIER = 2.0  # ATR multiplier for stop loss
 TP_RR_RATIO = 1.5 # Default risk:reward
 
-# ICT Session Times (UTC)
+# ICT Session Times (UTC) - ALIGNED WITH STANDARD ICT KILL ZONES
+# These are the TRUE ICT Kill Zones as taught by Michael Huddleston
 ICT_SESSIONS = {
-    'asian': {'start': 0, 'end': 6},      # 00:00-03:00 UTC but in EET and EAT for Broker
-    'london': {'start': 10, 'end': 13},    # 07:00-10:00 UTC but in EET and EAT for Broker
-    'ny': {'start': 15, 'end': 18}        # 12:00-15:00 UTC but in EET and EAT for Broker
+    'Asian': {'start': 0, 'end': 6},      # UTC 00:00-04:00 (Asian Kill Zone)
+    'London': {'start': 10, 'end': 13},     # UTC 06:00-09:00 (London Open Kill Zone) 
+    'NewYork': {'start': 15, 'end': 18},  # UTC 11:00-14:00 (New York Kill Zone)
+    'LondonClose': {'start': 17, 'end': 19}  # UTC 14:00-16:00 (London Close Kill Zone)
+}
+
+# Full Trading Sessions for reference (not kill zones)
+FULL_SESSIONS = {
+    'Sydney': {'start': 21, 'end': 6},    # UTC 21:00-06:00 (crosses midnight)
+    'Tokyo': {'start': 0, 'end': 9},      # UTC 00:00-09:00
+    'London': {'start': 7, 'end': 16},    # UTC 07:00-16:00
+    'NewYork': {'start': 13, 'end': 22}   # UTC 13:00-22:00
 }
 
 # Bot Operation
@@ -58,3 +67,5 @@ RETRACEMENT_THRESHOLD_PERCENT = 25.0
 ALLOW_MANIPULATION_PHASE_ENTRY = True
 MICRO_STRUCTURE_LOOKBACK = 15  # For structure continuation
 APPROACHING_LEVEL_TOLERANCE = 0.0005  # 5 pips
+
+MIN_TARGET_RR = 1.0

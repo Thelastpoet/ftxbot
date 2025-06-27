@@ -1,7 +1,5 @@
 """
-ICT Trading Engine - The specialized trading brain that follows the ICT narrative.
-This module contains the SMC analysis and signal generation following the proper
-ICT sequence: Daily Bias → Manipulation → Structure Break → Optimal Entry
+ICT Trading Engine 
 """
 
 import pandas as pd
@@ -120,71 +118,71 @@ class ICTAnalyzer:
     def _get_session_ranges(self, ohlc_df: pd.DataFrame) -> Dict[str, dict]:
         """
         Identify the last completed Asian session range.
+        Updated to use the FULL Tokyo session (00:00-09:00 UTC) for accumulation range
         """
         ranges: Dict[str, dict] = {}
-        sessions_to_check = { "Asia": "Tokyo" }
+        
+        try:
+            # Use the FULL Tokyo session for Asian accumulation (not just the kill zone)
+            # This gives us the complete overnight range
+            sess = smc.sessions(ohlc_df, session="Tokyo", time_zone="UTC")
+            if sess is None:
+                return ranges
 
-        for name, smc_name in sessions_to_check.items():
-            try:
-                # Use smartmoneyconcepts to mark session activity
-                sess = smc.sessions(ohlc_df, session=smc_name, time_zone="UTC")
-                if sess is None:
-                    continue
+            active = sess['Active'] == 1
+            flips = active.astype(int).diff().fillna(0)
+            
+            starts = flips[flips == 1].index
+            ends = flips[flips == -1].index
 
-                active = sess['Active'] == 1
-                flips = active.astype(int).diff().fillna(0)
-                
-                starts = flips[flips == 1].index
-                ends = flips[flips == -1].index
+            if starts.empty:
+                return ranges
 
-                if starts.empty:
-                    continue
-
-                # Handle ongoing session
-                if not ends.empty:
-                    if starts[-1] > ends[-1]:
-                        # Session is ongoing, use current time as temporary end
-                        last_start_time = starts[-1]
-                        last_end_time = ohlc_df.index[-1]
-                        
-                        # Only use if session has been active for at least 2 hours
-                        session_duration = (last_end_time - last_start_time).total_seconds() / 3600
-                        if session_duration >= 2:
-                            session_df = ohlc_df.loc[last_start_time:last_end_time]
-                            ranges[name + "_ongoing"] = {
-                                'start': last_start_time,
-                                'end': last_end_time,
-                                'high': session_df['high'].max(),
-                                'low': session_df['low'].min(),
-                                'is_ongoing': True
-                            }
-                        
-                        # Also check for last completed session
-                        if len(starts) > 1:
-                            starts = starts[:-1]
-                        else:
-                            continue
-
-                # Get last completed session
-                if not ends.empty:
+            # Handle ongoing session
+            if not ends.empty:
+                if starts[-1] > ends[-1]:
+                    # Session is ongoing, use current time as temporary end
                     last_start_time = starts[-1]
-                    corresponding_ends = ends[ends > last_start_time]
-                    if corresponding_ends.empty:
-                        continue
-                    last_end_time = corresponding_ends[0]
+                    last_end_time = ohlc_df.index[-1]
+                    
+                    # Only use if session has been active for at least 2 hours
+                    session_duration = (last_end_time - last_start_time).total_seconds() / 3600
+                    if session_duration >= 2:
+                        session_df = ohlc_df.loc[last_start_time:last_end_time]
+                        ranges["Asia_ongoing"] = {
+                            'start': last_start_time,
+                            'end': last_end_time,
+                            'high': session_df['high'].max(),
+                            'low': session_df['low'].min(),
+                            'is_ongoing': True
+                        }
+                    
+                    # Also check for last completed session
+                    if len(starts) > 1:
+                        starts = starts[:-1]
+                    else:
+                        return ranges
 
-                    session_df = ohlc_df.loc[last_start_time:last_end_time]
+            # Get last completed session
+            if not ends.empty:
+                last_start_time = starts[-1]
+                corresponding_ends = ends[ends > last_start_time]
+                if corresponding_ends.empty:
+                    return ranges
+                last_end_time = corresponding_ends[0]
 
-                    ranges[name] = {
-                        'start': last_start_time,
-                        'end': last_end_time,
-                        'high': session_df['high'].max(),
-                        'low': session_df['low'].min(),
-                        'is_ongoing': False
-                    }
-            except Exception as e:
-                logger.error(f"Error getting session range for {name}: {e}", exc_info=True)
-                continue
+                session_df = ohlc_df.loc[last_start_time:last_end_time]
+
+                ranges["Asia"] = {
+                    'start': last_start_time,
+                    'end': last_end_time,
+                    'high': session_df['high'].max(),
+                    'low': session_df['low'].min(),
+                    'is_ongoing': False
+                }
+                
+        except Exception as e:
+            logger.error(f"Error getting session range: {e}", exc_info=True)
 
         return ranges
     
@@ -483,25 +481,29 @@ class ICTAnalyzer:
             'killzone_name': None
         }
         
-        # Check ICT kill zones
+        # Check ICT kill zones (PRIMARY - this is what matters for ICT)
         for zone_name, zone_times in self.config.ICT_SESSIONS.items():
             if zone_times['start'] <= current_hour < zone_times['end']:
                 session_info['in_killzone'] = True
-                session_info['killzone_name'] = zone_name
+                session_info['killzone_name'] = zone_name.lower()  # Make lowercase for consistency
                 break
         
-        # Check general sessions using SMC
-        try:
-            sessions_to_check = ['London', 'New York', 'Tokyo']
-            for session in sessions_to_check:
-                result = smc.sessions(ohlc_df, session=session, time_zone="UTC")
-                if result is not None and 'Active' in result.columns:
-                    if result['Active'].iloc[-1] == 1:
-                        session_info['in_session'] = True
-                        session_info['session_name'] = session
-                        break
-        except Exception as e:
-            logger.warning(f"Error checking sessions: {e}")
+        # Check which full session we're in
+        for session_name, session_times in self.config.FULL_SESSIONS.items():
+            start = session_times['start']
+            end = session_times['end']
+            
+            # Handle sessions that cross midnight
+            if start > end:
+                if current_hour >= start or current_hour < end:
+                    session_info['in_session'] = True
+                    session_info['session_name'] = session_name
+                    break
+            else:
+                if start <= current_hour < end:
+                    session_info['in_session'] = True
+                    session_info['session_name'] = session_name
+                    break
         
         return session_info
     
@@ -619,8 +621,7 @@ class ICTAnalyzer:
             return True
             
         recent_candles = ohlc_df.tail(lookback)
-        current_price = ohlc_df['close'].iloc[-1]
-        
+                
         confirmations = []
         
         for idx, candle in recent_candles.iterrows():
@@ -643,7 +644,7 @@ class ICTAnalyzer:
                 if lower_wick > body_size * 1.2 and wick_ratio < 0.4:
                     confirmations.append('pin_bar')
                 
-                # NEW: Strong bullish close near highs
+                # Strong bullish close near highs
                 if candle['close'] > candle['open']:
                     close_position = (candle['close'] - candle['low']) / candle_range if candle_range > 0 else 0
                     if close_position > 0.8:  # Closed in top 20% of range
@@ -669,7 +670,7 @@ class ICTAnalyzer:
                 if upper_wick > body_size * 1.2 and wick_ratio < 0.4:
                     confirmations.append('pin_bar')
                     
-                # NEW: Strong bearish close near lows
+                # Strong bearish close near lows
                 if candle['close'] < candle['open']:
                     close_position = (candle['close'] - candle['low']) / candle_range if candle_range > 0 else 0
                     if close_position < 0.2:  # Closed in bottom 20% of range
@@ -684,7 +685,7 @@ class ICTAnalyzer:
                         candle['open'] > prev_candle['close']):
                         confirmations.append('engulfing')
         
-        # ENHANCED: Check for momentum
+        # Check for momentum
         if len(recent_candles) >= 2:
             # Look for consistent directional movement
             if bias == 'bullish':
@@ -715,7 +716,6 @@ class ICTAnalyzer:
 class ICTSignalGenerator:
     """
     Generates trading signals following the ICT narrative sequence.
-    This is the key difference - we follow a story, not a checklist.
     """
     
     def __init__(self, config):
@@ -738,7 +738,6 @@ class ICTSignalGenerator:
         # Extract key components
         daily_bias = analysis['daily_bias']
         manipulation = analysis['manipulation']
-        structure = analysis['structure']
         current_price = analysis['current_price']
         session = analysis['session']
         
@@ -943,7 +942,6 @@ class ICTSignalGenerator:
                     return fvg
         
         return None
-
     
     def _is_safe_entry_location(self, ohlc_df, entry_price, sl_price, daily_bias):
         """
@@ -1130,7 +1128,6 @@ class ICTSignalGenerator:
             # SL above the swing high or manipulation high
             sl_price = max(ote['swing_high'], manipulation.get('level', ote['swing_high']))
             sl_price += self._calculate_atr_buffer(ohlc_df)
-            sl_price += spread
         
         # Calculate target
         tp_price = self._calculate_target(current_price, sl_price, bias, analysis)        
@@ -1181,7 +1178,7 @@ class ICTSignalGenerator:
         
         # If no liquidity zones, try to get them from the latest analysis
         if not liquidity_zones and hasattr(self, '_last_analysis_cache'):
-            cached_analysis = self._last_analysis_cache.get(analysis.get('symbol', ''))
+            cached_analysis = self.analyzer._last_analysis_cache.get(analysis.get('symbol', ''))
             if cached_analysis and 'liquidity_zones' in cached_analysis:
                 liquidity_zones = cached_analysis['liquidity_zones']
         

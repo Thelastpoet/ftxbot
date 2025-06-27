@@ -329,5 +329,4 @@ class SymbolManager:
             logger.info(f"{symbol}: Spread {spread_points} > max {max_spread_points}. Skipping.")
             return None
             
-        # Instead of returning True, return the actual spread value
         return raw_spread

@@ -28,7 +28,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-
 class ICTTradingBot:
     """
     Main trading bot that coordinates all components and follows ICT methodology.
@@ -47,7 +46,7 @@ class ICTTradingBot:
         self.daily_trades = 0
         self.last_trade_date = None
         self.session_trades = defaultdict(int)
-        self.active_narratives = {}  # Track narrative for each symbol
+        self.active_narratives = {}
         
     def initialize(self):
         """Initialize the bot and all components."""
@@ -221,6 +220,7 @@ class ICTTradingBot:
         if require_killzone:
             in_any_killzone = False
             current_hour = datetime.now().hour
+            logging.info(f"Current Hour: {current_hour}")
             for zone_name, zone_times in config.ICT_SESSIONS.items():
                 # Handle sessions that cross midnight
                 if zone_times['start'] > zone_times['end']:
