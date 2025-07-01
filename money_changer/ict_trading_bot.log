@@ -385,3 +385,1640 @@
 2025-07-01 16:52:10,546 - __main__ - INFO - 
  ICT Trading Bot Shutdown Complete
 
+2025-07-01 17:25:44,750 - position_manager - INFO - ICT Position Manager initialized
+2025-07-01 17:25:44,750 - __main__ - INFO - ICT Position Manager enabled
+2025-07-01 17:25:44,751 - __main__ - INFO - ============================================================
+2025-07-01 17:25:44,751 - __main__ - INFO - ICT Trading Bot - Initialization
+2025-07-01 17:25:44,751 - __main__ - INFO - ============================================================
+2025-07-01 17:25:44,763 - bot_components - INFO - Connected to account: 350682536, Server: XMGlobal-MT5 11, Balance: 18.77 USD
+2025-07-01 17:25:44,766 - bot_components - INFO - Initialized 25 symbols: ['AUDUSD', 'CHFJPY', 'EURUSD', 'GBPUSD', 'USDCAD', 'USDCHF', 'USDJPY', 'EURCAD', 'GBPJPY', 'AUDCHF', 'AUDCAD', 'AUDJPY', 'EURAUD', 'EURJPY', 'EURCHF', 'EURNZD', 'AUDNZD', 'GBPCHF', 'CADCHF', 'GBPAUD', 'GBPCAD', 'GBPNZD', 'NZDUSD', 'GOLD', 'SILVER']
+2025-07-01 17:25:44,766 - __main__ - INFO - Initialized with 25 symbols
+2025-07-01 17:25:44,766 - __main__ - INFO - Risk per trade: 1.0%
+2025-07-01 17:25:44,766 - __main__ - INFO - Max daily trades: 100
+2025-07-01 17:25:44,767 - __main__ - INFO - ============================================================
+2025-07-01 17:25:44,767 - __main__ - INFO - 
+ ICT Trading Bot Started
+
+2025-07-01 17:25:44,767 - __main__ - INFO - 
+============================== Cycle 1 ==============================
+2025-07-01 17:25:44,767 - __main__ - INFO - Time: 2025-07-01 17:25:44
+2025-07-01 17:25:44,767 - __main__ - INFO - New trading day: 2025-07-01
+2025-07-01 17:25:44,767 - __main__ - INFO - Active Kill Zone: NEW YORK KILL ZONE (NY Time: 10:25)
+2025-07-01 17:25:46,099 - __main__ - INFO - EURUSD: Position already open (BUY)
+2025-07-01 17:25:54,306 - bot_components - INFO - EURNZD: Spread 54 > max 50. Skipping.
+2025-07-01 17:25:57,252 - bot_components - INFO - GBPCAD: Spread 51 > max 50. Skipping.
+2025-07-01 17:26:00,164 - __main__ - INFO - Cycle completed in 15.4s. Sleeping for 44.6s...
+2025-07-01 17:26:44,768 - __main__ - INFO - 
+============================== Cycle 2 ==============================
+2025-07-01 17:26:44,769 - __main__ - INFO - Time: 2025-07-01 17:26:44
+2025-07-01 17:26:44,770 - __main__ - INFO - Active Kill Zone: NEW YORK KILL ZONE (NY Time: 10:26)
+2025-07-01 17:26:46,060 - __main__ - INFO - EURUSD: Position already open (BUY)
+2025-07-01 17:26:53,998 - bot_components - INFO - EURNZD: Spread 52 > max 50. Skipping.
+2025-07-01 17:26:56,836 - bot_components - INFO - GBPCAD: Spread 55 > max 50. Skipping.
+2025-07-01 17:26:59,804 - __main__ - INFO - Cycle completed in 15.0s. Sleeping for 45.0s...
+2025-07-01 17:27:44,770 - __main__ - INFO - 
+============================== Cycle 3 ==============================
+2025-07-01 17:27:44,770 - __main__ - INFO - Time: 2025-07-01 17:27:44
+2025-07-01 17:27:44,770 - __main__ - INFO - Active Kill Zone: NEW YORK KILL ZONE (NY Time: 10:27)
+2025-07-01 17:27:45,996 - __main__ - INFO - EURUSD: Position already open (BUY)
+2025-07-01 17:27:59,582 - __main__ - INFO - Cycle completed in 14.8s. Sleeping for 45.2s...
+2025-07-01 17:28:44,771 - __main__ - INFO - 
+============================== Cycle 4 ==============================
+2025-07-01 17:28:44,772 - __main__ - INFO - Time: 2025-07-01 17:28:44
+2025-07-01 17:28:44,773 - __main__ - INFO - Active Kill Zone: NEW YORK KILL ZONE (NY Time: 10:28)
+2025-07-01 17:28:45,991 - __main__ - INFO - EURUSD: Position already open (BUY)
+2025-07-01 17:28:56,681 - bot_components - INFO - GBPCAD: Spread 51 > max 50. Skipping.
+2025-07-01 17:28:59,478 - __main__ - INFO - Cycle completed in 14.7s. Sleeping for 45.3s...
+2025-07-01 17:29:44,771 - __main__ - INFO - 
+============================== Cycle 5 ==============================
+2025-07-01 17:29:44,772 - __main__ - INFO - Time: 2025-07-01 17:29:44
+2025-07-01 17:29:44,772 - __main__ - INFO - Active Kill Zone: NEW YORK KILL ZONE (NY Time: 10:29)
+2025-07-01 17:29:45,970 - __main__ - INFO - EURUSD: Position already open (BUY)
+2025-07-01 17:29:53,696 - bot_components - INFO - EURNZD: Spread 57 > max 50. Skipping.
+2025-07-01 17:29:56,498 - bot_components - INFO - GBPCAD: Spread 56 > max 50. Skipping.
+2025-07-01 17:29:59,312 - __main__ - INFO - Cycle completed in 14.5s. Sleeping for 45.5s...
+2025-07-01 17:30:44,773 - __main__ - INFO - 
+============================== Cycle 6 ==============================
+2025-07-01 17:30:44,773 - __main__ - INFO - Time: 2025-07-01 17:30:44
+2025-07-01 17:30:44,773 - __main__ - INFO - Active Kill Zone: NEW YORK KILL ZONE (NY Time: 10:30)
+2025-07-01 17:30:45,975 - __main__ - INFO - EURUSD: Position already open (BUY)
+2025-07-01 17:30:53,675 - bot_components - INFO - EURNZD: Spread 56 > max 50. Skipping.
+2025-07-01 17:30:56,480 - bot_components - INFO - GBPCAD: Spread 54 > max 50. Skipping.
+2025-07-01 17:30:59,331 - __main__ - INFO - Cycle completed in 14.6s. Sleeping for 45.4s...
+2025-07-01 17:31:44,774 - __main__ - INFO - 
+============================== Cycle 7 ==============================
+2025-07-01 17:31:44,775 - __main__ - INFO - Time: 2025-07-01 17:31:44
+2025-07-01 17:31:44,776 - __main__ - INFO - Active Kill Zone: NEW YORK KILL ZONE (NY Time: 10:31)
+2025-07-01 17:31:46,010 - __main__ - INFO - EURUSD: Position already open (BUY)
+2025-07-01 17:31:53,709 - bot_components - INFO - EURNZD: Spread 52 > max 50. Skipping.
+2025-07-01 17:31:56,501 - bot_components - INFO - GBPCAD: Spread 53 > max 50. Skipping.
+2025-07-01 17:31:59,387 - __main__ - INFO - Cycle completed in 14.6s. Sleeping for 45.4s...
+2025-07-01 17:32:44,775 - __main__ - INFO - 
+============================== Cycle 8 ==============================
+2025-07-01 17:32:44,776 - __main__ - INFO - Time: 2025-07-01 17:32:44
+2025-07-01 17:32:44,776 - __main__ - INFO - Active Kill Zone: NEW YORK KILL ZONE (NY Time: 10:32)
+2025-07-01 17:32:45,985 - __main__ - INFO - EURUSD: Position already open (BUY)
+2025-07-01 17:32:56,562 - bot_components - INFO - GBPCAD: Spread 51 > max 50. Skipping.
+2025-07-01 17:32:59,451 - __main__ - INFO - Cycle completed in 14.7s. Sleeping for 45.3s...
+2025-07-01 17:33:44,777 - __main__ - INFO - 
+============================== Cycle 9 ==============================
+2025-07-01 17:33:44,777 - __main__ - INFO - Time: 2025-07-01 17:33:44
+2025-07-01 17:33:44,778 - __main__ - INFO - Active Kill Zone: NEW YORK KILL ZONE (NY Time: 10:33)
+2025-07-01 17:33:46,007 - __main__ - INFO - EURUSD: Position already open (BUY)
+2025-07-01 17:33:59,510 - __main__ - INFO - Cycle completed in 14.7s. Sleeping for 45.3s...
+2025-07-01 17:34:44,777 - __main__ - INFO - 
+============================== Cycle 10 ==============================
+2025-07-01 17:34:44,778 - __main__ - INFO - Time: 2025-07-01 17:34:44
+2025-07-01 17:34:44,778 - __main__ - INFO - Active Kill Zone: NEW YORK KILL ZONE (NY Time: 10:34)
+2025-07-01 17:34:45,971 - __main__ - INFO - EURUSD: Position already open (BUY)
+2025-07-01 17:34:53,695 - bot_components - INFO - EURNZD: Spread 51 > max 50. Skipping.
+2025-07-01 17:34:59,464 - __main__ - INFO - Cycle completed in 14.7s. Sleeping for 45.3s...
+2025-07-01 17:35:44,779 - __main__ - INFO - 
+============================== Cycle 11 ==============================
+2025-07-01 17:35:44,780 - __main__ - INFO - Time: 2025-07-01 17:35:44
+2025-07-01 17:35:44,781 - __main__ - INFO - Active Kill Zone: NEW YORK KILL ZONE (NY Time: 10:35)
+2025-07-01 17:35:46,072 - __main__ - INFO - EURUSD: Position already open (BUY)
+2025-07-01 17:35:56,674 - bot_components - INFO - GBPCAD: Spread 54 > max 50. Skipping.
+2025-07-01 17:35:59,528 - __main__ - INFO - Cycle completed in 14.7s. Sleeping for 45.3s...
+2025-07-01 17:36:44,780 - __main__ - INFO - 
+============================== Cycle 12 ==============================
+2025-07-01 17:36:44,781 - __main__ - INFO - Time: 2025-07-01 17:36:44
+2025-07-01 17:36:44,782 - __main__ - INFO - Active Kill Zone: NEW YORK KILL ZONE (NY Time: 10:36)
+2025-07-01 17:36:46,011 - __main__ - INFO - EURUSD: Position already open (BUY)
+2025-07-01 17:36:59,568 - __main__ - INFO - Cycle completed in 14.8s. Sleeping for 45.2s...
+2025-07-01 17:37:44,781 - __main__ - INFO - 
+============================== Cycle 13 ==============================
+2025-07-01 17:37:44,781 - __main__ - INFO - Time: 2025-07-01 17:37:44
+2025-07-01 17:37:44,782 - __main__ - INFO - Active Kill Zone: NEW YORK KILL ZONE (NY Time: 10:37)
+2025-07-01 17:37:46,016 - __main__ - INFO - EURUSD: Position already open (BUY)
+2025-07-01 17:37:56,613 - bot_components - INFO - GBPCAD: Spread 55 > max 50. Skipping.
+2025-07-01 17:37:59,505 - __main__ - INFO - Cycle completed in 14.7s. Sleeping for 45.3s...
+2025-07-01 17:38:44,782 - __main__ - INFO - 
+============================== Cycle 14 ==============================
+2025-07-01 17:38:44,782 - __main__ - INFO - Time: 2025-07-01 17:38:44
+2025-07-01 17:38:44,782 - __main__ - INFO - Active Kill Zone: NEW YORK KILL ZONE (NY Time: 10:38)
+2025-07-01 17:38:45,982 - __main__ - INFO - EURUSD: Position already open (BUY)
+2025-07-01 17:38:56,745 - bot_components - INFO - GBPCAD: Spread 51 > max 50. Skipping.
+2025-07-01 17:38:59,602 - __main__ - INFO - Cycle completed in 14.8s. Sleeping for 45.2s...
+2025-07-01 17:39:44,783 - __main__ - INFO - 
+============================== Cycle 15 ==============================
+2025-07-01 17:39:44,784 - __main__ - INFO - Time: 2025-07-01 17:39:44
+2025-07-01 17:39:44,785 - __main__ - INFO - Active Kill Zone: NEW YORK KILL ZONE (NY Time: 10:39)
+2025-07-01 17:39:46,056 - __main__ - INFO - EURUSD: Position already open (BUY)
+2025-07-01 17:39:56,809 - bot_components - INFO - GBPCAD: Spread 54 > max 50. Skipping.
+2025-07-01 17:39:59,701 - __main__ - INFO - Cycle completed in 14.9s. Sleeping for 45.1s...
+2025-07-01 17:40:44,784 - __main__ - INFO - 
+============================== Cycle 16 ==============================
+2025-07-01 17:40:44,785 - __main__ - INFO - Time: 2025-07-01 17:40:44
+2025-07-01 17:40:44,785 - __main__ - INFO - Active Kill Zone: NEW YORK KILL ZONE (NY Time: 10:40)
+2025-07-01 17:40:46,007 - __main__ - INFO - EURUSD: Position already open (BUY)
+2025-07-01 17:40:56,713 - bot_components - INFO - GBPCAD: Spread 55 > max 50. Skipping.
+2025-07-01 17:40:59,621 - __main__ - INFO - Cycle completed in 14.8s. Sleeping for 45.2s...
+2025-07-01 17:41:44,785 - __main__ - INFO - 
+============================== Cycle 17 ==============================
+2025-07-01 17:41:44,785 - __main__ - INFO - Time: 2025-07-01 17:41:44
+2025-07-01 17:41:44,786 - __main__ - INFO - Active Kill Zone: NEW YORK KILL ZONE (NY Time: 10:41)
+2025-07-01 17:41:45,987 - __main__ - INFO - EURUSD: Position already open (BUY)
+2025-07-01 17:41:56,679 - bot_components - INFO - GBPCAD: Spread 51 > max 50. Skipping.
+2025-07-01 17:41:59,607 - __main__ - INFO - Cycle completed in 14.8s. Sleeping for 45.2s...
+2025-07-01 17:42:44,786 - __main__ - INFO - 
+============================== Cycle 18 ==============================
+2025-07-01 17:42:44,786 - __main__ - INFO - Time: 2025-07-01 17:42:44
+2025-07-01 17:42:44,786 - __main__ - INFO - Active Kill Zone: NEW YORK KILL ZONE (NY Time: 10:42)
+2025-07-01 17:42:45,992 - __main__ - INFO - EURUSD: Position already open (BUY)
+2025-07-01 17:42:56,717 - bot_components - INFO - GBPCAD: Spread 52 > max 50. Skipping.
+2025-07-01 17:42:59,613 - __main__ - INFO - Cycle completed in 14.8s. Sleeping for 45.2s...
+2025-07-01 17:43:44,787 - __main__ - INFO - 
+============================== Cycle 19 ==============================
+2025-07-01 17:43:44,787 - __main__ - INFO - Time: 2025-07-01 17:43:44
+2025-07-01 17:43:44,788 - __main__ - INFO - Active Kill Zone: NEW YORK KILL ZONE (NY Time: 10:43)
+2025-07-01 17:43:45,986 - __main__ - INFO - EURUSD: Position already open (BUY)
+2025-07-01 17:43:53,791 - bot_components - INFO - EURNZD: Spread 55 > max 50. Skipping.
+2025-07-01 17:43:56,644 - bot_components - INFO - GBPCAD: Spread 51 > max 50. Skipping.
+2025-07-01 17:43:59,493 - __main__ - INFO - Cycle completed in 14.7s. Sleeping for 45.3s...
+2025-07-01 17:44:44,787 - __main__ - INFO - 
+============================== Cycle 20 ==============================
+2025-07-01 17:44:44,788 - __main__ - INFO - Time: 2025-07-01 17:44:44
+2025-07-01 17:44:44,788 - __main__ - INFO - Active Kill Zone: NEW YORK KILL ZONE (NY Time: 10:44)
+2025-07-01 17:44:46,014 - __main__ - INFO - EURUSD: Position already open (BUY)
+2025-07-01 17:44:53,786 - bot_components - INFO - EURNZD: Spread 52 > max 50. Skipping.
+2025-07-01 17:44:56,589 - bot_components - INFO - GBPCAD: Spread 51 > max 50. Skipping.
+2025-07-01 17:44:59,475 - __main__ - INFO - Cycle completed in 14.7s. Sleeping for 45.3s...
+2025-07-01 17:45:44,788 - __main__ - INFO - 
+============================== Cycle 21 ==============================
+2025-07-01 17:45:44,789 - __main__ - INFO - Time: 2025-07-01 17:45:44
+2025-07-01 17:45:44,789 - __main__ - INFO - Active Kill Zone: NEW YORK KILL ZONE (NY Time: 10:45)
+2025-07-01 17:45:45,981 - __main__ - INFO - EURUSD: Position already open (BUY)
+2025-07-01 17:45:56,013 - bot_components - INFO - GBPAUD: Spread 51 > max 50. Skipping.
+2025-07-01 17:45:56,514 - bot_components - INFO - GBPCAD: Spread 54 > max 50. Skipping.
+2025-07-01 17:45:59,366 - __main__ - INFO - Cycle completed in 14.6s. Sleeping for 45.4s...
+2025-07-01 17:46:44,789 - __main__ - INFO - 
+============================== Cycle 22 ==============================
+2025-07-01 17:46:44,789 - __main__ - INFO - Time: 2025-07-01 17:46:44
+2025-07-01 17:46:44,790 - __main__ - INFO - Active Kill Zone: NEW YORK KILL ZONE (NY Time: 10:46)
+2025-07-01 17:46:46,004 - __main__ - INFO - EURUSD: Position already open (BUY)
+2025-07-01 17:46:53,797 - bot_components - INFO - EURNZD: Spread 53 > max 50. Skipping.
+2025-07-01 17:46:56,682 - bot_components - INFO - GBPCAD: Spread 52 > max 50. Skipping.
+2025-07-01 17:46:59,595 - __main__ - INFO - Cycle completed in 14.8s. Sleeping for 45.2s...
+2025-07-01 17:47:44,790 - __main__ - INFO - 
+============================== Cycle 23 ==============================
+2025-07-01 17:47:44,790 - __main__ - INFO - Time: 2025-07-01 17:47:44
+2025-07-01 17:47:44,790 - __main__ - INFO - Active Kill Zone: NEW YORK KILL ZONE (NY Time: 10:47)
+2025-07-01 17:47:46,009 - __main__ - INFO - EURUSD: Position already open (BUY)
+2025-07-01 17:47:56,082 - bot_components - INFO - GBPAUD: Spread 51 > max 50. Skipping.
+2025-07-01 17:47:56,583 - bot_components - INFO - GBPCAD: Spread 51 > max 50. Skipping.
+2025-07-01 17:47:59,542 - __main__ - INFO - Cycle completed in 14.8s. Sleeping for 45.2s...
+2025-07-01 17:48:44,791 - __main__ - INFO - 
+============================== Cycle 24 ==============================
+2025-07-01 17:48:44,791 - __main__ - INFO - Time: 2025-07-01 17:48:44
+2025-07-01 17:48:44,792 - __main__ - INFO - Active Kill Zone: NEW YORK KILL ZONE (NY Time: 10:48)
+2025-07-01 17:48:46,078 - __main__ - INFO - EURUSD: Position already open (BUY)
+2025-07-01 17:48:59,931 - __main__ - INFO - Cycle completed in 15.1s. Sleeping for 44.9s...
+2025-07-01 17:49:44,791 - __main__ - INFO - 
+============================== Cycle 25 ==============================
+2025-07-01 17:49:44,792 - __main__ - INFO - Time: 2025-07-01 17:49:44
+2025-07-01 17:49:44,792 - __main__ - INFO - Active Kill Zone: NEW YORK KILL ZONE (NY Time: 10:49)
+2025-07-01 17:49:46,031 - __main__ - INFO - EURUSD: Position already open (BUY)
+2025-07-01 17:49:59,679 - __main__ - INFO - Cycle completed in 14.9s. Sleeping for 45.1s...
+2025-07-01 17:50:44,792 - __main__ - INFO - 
+============================== Cycle 26 ==============================
+2025-07-01 17:50:44,793 - __main__ - INFO - Time: 2025-07-01 17:50:44
+2025-07-01 17:50:44,793 - __main__ - INFO - Active Kill Zone: NEW YORK KILL ZONE (NY Time: 10:50)
+2025-07-01 17:50:46,047 - __main__ - INFO - EURUSD: Position already open (BUY)
+2025-07-01 17:50:56,150 - bot_components - INFO - GBPAUD: Spread 54 > max 50. Skipping.
+2025-07-01 17:50:56,652 - bot_components - INFO - GBPCAD: Spread 57 > max 50. Skipping.
+2025-07-01 17:50:59,541 - __main__ - INFO - Cycle completed in 14.7s. Sleeping for 45.3s...
+2025-07-01 17:51:44,793 - __main__ - INFO - 
+============================== Cycle 27 ==============================
+2025-07-01 17:51:44,794 - __main__ - INFO - Time: 2025-07-01 17:51:44
+2025-07-01 17:51:44,794 - __main__ - INFO - Active Kill Zone: NEW YORK KILL ZONE (NY Time: 10:51)
+2025-07-01 17:51:46,100 - __main__ - INFO - EURUSD: Position already open (BUY)
+2025-07-01 17:51:56,176 - bot_components - INFO - GBPAUD: Spread 51 > max 50. Skipping.
+2025-07-01 17:51:56,678 - bot_components - INFO - GBPCAD: Spread 55 > max 50. Skipping.
+2025-07-01 17:51:59,826 - __main__ - INFO - Cycle completed in 15.0s. Sleeping for 45.0s...
+2025-07-01 17:52:44,795 - __main__ - INFO - 
+============================== Cycle 28 ==============================
+2025-07-01 17:52:44,795 - __main__ - INFO - Time: 2025-07-01 17:52:44
+2025-07-01 17:52:44,796 - __main__ - INFO - Active Kill Zone: NEW YORK KILL ZONE (NY Time: 10:52)
+2025-07-01 17:52:46,001 - __main__ - INFO - EURUSD: Position already open (BUY)
+2025-07-01 17:52:53,847 - bot_components - INFO - EURNZD: Spread 52 > max 50. Skipping.
+2025-07-01 17:52:56,051 - bot_components - INFO - GBPAUD: Spread 51 > max 50. Skipping.
+2025-07-01 17:52:56,553 - bot_components - INFO - GBPCAD: Spread 53 > max 50. Skipping.
+2025-07-01 17:52:59,747 - __main__ - INFO - Cycle completed in 15.0s. Sleeping for 45.0s...
+2025-07-01 17:53:44,795 - __main__ - INFO - 
+============================== Cycle 29 ==============================
+2025-07-01 17:53:44,796 - __main__ - INFO - Time: 2025-07-01 17:53:44
+2025-07-01 17:53:44,797 - __main__ - INFO - Active Kill Zone: NEW YORK KILL ZONE (NY Time: 10:53)
+2025-07-01 17:53:46,055 - __main__ - INFO - EURUSD: Position already open (BUY)
+2025-07-01 17:53:56,260 - bot_components - INFO - GBPAUD: Spread 51 > max 50. Skipping.
+2025-07-01 17:53:56,761 - bot_components - INFO - GBPCAD: Spread 56 > max 50. Skipping.
+2025-07-01 17:53:59,959 - __main__ - INFO - Cycle completed in 15.2s. Sleeping for 44.8s...
+2025-07-01 17:54:44,796 - __main__ - INFO - 
+============================== Cycle 30 ==============================
+2025-07-01 17:54:44,797 - __main__ - INFO - Time: 2025-07-01 17:54:44
+2025-07-01 17:54:44,797 - __main__ - INFO - Active Kill Zone: NEW YORK KILL ZONE (NY Time: 10:54)
+2025-07-01 17:54:46,050 - __main__ - INFO - EURUSD: Position already open (BUY)
+2025-07-01 17:54:56,807 - bot_components - INFO - GBPCAD: Spread 56 > max 50. Skipping.
+2025-07-01 17:54:59,897 - __main__ - INFO - Cycle completed in 15.1s. Sleeping for 44.9s...
+2025-07-01 17:55:44,797 - __main__ - INFO - 
+============================== Cycle 31 ==============================
+2025-07-01 17:55:44,797 - __main__ - INFO - Time: 2025-07-01 17:55:44
+2025-07-01 17:55:44,798 - __main__ - INFO - Active Kill Zone: NEW YORK KILL ZONE (NY Time: 10:55)
+2025-07-01 17:55:45,996 - __main__ - INFO - EURUSD: Position already open (BUY)
+2025-07-01 17:55:56,710 - bot_components - INFO - GBPCAD: Spread 53 > max 50. Skipping.
+2025-07-01 17:55:59,849 - __main__ - INFO - Cycle completed in 15.1s. Sleeping for 44.9s...
+2025-07-01 17:56:44,798 - __main__ - INFO - 
+============================== Cycle 32 ==============================
+2025-07-01 17:56:44,800 - __main__ - INFO - Time: 2025-07-01 17:56:44
+2025-07-01 17:56:44,800 - __main__ - INFO - Active Kill Zone: NEW YORK KILL ZONE (NY Time: 10:56)
+2025-07-01 17:56:46,059 - __main__ - INFO - EURUSD: Position already open (BUY)
+2025-07-01 17:56:56,831 - bot_components - INFO - GBPCAD: Spread 55 > max 50. Skipping.
+2025-07-01 17:56:59,931 - __main__ - INFO - Cycle completed in 15.1s. Sleeping for 44.9s...
+2025-07-01 17:57:44,799 - __main__ - INFO - 
+============================== Cycle 33 ==============================
+2025-07-01 17:57:44,800 - __main__ - INFO - Time: 2025-07-01 17:57:44
+2025-07-01 17:57:44,800 - __main__ - INFO - Active Kill Zone: NEW YORK KILL ZONE (NY Time: 10:57)
+2025-07-01 17:57:46,010 - __main__ - INFO - EURUSD: Position already open (BUY)
+2025-07-01 17:57:53,738 - bot_components - INFO - EURNZD: Spread 53 > max 50. Skipping.
+2025-07-01 17:57:56,001 - bot_components - INFO - GBPAUD: Spread 51 > max 50. Skipping.
+2025-07-01 17:57:56,502 - bot_components - INFO - GBPCAD: Spread 52 > max 50. Skipping.
+2025-07-01 17:57:59,625 - __main__ - INFO - Cycle completed in 14.8s. Sleeping for 45.2s...
+2025-07-01 17:58:44,800 - __main__ - INFO - 
+============================== Cycle 34 ==============================
+2025-07-01 17:58:44,801 - __main__ - INFO - Time: 2025-07-01 17:58:44
+2025-07-01 17:58:44,801 - __main__ - INFO - Active Kill Zone: NEW YORK KILL ZONE (NY Time: 10:58)
+2025-07-01 17:58:46,065 - __main__ - INFO - EURUSD: Position already open (BUY)
+2025-07-01 17:58:56,843 - bot_components - INFO - GBPCAD: Spread 55 > max 50. Skipping.
+2025-07-01 17:58:59,947 - __main__ - INFO - Cycle completed in 15.1s. Sleeping for 44.9s...
+2025-07-01 17:59:44,801 - __main__ - INFO - 
+============================== Cycle 35 ==============================
+2025-07-01 17:59:44,801 - __main__ - INFO - Time: 2025-07-01 17:59:44
+2025-07-01 17:59:44,802 - __main__ - INFO - Active Kill Zone: NEW YORK KILL ZONE (NY Time: 10:59)
+2025-07-01 17:59:46,077 - __main__ - INFO - EURUSD: Position already open (BUY)
+2025-07-01 17:59:59,976 - __main__ - INFO - Cycle completed in 15.2s. Sleeping for 44.8s...
+2025-07-01 18:00:44,802 - __main__ - INFO - 
+============================== Cycle 36 ==============================
+2025-07-01 18:00:44,802 - __main__ - INFO - Time: 2025-07-01 18:00:44
+2025-07-01 18:00:44,802 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 18:01:44,802 - __main__ - INFO - 
+============================== Cycle 37 ==============================
+2025-07-01 18:01:44,803 - __main__ - INFO - Time: 2025-07-01 18:01:44
+2025-07-01 18:01:44,803 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 18:02:44,803 - __main__ - INFO - 
+============================== Cycle 38 ==============================
+2025-07-01 18:02:44,803 - __main__ - INFO - Time: 2025-07-01 18:02:44
+2025-07-01 18:02:44,804 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 18:03:44,804 - __main__ - INFO - 
+============================== Cycle 39 ==============================
+2025-07-01 18:03:44,805 - __main__ - INFO - Time: 2025-07-01 18:03:44
+2025-07-01 18:03:44,806 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 18:04:44,805 - __main__ - INFO - 
+============================== Cycle 40 ==============================
+2025-07-01 18:04:44,805 - __main__ - INFO - Time: 2025-07-01 18:04:44
+2025-07-01 18:04:44,806 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 18:05:44,806 - __main__ - INFO - 
+============================== Cycle 41 ==============================
+2025-07-01 18:05:44,807 - __main__ - INFO - Time: 2025-07-01 18:05:44
+2025-07-01 18:05:44,807 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 18:06:44,807 - __main__ - INFO - 
+============================== Cycle 42 ==============================
+2025-07-01 18:06:44,807 - __main__ - INFO - Time: 2025-07-01 18:06:44
+2025-07-01 18:06:44,808 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 18:07:44,807 - __main__ - INFO - 
+============================== Cycle 43 ==============================
+2025-07-01 18:07:44,808 - __main__ - INFO - Time: 2025-07-01 18:07:44
+2025-07-01 18:07:44,808 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 18:08:44,808 - __main__ - INFO - 
+============================== Cycle 44 ==============================
+2025-07-01 18:08:44,808 - __main__ - INFO - Time: 2025-07-01 18:08:44
+2025-07-01 18:08:44,808 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 18:09:44,808 - __main__ - INFO - 
+============================== Cycle 45 ==============================
+2025-07-01 18:09:44,808 - __main__ - INFO - Time: 2025-07-01 18:09:44
+2025-07-01 18:09:44,809 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 18:10:44,809 - __main__ - INFO - 
+============================== Cycle 46 ==============================
+2025-07-01 18:10:44,809 - __main__ - INFO - Time: 2025-07-01 18:10:44
+2025-07-01 18:10:44,809 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 18:11:44,809 - __main__ - INFO - 
+============================== Cycle 47 ==============================
+2025-07-01 18:11:44,810 - __main__ - INFO - Time: 2025-07-01 18:11:44
+2025-07-01 18:11:44,810 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 18:12:44,810 - __main__ - INFO - 
+============================== Cycle 48 ==============================
+2025-07-01 18:12:44,810 - __main__ - INFO - Time: 2025-07-01 18:12:44
+2025-07-01 18:12:44,810 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 18:13:44,810 - __main__ - INFO - 
+============================== Cycle 49 ==============================
+2025-07-01 18:13:44,811 - __main__ - INFO - Time: 2025-07-01 18:13:44
+2025-07-01 18:13:44,811 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 18:14:44,811 - __main__ - INFO - 
+============================== Cycle 50 ==============================
+2025-07-01 18:14:44,812 - __main__ - INFO - Time: 2025-07-01 18:14:44
+2025-07-01 18:14:44,813 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 18:15:44,812 - __main__ - INFO - 
+============================== Cycle 51 ==============================
+2025-07-01 18:15:44,813 - __main__ - INFO - Time: 2025-07-01 18:15:44
+2025-07-01 18:15:44,813 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 18:16:44,813 - __main__ - INFO - 
+============================== Cycle 52 ==============================
+2025-07-01 18:16:44,813 - __main__ - INFO - Time: 2025-07-01 18:16:44
+2025-07-01 18:16:44,814 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 18:17:44,813 - __main__ - INFO - 
+============================== Cycle 53 ==============================
+2025-07-01 18:17:44,814 - __main__ - INFO - Time: 2025-07-01 18:17:44
+2025-07-01 18:17:44,814 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 18:18:44,814 - __main__ - INFO - 
+============================== Cycle 54 ==============================
+2025-07-01 18:18:44,814 - __main__ - INFO - Time: 2025-07-01 18:18:44
+2025-07-01 18:18:44,815 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 18:19:44,815 - __main__ - INFO - 
+============================== Cycle 55 ==============================
+2025-07-01 18:19:44,815 - __main__ - INFO - Time: 2025-07-01 18:19:44
+2025-07-01 18:19:44,816 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 18:20:44,816 - __main__ - INFO - 
+============================== Cycle 56 ==============================
+2025-07-01 18:20:44,817 - __main__ - INFO - Time: 2025-07-01 18:20:44
+2025-07-01 18:20:44,818 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 18:21:44,817 - __main__ - INFO - 
+============================== Cycle 57 ==============================
+2025-07-01 18:21:44,817 - __main__ - INFO - Time: 2025-07-01 18:21:44
+2025-07-01 18:21:44,818 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 18:22:44,817 - __main__ - INFO - 
+============================== Cycle 58 ==============================
+2025-07-01 18:22:44,818 - __main__ - INFO - Time: 2025-07-01 18:22:44
+2025-07-01 18:22:44,818 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 18:23:44,818 - __main__ - INFO - 
+============================== Cycle 59 ==============================
+2025-07-01 18:23:44,818 - __main__ - INFO - Time: 2025-07-01 18:23:44
+2025-07-01 18:23:44,819 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 18:24:44,819 - __main__ - INFO - 
+============================== Cycle 60 ==============================
+2025-07-01 18:24:44,819 - __main__ - INFO - Time: 2025-07-01 18:24:44
+2025-07-01 18:24:44,819 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 18:25:44,819 - __main__ - INFO - 
+============================== Cycle 61 ==============================
+2025-07-01 18:25:44,819 - __main__ - INFO - Time: 2025-07-01 18:25:44
+2025-07-01 18:25:44,820 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 18:26:44,820 - __main__ - INFO - 
+============================== Cycle 62 ==============================
+2025-07-01 18:26:44,820 - __main__ - INFO - Time: 2025-07-01 18:26:44
+2025-07-01 18:26:44,820 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 18:27:44,821 - __main__ - INFO - 
+============================== Cycle 63 ==============================
+2025-07-01 18:27:44,821 - __main__ - INFO - Time: 2025-07-01 18:27:44
+2025-07-01 18:27:44,821 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 18:28:44,821 - __main__ - INFO - 
+============================== Cycle 64 ==============================
+2025-07-01 18:28:44,821 - __main__ - INFO - Time: 2025-07-01 18:28:44
+2025-07-01 18:28:44,822 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 18:29:44,822 - __main__ - INFO - 
+============================== Cycle 65 ==============================
+2025-07-01 18:29:44,822 - __main__ - INFO - Time: 2025-07-01 18:29:44
+2025-07-01 18:29:44,823 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 18:30:44,822 - __main__ - INFO - 
+============================== Cycle 66 ==============================
+2025-07-01 18:30:44,822 - __main__ - INFO - Time: 2025-07-01 18:30:44
+2025-07-01 18:30:44,823 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 18:31:44,823 - __main__ - INFO - 
+============================== Cycle 67 ==============================
+2025-07-01 18:31:44,823 - __main__ - INFO - Time: 2025-07-01 18:31:44
+2025-07-01 18:31:44,824 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 18:32:44,824 - __main__ - INFO - 
+============================== Cycle 68 ==============================
+2025-07-01 18:32:44,825 - __main__ - INFO - Time: 2025-07-01 18:32:44
+2025-07-01 18:32:44,826 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 18:33:44,825 - __main__ - INFO - 
+============================== Cycle 69 ==============================
+2025-07-01 18:33:44,826 - __main__ - INFO - Time: 2025-07-01 18:33:44
+2025-07-01 18:33:44,826 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 18:34:44,826 - __main__ - INFO - 
+============================== Cycle 70 ==============================
+2025-07-01 18:34:44,827 - __main__ - INFO - Time: 2025-07-01 18:34:44
+2025-07-01 18:34:44,828 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 18:35:44,827 - __main__ - INFO - 
+============================== Cycle 71 ==============================
+2025-07-01 18:35:44,828 - __main__ - INFO - Time: 2025-07-01 18:35:44
+2025-07-01 18:35:44,828 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 18:36:44,828 - __main__ - INFO - 
+============================== Cycle 72 ==============================
+2025-07-01 18:36:44,829 - __main__ - INFO - Time: 2025-07-01 18:36:44
+2025-07-01 18:36:44,830 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 18:37:44,829 - __main__ - INFO - 
+============================== Cycle 73 ==============================
+2025-07-01 18:37:44,829 - __main__ - INFO - Time: 2025-07-01 18:37:44
+2025-07-01 18:37:44,830 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 18:38:44,830 - __main__ - INFO - 
+============================== Cycle 74 ==============================
+2025-07-01 18:38:44,830 - __main__ - INFO - Time: 2025-07-01 18:38:44
+2025-07-01 18:38:44,830 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 18:39:44,830 - __main__ - INFO - 
+============================== Cycle 75 ==============================
+2025-07-01 18:39:44,831 - __main__ - INFO - Time: 2025-07-01 18:39:44
+2025-07-01 18:39:44,831 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 18:40:44,831 - __main__ - INFO - 
+============================== Cycle 76 ==============================
+2025-07-01 18:40:44,831 - __main__ - INFO - Time: 2025-07-01 18:40:44
+2025-07-01 18:40:44,832 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 18:41:44,831 - __main__ - INFO - 
+============================== Cycle 77 ==============================
+2025-07-01 18:41:44,832 - __main__ - INFO - Time: 2025-07-01 18:41:44
+2025-07-01 18:41:44,832 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 18:42:44,832 - __main__ - INFO - 
+============================== Cycle 78 ==============================
+2025-07-01 18:42:44,833 - __main__ - INFO - Time: 2025-07-01 18:42:44
+2025-07-01 18:42:44,834 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 18:43:44,833 - __main__ - INFO - 
+============================== Cycle 79 ==============================
+2025-07-01 18:43:44,833 - __main__ - INFO - Time: 2025-07-01 18:43:44
+2025-07-01 18:43:44,833 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 18:44:44,833 - __main__ - INFO - 
+============================== Cycle 80 ==============================
+2025-07-01 18:44:44,834 - __main__ - INFO - Time: 2025-07-01 18:44:44
+2025-07-01 18:44:44,834 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 18:45:44,834 - __main__ - INFO - 
+============================== Cycle 81 ==============================
+2025-07-01 18:45:44,834 - __main__ - INFO - Time: 2025-07-01 18:45:44
+2025-07-01 18:45:44,835 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 18:46:44,835 - __main__ - INFO - 
+============================== Cycle 82 ==============================
+2025-07-01 18:46:44,835 - __main__ - INFO - Time: 2025-07-01 18:46:44
+2025-07-01 18:46:44,835 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 18:47:44,835 - __main__ - INFO - 
+============================== Cycle 83 ==============================
+2025-07-01 18:47:44,835 - __main__ - INFO - Time: 2025-07-01 18:47:44
+2025-07-01 18:47:44,836 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 18:48:44,836 - __main__ - INFO - 
+============================== Cycle 84 ==============================
+2025-07-01 18:48:44,836 - __main__ - INFO - Time: 2025-07-01 18:48:44
+2025-07-01 18:48:44,837 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 18:49:44,837 - __main__ - INFO - 
+============================== Cycle 85 ==============================
+2025-07-01 18:49:44,837 - __main__ - INFO - Time: 2025-07-01 18:49:44
+2025-07-01 18:49:44,838 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 18:50:44,837 - __main__ - INFO - 
+============================== Cycle 86 ==============================
+2025-07-01 18:50:44,838 - __main__ - INFO - Time: 2025-07-01 18:50:44
+2025-07-01 18:50:44,839 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 18:51:44,839 - __main__ - INFO - 
+============================== Cycle 87 ==============================
+2025-07-01 18:51:44,839 - __main__ - INFO - Time: 2025-07-01 18:51:44
+2025-07-01 18:51:44,840 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 18:52:44,840 - __main__ - INFO - 
+============================== Cycle 88 ==============================
+2025-07-01 18:52:44,841 - __main__ - INFO - Time: 2025-07-01 18:52:44
+2025-07-01 18:52:44,841 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 18:53:44,840 - __main__ - INFO - 
+============================== Cycle 89 ==============================
+2025-07-01 18:53:44,841 - __main__ - INFO - Time: 2025-07-01 18:53:44
+2025-07-01 18:53:44,841 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 18:54:44,841 - __main__ - INFO - 
+============================== Cycle 90 ==============================
+2025-07-01 18:54:44,841 - __main__ - INFO - Time: 2025-07-01 18:54:44
+2025-07-01 18:54:44,842 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 18:55:44,842 - __main__ - INFO - 
+============================== Cycle 91 ==============================
+2025-07-01 18:55:44,843 - __main__ - INFO - Time: 2025-07-01 18:55:44
+2025-07-01 18:55:44,844 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 18:56:44,843 - __main__ - INFO - 
+============================== Cycle 92 ==============================
+2025-07-01 18:56:44,843 - __main__ - INFO - Time: 2025-07-01 18:56:44
+2025-07-01 18:56:44,844 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 18:57:44,844 - __main__ - INFO - 
+============================== Cycle 93 ==============================
+2025-07-01 18:57:44,844 - __main__ - INFO - Time: 2025-07-01 18:57:44
+2025-07-01 18:57:44,844 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 18:58:44,844 - __main__ - INFO - 
+============================== Cycle 94 ==============================
+2025-07-01 18:58:44,845 - __main__ - INFO - Time: 2025-07-01 18:58:44
+2025-07-01 18:58:44,845 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 18:59:44,845 - __main__ - INFO - 
+============================== Cycle 95 ==============================
+2025-07-01 18:59:44,846 - __main__ - INFO - Time: 2025-07-01 18:59:44
+2025-07-01 18:59:44,846 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 19:00:44,846 - __main__ - INFO - 
+============================== Cycle 96 ==============================
+2025-07-01 19:00:44,847 - __main__ - INFO - Time: 2025-07-01 19:00:44
+2025-07-01 19:00:44,847 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 19:01:44,847 - __main__ - INFO - 
+============================== Cycle 97 ==============================
+2025-07-01 19:01:44,847 - __main__ - INFO - Time: 2025-07-01 19:01:44
+2025-07-01 19:01:44,847 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 19:02:44,848 - __main__ - INFO - 
+============================== Cycle 98 ==============================
+2025-07-01 19:02:44,848 - __main__ - INFO - Time: 2025-07-01 19:02:44
+2025-07-01 19:02:44,848 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 19:03:44,848 - __main__ - INFO - 
+============================== Cycle 99 ==============================
+2025-07-01 19:03:44,849 - __main__ - INFO - Time: 2025-07-01 19:03:44
+2025-07-01 19:03:44,849 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 19:04:44,849 - __main__ - INFO - 
+============================== Cycle 100 ==============================
+2025-07-01 19:04:44,850 - __main__ - INFO - Time: 2025-07-01 19:04:44
+2025-07-01 19:04:44,850 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 19:05:44,850 - __main__ - INFO - 
+============================== Cycle 101 ==============================
+2025-07-01 19:05:44,851 - __main__ - INFO - Time: 2025-07-01 19:05:44
+2025-07-01 19:05:44,851 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 19:06:44,851 - __main__ - INFO - 
+============================== Cycle 102 ==============================
+2025-07-01 19:06:44,852 - __main__ - INFO - Time: 2025-07-01 19:06:44
+2025-07-01 19:06:44,852 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 19:07:44,852 - __main__ - INFO - 
+============================== Cycle 103 ==============================
+2025-07-01 19:07:44,852 - __main__ - INFO - Time: 2025-07-01 19:07:44
+2025-07-01 19:07:44,853 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 19:08:44,852 - __main__ - INFO - 
+============================== Cycle 104 ==============================
+2025-07-01 19:08:44,852 - __main__ - INFO - Time: 2025-07-01 19:08:44
+2025-07-01 19:08:44,853 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 19:09:44,853 - __main__ - INFO - 
+============================== Cycle 105 ==============================
+2025-07-01 19:09:44,853 - __main__ - INFO - Time: 2025-07-01 19:09:44
+2025-07-01 19:09:44,854 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 19:10:44,854 - __main__ - INFO - 
+============================== Cycle 106 ==============================
+2025-07-01 19:10:44,854 - __main__ - INFO - Time: 2025-07-01 19:10:44
+2025-07-01 19:10:44,855 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 19:11:44,855 - __main__ - INFO - 
+============================== Cycle 107 ==============================
+2025-07-01 19:11:44,856 - __main__ - INFO - Time: 2025-07-01 19:11:44
+2025-07-01 19:11:44,857 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 19:12:44,856 - __main__ - INFO - 
+============================== Cycle 108 ==============================
+2025-07-01 19:12:44,856 - __main__ - INFO - Time: 2025-07-01 19:12:44
+2025-07-01 19:12:44,856 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 19:13:44,856 - __main__ - INFO - 
+============================== Cycle 109 ==============================
+2025-07-01 19:13:44,858 - __main__ - INFO - Time: 2025-07-01 19:13:44
+2025-07-01 19:13:44,859 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 19:14:44,858 - __main__ - INFO - 
+============================== Cycle 110 ==============================
+2025-07-01 19:14:44,858 - __main__ - INFO - Time: 2025-07-01 19:14:44
+2025-07-01 19:14:44,859 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 19:15:44,858 - __main__ - INFO - 
+============================== Cycle 111 ==============================
+2025-07-01 19:15:44,859 - __main__ - INFO - Time: 2025-07-01 19:15:44
+2025-07-01 19:15:44,859 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 19:16:44,859 - __main__ - INFO - 
+============================== Cycle 112 ==============================
+2025-07-01 19:16:44,860 - __main__ - INFO - Time: 2025-07-01 19:16:44
+2025-07-01 19:16:44,861 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 19:17:44,860 - __main__ - INFO - 
+============================== Cycle 113 ==============================
+2025-07-01 19:17:44,860 - __main__ - INFO - Time: 2025-07-01 19:17:44
+2025-07-01 19:17:44,861 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 19:18:44,861 - __main__ - INFO - 
+============================== Cycle 114 ==============================
+2025-07-01 19:18:44,862 - __main__ - INFO - Time: 2025-07-01 19:18:44
+2025-07-01 19:18:44,862 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 19:19:44,862 - __main__ - INFO - 
+============================== Cycle 115 ==============================
+2025-07-01 19:19:44,863 - __main__ - INFO - Time: 2025-07-01 19:19:44
+2025-07-01 19:19:44,863 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 19:20:44,863 - __main__ - INFO - 
+============================== Cycle 116 ==============================
+2025-07-01 19:20:44,863 - __main__ - INFO - Time: 2025-07-01 19:20:44
+2025-07-01 19:20:44,864 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 19:21:44,863 - __main__ - INFO - 
+============================== Cycle 117 ==============================
+2025-07-01 19:21:44,864 - __main__ - INFO - Time: 2025-07-01 19:21:44
+2025-07-01 19:21:44,864 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 19:22:44,864 - __main__ - INFO - 
+============================== Cycle 118 ==============================
+2025-07-01 19:22:44,866 - __main__ - INFO - Time: 2025-07-01 19:22:44
+2025-07-01 19:22:44,867 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 19:23:44,865 - __main__ - INFO - 
+============================== Cycle 119 ==============================
+2025-07-01 19:23:44,865 - __main__ - INFO - Time: 2025-07-01 19:23:44
+2025-07-01 19:23:44,866 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 19:24:44,866 - __main__ - INFO - 
+============================== Cycle 120 ==============================
+2025-07-01 19:24:44,866 - __main__ - INFO - Time: 2025-07-01 19:24:44
+2025-07-01 19:24:44,866 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 19:25:44,867 - __main__ - INFO - 
+============================== Cycle 121 ==============================
+2025-07-01 19:25:44,867 - __main__ - INFO - Time: 2025-07-01 19:25:44
+2025-07-01 19:25:44,868 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 19:26:44,867 - __main__ - INFO - 
+============================== Cycle 122 ==============================
+2025-07-01 19:26:44,868 - __main__ - INFO - Time: 2025-07-01 19:26:44
+2025-07-01 19:26:44,869 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 19:27:44,868 - __main__ - INFO - 
+============================== Cycle 123 ==============================
+2025-07-01 19:27:44,869 - __main__ - INFO - Time: 2025-07-01 19:27:44
+2025-07-01 19:27:44,869 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 19:28:44,869 - __main__ - INFO - 
+============================== Cycle 124 ==============================
+2025-07-01 19:28:44,870 - __main__ - INFO - Time: 2025-07-01 19:28:44
+2025-07-01 19:28:44,870 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 19:29:44,870 - __main__ - INFO - 
+============================== Cycle 125 ==============================
+2025-07-01 19:29:44,871 - __main__ - INFO - Time: 2025-07-01 19:29:44
+2025-07-01 19:29:44,871 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 19:30:44,871 - __main__ - INFO - 
+============================== Cycle 126 ==============================
+2025-07-01 19:30:44,871 - __main__ - INFO - Time: 2025-07-01 19:30:44
+2025-07-01 19:30:44,872 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 19:31:44,872 - __main__ - INFO - 
+============================== Cycle 127 ==============================
+2025-07-01 19:31:44,872 - __main__ - INFO - Time: 2025-07-01 19:31:44
+2025-07-01 19:31:44,872 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 19:32:44,872 - __main__ - INFO - 
+============================== Cycle 128 ==============================
+2025-07-01 19:32:44,874 - __main__ - INFO - Time: 2025-07-01 19:32:44
+2025-07-01 19:32:44,875 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 19:33:44,874 - __main__ - INFO - 
+============================== Cycle 129 ==============================
+2025-07-01 19:33:44,875 - __main__ - INFO - Time: 2025-07-01 19:33:44
+2025-07-01 19:33:44,876 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 19:34:44,875 - __main__ - INFO - 
+============================== Cycle 130 ==============================
+2025-07-01 19:34:44,876 - __main__ - INFO - Time: 2025-07-01 19:34:44
+2025-07-01 19:34:44,876 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 19:35:44,876 - __main__ - INFO - 
+============================== Cycle 131 ==============================
+2025-07-01 19:35:44,877 - __main__ - INFO - Time: 2025-07-01 19:35:44
+2025-07-01 19:35:44,878 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 19:36:44,877 - __main__ - INFO - 
+============================== Cycle 132 ==============================
+2025-07-01 19:36:44,877 - __main__ - INFO - Time: 2025-07-01 19:36:44
+2025-07-01 19:36:44,877 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 19:37:44,877 - __main__ - INFO - 
+============================== Cycle 133 ==============================
+2025-07-01 19:37:44,878 - __main__ - INFO - Time: 2025-07-01 19:37:44
+2025-07-01 19:37:44,878 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 19:38:44,878 - __main__ - INFO - 
+============================== Cycle 134 ==============================
+2025-07-01 19:38:44,879 - __main__ - INFO - Time: 2025-07-01 19:38:44
+2025-07-01 19:38:44,879 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 19:39:44,879 - __main__ - INFO - 
+============================== Cycle 135 ==============================
+2025-07-01 19:39:44,880 - __main__ - INFO - Time: 2025-07-01 19:39:44
+2025-07-01 19:39:44,881 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 19:40:44,880 - __main__ - INFO - 
+============================== Cycle 136 ==============================
+2025-07-01 19:40:44,880 - __main__ - INFO - Time: 2025-07-01 19:40:44
+2025-07-01 19:40:44,881 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 19:41:44,880 - __main__ - INFO - 
+============================== Cycle 137 ==============================
+2025-07-01 19:41:44,881 - __main__ - INFO - Time: 2025-07-01 19:41:44
+2025-07-01 19:41:44,882 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 19:42:44,881 - __main__ - INFO - 
+============================== Cycle 138 ==============================
+2025-07-01 19:42:44,882 - __main__ - INFO - Time: 2025-07-01 19:42:44
+2025-07-01 19:42:44,883 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 19:43:44,882 - __main__ - INFO - 
+============================== Cycle 139 ==============================
+2025-07-01 19:43:44,882 - __main__ - INFO - Time: 2025-07-01 19:43:44
+2025-07-01 19:43:44,883 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 19:44:44,883 - __main__ - INFO - 
+============================== Cycle 140 ==============================
+2025-07-01 19:44:44,883 - __main__ - INFO - Time: 2025-07-01 19:44:44
+2025-07-01 19:44:44,884 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 19:45:44,883 - __main__ - INFO - 
+============================== Cycle 141 ==============================
+2025-07-01 19:45:44,884 - __main__ - INFO - Time: 2025-07-01 19:45:44
+2025-07-01 19:45:44,884 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 19:46:44,884 - __main__ - INFO - 
+============================== Cycle 142 ==============================
+2025-07-01 19:46:44,885 - __main__ - INFO - Time: 2025-07-01 19:46:44
+2025-07-01 19:46:44,885 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 19:47:44,885 - __main__ - INFO - 
+============================== Cycle 143 ==============================
+2025-07-01 19:47:44,885 - __main__ - INFO - Time: 2025-07-01 19:47:44
+2025-07-01 19:47:44,886 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 19:48:44,885 - __main__ - INFO - 
+============================== Cycle 144 ==============================
+2025-07-01 19:48:44,886 - __main__ - INFO - Time: 2025-07-01 19:48:44
+2025-07-01 19:48:44,887 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 19:49:44,887 - __main__ - INFO - 
+============================== Cycle 145 ==============================
+2025-07-01 19:49:44,887 - __main__ - INFO - Time: 2025-07-01 19:49:44
+2025-07-01 19:49:44,887 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 19:50:44,887 - __main__ - INFO - 
+============================== Cycle 146 ==============================
+2025-07-01 19:50:44,888 - __main__ - INFO - Time: 2025-07-01 19:50:44
+2025-07-01 19:50:44,888 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 19:51:44,888 - __main__ - INFO - 
+============================== Cycle 147 ==============================
+2025-07-01 19:51:44,889 - __main__ - INFO - Time: 2025-07-01 19:51:44
+2025-07-01 19:51:44,889 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 19:52:44,889 - __main__ - INFO - 
+============================== Cycle 148 ==============================
+2025-07-01 19:52:44,891 - __main__ - INFO - Time: 2025-07-01 19:52:44
+2025-07-01 19:52:44,892 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 19:53:44,891 - __main__ - INFO - 
+============================== Cycle 149 ==============================
+2025-07-01 19:53:44,892 - __main__ - INFO - Time: 2025-07-01 19:53:44
+2025-07-01 19:53:44,893 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 19:54:44,892 - __main__ - INFO - 
+============================== Cycle 150 ==============================
+2025-07-01 19:54:44,894 - __main__ - INFO - Time: 2025-07-01 19:54:44
+2025-07-01 19:54:44,894 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 19:55:44,893 - __main__ - INFO - 
+============================== Cycle 151 ==============================
+2025-07-01 19:55:44,894 - __main__ - INFO - Time: 2025-07-01 19:55:44
+2025-07-01 19:55:44,894 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 19:56:44,894 - __main__ - INFO - 
+============================== Cycle 152 ==============================
+2025-07-01 19:56:44,895 - __main__ - INFO - Time: 2025-07-01 19:56:44
+2025-07-01 19:56:44,896 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 19:57:44,896 - __main__ - INFO - 
+============================== Cycle 153 ==============================
+2025-07-01 19:57:44,897 - __main__ - INFO - Time: 2025-07-01 19:57:44
+2025-07-01 19:57:44,898 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 19:58:44,897 - __main__ - INFO - 
+============================== Cycle 154 ==============================
+2025-07-01 19:58:44,897 - __main__ - INFO - Time: 2025-07-01 19:58:44
+2025-07-01 19:58:44,897 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 19:59:44,897 - __main__ - INFO - 
+============================== Cycle 155 ==============================
+2025-07-01 19:59:44,898 - __main__ - INFO - Time: 2025-07-01 19:59:44
+2025-07-01 19:59:44,898 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 20:00:44,898 - __main__ - INFO - 
+============================== Cycle 156 ==============================
+2025-07-01 20:00:44,898 - __main__ - INFO - Time: 2025-07-01 20:00:44
+2025-07-01 20:00:44,900 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 20:01:44,898 - __main__ - INFO - 
+============================== Cycle 157 ==============================
+2025-07-01 20:01:44,899 - __main__ - INFO - Time: 2025-07-01 20:01:44
+2025-07-01 20:01:44,900 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 20:02:44,899 - __main__ - INFO - 
+============================== Cycle 158 ==============================
+2025-07-01 20:02:44,900 - __main__ - INFO - Time: 2025-07-01 20:02:44
+2025-07-01 20:02:44,900 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 20:03:44,900 - __main__ - INFO - 
+============================== Cycle 159 ==============================
+2025-07-01 20:03:44,900 - __main__ - INFO - Time: 2025-07-01 20:03:44
+2025-07-01 20:03:44,900 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 20:04:44,900 - __main__ - INFO - 
+============================== Cycle 160 ==============================
+2025-07-01 20:04:44,901 - __main__ - INFO - Time: 2025-07-01 20:04:44
+2025-07-01 20:04:44,901 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 20:05:44,901 - __main__ - INFO - 
+============================== Cycle 161 ==============================
+2025-07-01 20:05:44,902 - __main__ - INFO - Time: 2025-07-01 20:05:44
+2025-07-01 20:05:44,903 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 20:06:44,903 - __main__ - INFO - 
+============================== Cycle 162 ==============================
+2025-07-01 20:06:44,904 - __main__ - INFO - Time: 2025-07-01 20:06:44
+2025-07-01 20:06:44,904 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 20:07:44,903 - __main__ - INFO - 
+============================== Cycle 163 ==============================
+2025-07-01 20:07:44,904 - __main__ - INFO - Time: 2025-07-01 20:07:44
+2025-07-01 20:07:44,904 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 20:08:44,904 - __main__ - INFO - 
+============================== Cycle 164 ==============================
+2025-07-01 20:08:44,905 - __main__ - INFO - Time: 2025-07-01 20:08:44
+2025-07-01 20:08:44,906 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 20:09:44,905 - __main__ - INFO - 
+============================== Cycle 165 ==============================
+2025-07-01 20:09:44,906 - __main__ - INFO - Time: 2025-07-01 20:09:44
+2025-07-01 20:09:44,906 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 20:10:44,906 - __main__ - INFO - 
+============================== Cycle 166 ==============================
+2025-07-01 20:10:44,907 - __main__ - INFO - Time: 2025-07-01 20:10:44
+2025-07-01 20:10:44,907 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 20:11:44,907 - __main__ - INFO - 
+============================== Cycle 167 ==============================
+2025-07-01 20:11:44,907 - __main__ - INFO - Time: 2025-07-01 20:11:44
+2025-07-01 20:11:44,907 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 20:12:44,907 - __main__ - INFO - 
+============================== Cycle 168 ==============================
+2025-07-01 20:12:44,908 - __main__ - INFO - Time: 2025-07-01 20:12:44
+2025-07-01 20:12:44,909 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 20:13:44,908 - __main__ - INFO - 
+============================== Cycle 169 ==============================
+2025-07-01 20:13:44,909 - __main__ - INFO - Time: 2025-07-01 20:13:44
+2025-07-01 20:13:44,909 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 20:14:44,909 - __main__ - INFO - 
+============================== Cycle 170 ==============================
+2025-07-01 20:14:44,910 - __main__ - INFO - Time: 2025-07-01 20:14:44
+2025-07-01 20:14:44,910 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 20:15:44,910 - __main__ - INFO - 
+============================== Cycle 171 ==============================
+2025-07-01 20:15:44,911 - __main__ - INFO - Time: 2025-07-01 20:15:44
+2025-07-01 20:15:44,912 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 20:16:44,911 - __main__ - INFO - 
+============================== Cycle 172 ==============================
+2025-07-01 20:16:44,912 - __main__ - INFO - Time: 2025-07-01 20:16:44
+2025-07-01 20:16:44,913 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 20:17:44,912 - __main__ - INFO - 
+============================== Cycle 173 ==============================
+2025-07-01 20:17:44,913 - __main__ - INFO - Time: 2025-07-01 20:17:44
+2025-07-01 20:17:44,914 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 20:18:44,913 - __main__ - INFO - 
+============================== Cycle 174 ==============================
+2025-07-01 20:18:44,914 - __main__ - INFO - Time: 2025-07-01 20:18:44
+2025-07-01 20:18:44,915 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 20:19:44,914 - __main__ - INFO - 
+============================== Cycle 175 ==============================
+2025-07-01 20:19:44,914 - __main__ - INFO - Time: 2025-07-01 20:19:44
+2025-07-01 20:19:44,915 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 20:20:44,915 - __main__ - INFO - 
+============================== Cycle 176 ==============================
+2025-07-01 20:20:44,915 - __main__ - INFO - Time: 2025-07-01 20:20:44
+2025-07-01 20:20:44,916 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 20:21:44,915 - __main__ - INFO - 
+============================== Cycle 177 ==============================
+2025-07-01 20:21:44,916 - __main__ - INFO - Time: 2025-07-01 20:21:44
+2025-07-01 20:21:44,916 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 20:22:44,916 - __main__ - INFO - 
+============================== Cycle 178 ==============================
+2025-07-01 20:22:44,917 - __main__ - INFO - Time: 2025-07-01 20:22:44
+2025-07-01 20:22:44,918 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 20:23:44,917 - __main__ - INFO - 
+============================== Cycle 179 ==============================
+2025-07-01 20:23:44,918 - __main__ - INFO - Time: 2025-07-01 20:23:44
+2025-07-01 20:23:44,918 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 20:24:44,918 - __main__ - INFO - 
+============================== Cycle 180 ==============================
+2025-07-01 20:24:44,918 - __main__ - INFO - Time: 2025-07-01 20:24:44
+2025-07-01 20:24:44,919 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 20:25:44,918 - __main__ - INFO - 
+============================== Cycle 181 ==============================
+2025-07-01 20:25:44,919 - __main__ - INFO - Time: 2025-07-01 20:25:44
+2025-07-01 20:25:44,919 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 20:26:44,919 - __main__ - INFO - 
+============================== Cycle 182 ==============================
+2025-07-01 20:26:44,919 - __main__ - INFO - Time: 2025-07-01 20:26:44
+2025-07-01 20:26:44,920 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 20:27:44,920 - __main__ - INFO - 
+============================== Cycle 183 ==============================
+2025-07-01 20:27:44,920 - __main__ - INFO - Time: 2025-07-01 20:27:44
+2025-07-01 20:27:44,920 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 20:28:44,920 - __main__ - INFO - 
+============================== Cycle 184 ==============================
+2025-07-01 20:28:44,921 - __main__ - INFO - Time: 2025-07-01 20:28:44
+2025-07-01 20:28:44,921 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 20:29:44,921 - __main__ - INFO - 
+============================== Cycle 185 ==============================
+2025-07-01 20:29:44,922 - __main__ - INFO - Time: 2025-07-01 20:29:44
+2025-07-01 20:29:44,922 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 20:30:44,922 - __main__ - INFO - 
+============================== Cycle 186 ==============================
+2025-07-01 20:30:44,922 - __main__ - INFO - Time: 2025-07-01 20:30:44
+2025-07-01 20:30:44,923 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 20:31:44,923 - __main__ - INFO - 
+============================== Cycle 187 ==============================
+2025-07-01 20:31:44,924 - __main__ - INFO - Time: 2025-07-01 20:31:44
+2025-07-01 20:31:44,925 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 20:32:44,924 - __main__ - INFO - 
+============================== Cycle 188 ==============================
+2025-07-01 20:32:44,925 - __main__ - INFO - Time: 2025-07-01 20:32:44
+2025-07-01 20:32:44,925 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 20:33:44,926 - __main__ - INFO - 
+============================== Cycle 189 ==============================
+2025-07-01 20:33:44,926 - __main__ - INFO - Time: 2025-07-01 20:33:44
+2025-07-01 20:33:44,927 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 20:34:44,926 - __main__ - INFO - 
+============================== Cycle 190 ==============================
+2025-07-01 20:34:44,927 - __main__ - INFO - Time: 2025-07-01 20:34:44
+2025-07-01 20:34:44,927 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 20:35:44,927 - __main__ - INFO - 
+============================== Cycle 191 ==============================
+2025-07-01 20:35:44,928 - __main__ - INFO - Time: 2025-07-01 20:35:44
+2025-07-01 20:35:44,928 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 20:36:44,928 - __main__ - INFO - 
+============================== Cycle 192 ==============================
+2025-07-01 20:36:44,928 - __main__ - INFO - Time: 2025-07-01 20:36:44
+2025-07-01 20:36:44,929 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 20:37:44,928 - __main__ - INFO - 
+============================== Cycle 193 ==============================
+2025-07-01 20:37:44,929 - __main__ - INFO - Time: 2025-07-01 20:37:44
+2025-07-01 20:37:44,929 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 20:38:44,929 - __main__ - INFO - 
+============================== Cycle 194 ==============================
+2025-07-01 20:38:44,930 - __main__ - INFO - Time: 2025-07-01 20:38:44
+2025-07-01 20:38:44,930 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 20:39:44,930 - __main__ - INFO - 
+============================== Cycle 195 ==============================
+2025-07-01 20:39:44,931 - __main__ - INFO - Time: 2025-07-01 20:39:44
+2025-07-01 20:39:44,932 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 20:40:44,931 - __main__ - INFO - 
+============================== Cycle 196 ==============================
+2025-07-01 20:40:44,932 - __main__ - INFO - Time: 2025-07-01 20:40:44
+2025-07-01 20:40:44,932 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 20:41:44,932 - __main__ - INFO - 
+============================== Cycle 197 ==============================
+2025-07-01 20:41:44,933 - __main__ - INFO - Time: 2025-07-01 20:41:44
+2025-07-01 20:41:44,934 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 20:42:44,933 - __main__ - INFO - 
+============================== Cycle 198 ==============================
+2025-07-01 20:42:44,934 - __main__ - INFO - Time: 2025-07-01 20:42:44
+2025-07-01 20:42:44,934 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 20:43:44,934 - __main__ - INFO - 
+============================== Cycle 199 ==============================
+2025-07-01 20:43:44,935 - __main__ - INFO - Time: 2025-07-01 20:43:44
+2025-07-01 20:43:44,936 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 20:44:44,935 - __main__ - INFO - 
+============================== Cycle 200 ==============================
+2025-07-01 20:44:44,936 - __main__ - INFO - Time: 2025-07-01 20:44:44
+2025-07-01 20:44:44,936 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 20:45:44,936 - __main__ - INFO - 
+============================== Cycle 201 ==============================
+2025-07-01 20:45:44,936 - __main__ - INFO - Time: 2025-07-01 20:45:44
+2025-07-01 20:45:44,936 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 20:46:44,936 - __main__ - INFO - 
+============================== Cycle 202 ==============================
+2025-07-01 20:46:44,938 - __main__ - INFO - Time: 2025-07-01 20:46:44
+2025-07-01 20:46:44,938 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 20:47:44,938 - __main__ - INFO - 
+============================== Cycle 203 ==============================
+2025-07-01 20:47:44,938 - __main__ - INFO - Time: 2025-07-01 20:47:44
+2025-07-01 20:47:44,938 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 20:48:44,938 - __main__ - INFO - 
+============================== Cycle 204 ==============================
+2025-07-01 20:48:44,940 - __main__ - INFO - Time: 2025-07-01 20:48:44
+2025-07-01 20:48:44,940 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 20:49:44,939 - __main__ - INFO - 
+============================== Cycle 205 ==============================
+2025-07-01 20:49:44,940 - __main__ - INFO - Time: 2025-07-01 20:49:44
+2025-07-01 20:49:44,940 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 20:50:44,940 - __main__ - INFO - 
+============================== Cycle 206 ==============================
+2025-07-01 20:50:44,940 - __main__ - INFO - Time: 2025-07-01 20:50:44
+2025-07-01 20:50:44,940 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 20:51:44,940 - __main__ - INFO - 
+============================== Cycle 207 ==============================
+2025-07-01 20:51:44,941 - __main__ - INFO - Time: 2025-07-01 20:51:44
+2025-07-01 20:51:44,941 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 20:52:44,941 - __main__ - INFO - 
+============================== Cycle 208 ==============================
+2025-07-01 20:52:44,941 - __main__ - INFO - Time: 2025-07-01 20:52:44
+2025-07-01 20:52:44,942 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 20:53:44,942 - __main__ - INFO - 
+============================== Cycle 209 ==============================
+2025-07-01 20:53:44,942 - __main__ - INFO - Time: 2025-07-01 20:53:44
+2025-07-01 20:53:44,942 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 20:54:44,942 - __main__ - INFO - 
+============================== Cycle 210 ==============================
+2025-07-01 20:54:44,943 - __main__ - INFO - Time: 2025-07-01 20:54:44
+2025-07-01 20:54:44,943 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 20:55:44,943 - __main__ - INFO - 
+============================== Cycle 211 ==============================
+2025-07-01 20:55:44,943 - __main__ - INFO - Time: 2025-07-01 20:55:44
+2025-07-01 20:55:44,944 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 20:56:44,944 - __main__ - INFO - 
+============================== Cycle 212 ==============================
+2025-07-01 20:56:44,944 - __main__ - INFO - Time: 2025-07-01 20:56:44
+2025-07-01 20:56:44,944 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 20:57:44,945 - __main__ - INFO - 
+============================== Cycle 213 ==============================
+2025-07-01 20:57:44,945 - __main__ - INFO - Time: 2025-07-01 20:57:44
+2025-07-01 20:57:44,945 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 20:58:44,946 - __main__ - INFO - 
+============================== Cycle 214 ==============================
+2025-07-01 20:58:44,946 - __main__ - INFO - Time: 2025-07-01 20:58:44
+2025-07-01 20:58:44,947 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 20:59:44,947 - __main__ - INFO - 
+============================== Cycle 215 ==============================
+2025-07-01 20:59:44,947 - __main__ - INFO - Time: 2025-07-01 20:59:44
+2025-07-01 20:59:44,947 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 21:00:44,947 - __main__ - INFO - 
+============================== Cycle 216 ==============================
+2025-07-01 21:00:44,948 - __main__ - INFO - Time: 2025-07-01 21:00:44
+2025-07-01 21:00:44,949 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 21:01:44,948 - __main__ - INFO - 
+============================== Cycle 217 ==============================
+2025-07-01 21:01:44,950 - __main__ - INFO - Time: 2025-07-01 21:01:44
+2025-07-01 21:01:44,951 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 21:02:44,949 - __main__ - INFO - 
+============================== Cycle 218 ==============================
+2025-07-01 21:02:44,950 - __main__ - INFO - Time: 2025-07-01 21:02:44
+2025-07-01 21:02:44,950 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 21:03:44,950 - __main__ - INFO - 
+============================== Cycle 219 ==============================
+2025-07-01 21:03:44,950 - __main__ - INFO - Time: 2025-07-01 21:03:44
+2025-07-01 21:03:44,950 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 21:04:44,950 - __main__ - INFO - 
+============================== Cycle 220 ==============================
+2025-07-01 21:04:44,951 - __main__ - INFO - Time: 2025-07-01 21:04:44
+2025-07-01 21:04:44,952 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 21:05:44,951 - __main__ - INFO - 
+============================== Cycle 221 ==============================
+2025-07-01 21:05:44,952 - __main__ - INFO - Time: 2025-07-01 21:05:44
+2025-07-01 21:05:44,952 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 21:06:44,952 - __main__ - INFO - 
+============================== Cycle 222 ==============================
+2025-07-01 21:06:44,952 - __main__ - INFO - Time: 2025-07-01 21:06:44
+2025-07-01 21:06:44,952 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 21:07:44,952 - __main__ - INFO - 
+============================== Cycle 223 ==============================
+2025-07-01 21:07:44,953 - __main__ - INFO - Time: 2025-07-01 21:07:44
+2025-07-01 21:07:44,953 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 21:08:44,953 - __main__ - INFO - 
+============================== Cycle 224 ==============================
+2025-07-01 21:08:44,953 - __main__ - INFO - Time: 2025-07-01 21:08:44
+2025-07-01 21:08:44,954 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 21:09:44,954 - __main__ - INFO - 
+============================== Cycle 225 ==============================
+2025-07-01 21:09:44,955 - __main__ - INFO - Time: 2025-07-01 21:09:44
+2025-07-01 21:09:44,955 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 21:10:44,955 - __main__ - INFO - 
+============================== Cycle 226 ==============================
+2025-07-01 21:10:44,956 - __main__ - INFO - Time: 2025-07-01 21:10:44
+2025-07-01 21:10:44,956 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 21:11:44,956 - __main__ - INFO - 
+============================== Cycle 227 ==============================
+2025-07-01 21:11:44,957 - __main__ - INFO - Time: 2025-07-01 21:11:44
+2025-07-01 21:11:44,958 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 21:12:44,957 - __main__ - INFO - 
+============================== Cycle 228 ==============================
+2025-07-01 21:12:44,958 - __main__ - INFO - Time: 2025-07-01 21:12:44
+2025-07-01 21:12:44,959 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 21:13:44,958 - __main__ - INFO - 
+============================== Cycle 229 ==============================
+2025-07-01 21:13:44,959 - __main__ - INFO - Time: 2025-07-01 21:13:44
+2025-07-01 21:13:44,960 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 21:14:44,959 - __main__ - INFO - 
+============================== Cycle 230 ==============================
+2025-07-01 21:14:44,960 - __main__ - INFO - Time: 2025-07-01 21:14:44
+2025-07-01 21:14:44,961 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 21:15:44,960 - __main__ - INFO - 
+============================== Cycle 231 ==============================
+2025-07-01 21:15:44,960 - __main__ - INFO - Time: 2025-07-01 21:15:44
+2025-07-01 21:15:44,961 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 21:16:44,960 - __main__ - INFO - 
+============================== Cycle 232 ==============================
+2025-07-01 21:16:44,961 - __main__ - INFO - Time: 2025-07-01 21:16:44
+2025-07-01 21:16:44,962 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 21:17:44,961 - __main__ - INFO - 
+============================== Cycle 233 ==============================
+2025-07-01 21:17:44,962 - __main__ - INFO - Time: 2025-07-01 21:17:44
+2025-07-01 21:17:44,962 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 21:18:44,962 - __main__ - INFO - 
+============================== Cycle 234 ==============================
+2025-07-01 21:18:44,963 - __main__ - INFO - Time: 2025-07-01 21:18:44
+2025-07-01 21:18:44,964 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 21:19:44,963 - __main__ - INFO - 
+============================== Cycle 235 ==============================
+2025-07-01 21:19:44,963 - __main__ - INFO - Time: 2025-07-01 21:19:44
+2025-07-01 21:19:44,963 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 21:20:44,963 - __main__ - INFO - 
+============================== Cycle 236 ==============================
+2025-07-01 21:20:44,964 - __main__ - INFO - Time: 2025-07-01 21:20:44
+2025-07-01 21:20:44,965 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 21:21:44,964 - __main__ - INFO - 
+============================== Cycle 237 ==============================
+2025-07-01 21:21:44,965 - __main__ - INFO - Time: 2025-07-01 21:21:44
+2025-07-01 21:21:44,965 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 21:22:44,965 - __main__ - INFO - 
+============================== Cycle 238 ==============================
+2025-07-01 21:22:44,965 - __main__ - INFO - Time: 2025-07-01 21:22:44
+2025-07-01 21:22:44,966 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 21:23:44,966 - __main__ - INFO - 
+============================== Cycle 239 ==============================
+2025-07-01 21:23:44,967 - __main__ - INFO - Time: 2025-07-01 21:23:44
+2025-07-01 21:23:44,968 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 21:24:44,967 - __main__ - INFO - 
+============================== Cycle 240 ==============================
+2025-07-01 21:24:44,968 - __main__ - INFO - Time: 2025-07-01 21:24:44
+2025-07-01 21:24:44,969 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 21:25:44,968 - __main__ - INFO - 
+============================== Cycle 241 ==============================
+2025-07-01 21:25:44,968 - __main__ - INFO - Time: 2025-07-01 21:25:44
+2025-07-01 21:25:44,969 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 21:26:44,969 - __main__ - INFO - 
+============================== Cycle 242 ==============================
+2025-07-01 21:26:44,970 - __main__ - INFO - Time: 2025-07-01 21:26:44
+2025-07-01 21:26:44,970 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 21:27:44,970 - __main__ - INFO - 
+============================== Cycle 243 ==============================
+2025-07-01 21:27:44,971 - __main__ - INFO - Time: 2025-07-01 21:27:44
+2025-07-01 21:27:44,972 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 21:28:44,971 - __main__ - INFO - 
+============================== Cycle 244 ==============================
+2025-07-01 21:28:44,972 - __main__ - INFO - Time: 2025-07-01 21:28:44
+2025-07-01 21:28:44,972 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 21:29:44,972 - __main__ - INFO - 
+============================== Cycle 245 ==============================
+2025-07-01 21:29:44,972 - __main__ - INFO - Time: 2025-07-01 21:29:44
+2025-07-01 21:29:44,973 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 21:30:44,972 - __main__ - INFO - 
+============================== Cycle 246 ==============================
+2025-07-01 21:30:44,973 - __main__ - INFO - Time: 2025-07-01 21:30:44
+2025-07-01 21:30:44,973 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 21:31:44,973 - __main__ - INFO - 
+============================== Cycle 247 ==============================
+2025-07-01 21:31:44,973 - __main__ - INFO - Time: 2025-07-01 21:31:44
+2025-07-01 21:31:44,974 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 21:32:44,974 - __main__ - INFO - 
+============================== Cycle 248 ==============================
+2025-07-01 21:32:44,977 - __main__ - INFO - Time: 2025-07-01 21:32:44
+2025-07-01 21:32:44,978 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 21:33:44,975 - __main__ - INFO - 
+============================== Cycle 249 ==============================
+2025-07-01 21:33:44,976 - __main__ - INFO - Time: 2025-07-01 21:33:44
+2025-07-01 21:33:44,977 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 21:34:44,976 - __main__ - INFO - 
+============================== Cycle 250 ==============================
+2025-07-01 21:34:44,977 - __main__ - INFO - Time: 2025-07-01 21:34:44
+2025-07-01 21:34:44,978 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 21:35:44,977 - __main__ - INFO - 
+============================== Cycle 251 ==============================
+2025-07-01 21:35:44,978 - __main__ - INFO - Time: 2025-07-01 21:35:44
+2025-07-01 21:35:44,978 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 21:36:44,978 - __main__ - INFO - 
+============================== Cycle 252 ==============================
+2025-07-01 21:36:44,978 - __main__ - INFO - Time: 2025-07-01 21:36:44
+2025-07-01 21:36:44,979 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 21:37:44,978 - __main__ - INFO - 
+============================== Cycle 253 ==============================
+2025-07-01 21:37:44,979 - __main__ - INFO - Time: 2025-07-01 21:37:44
+2025-07-01 21:37:44,979 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 21:38:44,979 - __main__ - INFO - 
+============================== Cycle 254 ==============================
+2025-07-01 21:38:44,980 - __main__ - INFO - Time: 2025-07-01 21:38:44
+2025-07-01 21:38:44,980 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 21:39:44,980 - __main__ - INFO - 
+============================== Cycle 255 ==============================
+2025-07-01 21:39:44,980 - __main__ - INFO - Time: 2025-07-01 21:39:44
+2025-07-01 21:39:44,981 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 21:40:44,981 - __main__ - INFO - 
+============================== Cycle 256 ==============================
+2025-07-01 21:40:44,982 - __main__ - INFO - Time: 2025-07-01 21:40:44
+2025-07-01 21:40:44,982 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 21:41:44,982 - __main__ - INFO - 
+============================== Cycle 257 ==============================
+2025-07-01 21:41:44,983 - __main__ - INFO - Time: 2025-07-01 21:41:44
+2025-07-01 21:41:44,984 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 21:42:44,983 - __main__ - INFO - 
+============================== Cycle 258 ==============================
+2025-07-01 21:42:44,983 - __main__ - INFO - Time: 2025-07-01 21:42:44
+2025-07-01 21:42:44,983 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 21:43:44,983 - __main__ - INFO - 
+============================== Cycle 259 ==============================
+2025-07-01 21:43:44,984 - __main__ - INFO - Time: 2025-07-01 21:43:44
+2025-07-01 21:43:44,985 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 21:44:44,985 - __main__ - INFO - 
+============================== Cycle 260 ==============================
+2025-07-01 21:44:44,985 - __main__ - INFO - Time: 2025-07-01 21:44:44
+2025-07-01 21:44:44,986 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 21:45:44,985 - __main__ - INFO - 
+============================== Cycle 261 ==============================
+2025-07-01 21:45:44,985 - __main__ - INFO - Time: 2025-07-01 21:45:44
+2025-07-01 21:45:44,986 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 21:46:44,986 - __main__ - INFO - 
+============================== Cycle 262 ==============================
+2025-07-01 21:46:44,987 - __main__ - INFO - Time: 2025-07-01 21:46:44
+2025-07-01 21:46:44,987 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 21:47:44,987 - __main__ - INFO - 
+============================== Cycle 263 ==============================
+2025-07-01 21:47:44,988 - __main__ - INFO - Time: 2025-07-01 21:47:44
+2025-07-01 21:47:44,989 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 21:48:44,988 - __main__ - INFO - 
+============================== Cycle 264 ==============================
+2025-07-01 21:48:44,989 - __main__ - INFO - Time: 2025-07-01 21:48:44
+2025-07-01 21:48:44,990 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 21:49:44,989 - __main__ - INFO - 
+============================== Cycle 265 ==============================
+2025-07-01 21:49:44,990 - __main__ - INFO - Time: 2025-07-01 21:49:44
+2025-07-01 21:49:44,990 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 21:50:44,990 - __main__ - INFO - 
+============================== Cycle 266 ==============================
+2025-07-01 21:50:44,991 - __main__ - INFO - Time: 2025-07-01 21:50:44
+2025-07-01 21:50:44,992 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 21:51:44,991 - __main__ - INFO - 
+============================== Cycle 267 ==============================
+2025-07-01 21:51:44,992 - __main__ - INFO - Time: 2025-07-01 21:51:44
+2025-07-01 21:51:44,992 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 21:52:44,992 - __main__ - INFO - 
+============================== Cycle 268 ==============================
+2025-07-01 21:52:44,993 - __main__ - INFO - Time: 2025-07-01 21:52:44
+2025-07-01 21:52:44,993 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 21:53:44,993 - __main__ - INFO - 
+============================== Cycle 269 ==============================
+2025-07-01 21:53:44,994 - __main__ - INFO - Time: 2025-07-01 21:53:44
+2025-07-01 21:53:44,995 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 21:54:44,994 - __main__ - INFO - 
+============================== Cycle 270 ==============================
+2025-07-01 21:54:44,995 - __main__ - INFO - Time: 2025-07-01 21:54:44
+2025-07-01 21:54:44,996 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 21:55:44,995 - __main__ - INFO - 
+============================== Cycle 271 ==============================
+2025-07-01 21:55:44,995 - __main__ - INFO - Time: 2025-07-01 21:55:44
+2025-07-01 21:55:44,996 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 21:56:44,996 - __main__ - INFO - 
+============================== Cycle 272 ==============================
+2025-07-01 21:56:44,996 - __main__ - INFO - Time: 2025-07-01 21:56:44
+2025-07-01 21:56:44,996 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 21:57:44,996 - __main__ - INFO - 
+============================== Cycle 273 ==============================
+2025-07-01 21:57:44,997 - __main__ - INFO - Time: 2025-07-01 21:57:44
+2025-07-01 21:57:44,997 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 21:58:44,997 - __main__ - INFO - 
+============================== Cycle 274 ==============================
+2025-07-01 21:58:44,998 - __main__ - INFO - Time: 2025-07-01 21:58:44
+2025-07-01 21:58:44,998 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 21:59:44,998 - __main__ - INFO - 
+============================== Cycle 275 ==============================
+2025-07-01 21:59:44,999 - __main__ - INFO - Time: 2025-07-01 21:59:44
+2025-07-01 21:59:45,000 - __main__ - INFO - Cycle completed in 0.0s. Sleeping for 60.0s...
+2025-07-01 22:00:45,000 - __main__ - INFO - 
+============================== Cycle 276 ==============================
+2025-07-01 22:00:45,001 - __main__ - INFO - Time: 2025-07-01 22:00:45
+2025-07-01 22:00:45,005 - __main__ - INFO - Active Kill Zone: LONDON CLOSE KILL ZONE (NY Time: 15:00)
+2025-07-01 22:00:46,815 - __main__ - INFO - EURUSD: Position already open (BUY)
+2025-07-01 22:00:55,375 - bot_components - INFO - EURNZD: Spread 51 > max 50. Skipping.
+2025-07-01 22:00:58,560 - bot_components - INFO - GBPCAD: Spread 53 > max 50. Skipping.
+2025-07-01 22:01:01,784 - __main__ - INFO - Cycle completed in 16.8s. Sleeping for 43.2s...
+2025-07-01 22:01:45,001 - __main__ - INFO - 
+============================== Cycle 277 ==============================
+2025-07-01 22:01:45,002 - __main__ - INFO - Time: 2025-07-01 22:01:45
+2025-07-01 22:01:45,003 - __main__ - INFO - Active Kill Zone: LONDON CLOSE KILL ZONE (NY Time: 15:01)
+2025-07-01 22:01:46,282 - __main__ - INFO - EURUSD: Position already open (BUY)
+2025-07-01 22:01:54,334 - bot_components - INFO - EURNZD: Spread 52 > max 50. Skipping.
+2025-07-01 22:01:57,432 - bot_components - INFO - GBPCAD: Spread 52 > max 50. Skipping.
+2025-07-01 22:02:00,654 - __main__ - INFO - Cycle completed in 15.7s. Sleeping for 44.3s...
+2025-07-01 22:02:45,002 - __main__ - INFO - 
+============================== Cycle 278 ==============================
+2025-07-01 22:02:45,002 - __main__ - INFO - Time: 2025-07-01 22:02:45
+2025-07-01 22:02:45,003 - __main__ - INFO - Active Kill Zone: LONDON CLOSE KILL ZONE (NY Time: 15:02)
+2025-07-01 22:02:46,191 - __main__ - INFO - EURUSD: Position already open (BUY)
+2025-07-01 22:02:53,960 - bot_components - INFO - EURNZD: Spread 51 > max 50. Skipping.
+2025-07-01 22:02:57,008 - bot_components - INFO - GBPCAD: Spread 58 > max 50. Skipping.
+2025-07-01 22:03:00,031 - __main__ - INFO - Cycle completed in 15.0s. Sleeping for 45.0s...
+2025-07-01 22:03:45,003 - __main__ - INFO - 
+============================== Cycle 279 ==============================
+2025-07-01 22:03:45,003 - __main__ - INFO - Time: 2025-07-01 22:03:45
+2025-07-01 22:03:45,004 - __main__ - INFO - Active Kill Zone: LONDON CLOSE KILL ZONE (NY Time: 15:03)
+2025-07-01 22:03:46,201 - __main__ - INFO - EURUSD: Position already open (BUY)
+2025-07-01 22:03:53,877 - bot_components - INFO - EURNZD: Spread 51 > max 50. Skipping.
+2025-07-01 22:03:56,216 - bot_components - INFO - GBPAUD: Spread 51 > max 50. Skipping.
+2025-07-01 22:03:56,718 - bot_components - INFO - GBPCAD: Spread 57 > max 50. Skipping.
+2025-07-01 22:03:59,755 - __main__ - INFO - Cycle completed in 14.8s. Sleeping for 45.2s...
+2025-07-01 22:04:45,004 - __main__ - INFO - 
+============================== Cycle 280 ==============================
+2025-07-01 22:04:45,004 - __main__ - INFO - Time: 2025-07-01 22:04:45
+2025-07-01 22:04:45,004 - __main__ - INFO - Active Kill Zone: LONDON CLOSE KILL ZONE (NY Time: 15:04)
+2025-07-01 22:04:46,215 - __main__ - INFO - EURUSD: Position already open (BUY)
+2025-07-01 22:04:57,096 - bot_components - INFO - GBPCAD: Spread 57 > max 50. Skipping.
+2025-07-01 22:05:00,171 - __main__ - INFO - Cycle completed in 15.2s. Sleeping for 44.8s...
+2025-07-01 22:05:45,004 - __main__ - INFO - 
+============================== Cycle 281 ==============================
+2025-07-01 22:05:45,004 - __main__ - INFO - Time: 2025-07-01 22:05:45
+2025-07-01 22:05:45,004 - __main__ - INFO - Active Kill Zone: LONDON CLOSE KILL ZONE (NY Time: 15:05)
+2025-07-01 22:05:46,250 - __main__ - INFO - EURUSD: Position already open (BUY)
+2025-07-01 22:05:53,945 - bot_components - INFO - EURNZD: Spread 53 > max 50. Skipping.
+2025-07-01 22:05:56,936 - bot_components - INFO - GBPCAD: Spread 56 > max 50. Skipping.
+2025-07-01 22:06:00,027 - __main__ - INFO - Cycle completed in 15.0s. Sleeping for 45.0s...
+2025-07-01 22:06:45,005 - __main__ - INFO - 
+============================== Cycle 282 ==============================
+2025-07-01 22:06:45,005 - __main__ - INFO - Time: 2025-07-01 22:06:45
+2025-07-01 22:06:45,005 - __main__ - INFO - Active Kill Zone: LONDON CLOSE KILL ZONE (NY Time: 15:06)
+2025-07-01 22:06:46,197 - __main__ - INFO - EURUSD: Position already open (BUY)
+2025-07-01 22:06:53,982 - bot_components - INFO - EURNZD: Spread 56 > max 50. Skipping.
+2025-07-01 22:06:56,985 - bot_components - INFO - GBPCAD: Spread 54 > max 50. Skipping.
+2025-07-01 22:07:00,051 - __main__ - INFO - Cycle completed in 15.0s. Sleeping for 45.0s...
+2025-07-01 22:07:45,005 - __main__ - INFO - 
+============================== Cycle 283 ==============================
+2025-07-01 22:07:45,006 - __main__ - INFO - Time: 2025-07-01 22:07:45
+2025-07-01 22:07:45,006 - __main__ - INFO - Active Kill Zone: LONDON CLOSE KILL ZONE (NY Time: 15:07)
+2025-07-01 22:07:46,257 - __main__ - INFO - EURUSD: Position already open (BUY)
+2025-07-01 22:07:54,043 - bot_components - INFO - EURNZD: Spread 52 > max 50. Skipping.
+2025-07-01 22:07:56,362 - bot_components - INFO - GBPAUD: Spread 51 > max 50. Skipping.
+2025-07-01 22:07:56,864 - bot_components - INFO - GBPCAD: Spread 53 > max 50. Skipping.
+2025-07-01 22:07:59,943 - __main__ - INFO - Cycle completed in 14.9s. Sleeping for 45.1s...
+2025-07-01 22:08:45,006 - __main__ - INFO - 
+============================== Cycle 284 ==============================
+2025-07-01 22:08:45,006 - __main__ - INFO - Time: 2025-07-01 22:08:45
+2025-07-01 22:08:45,007 - __main__ - INFO - Active Kill Zone: LONDON CLOSE KILL ZONE (NY Time: 15:08)
+2025-07-01 22:08:46,201 - __main__ - INFO - EURUSD: Position already open (BUY)
+2025-07-01 22:08:53,984 - bot_components - INFO - EURNZD: Spread 52 > max 50. Skipping.
+2025-07-01 22:08:57,012 - bot_components - INFO - GBPCAD: Spread 53 > max 50. Skipping.
+2025-07-01 22:09:00,044 - __main__ - INFO - Cycle completed in 15.0s. Sleeping for 45.0s...
+2025-07-01 22:09:45,006 - __main__ - INFO - 
+============================== Cycle 285 ==============================
+2025-07-01 22:09:45,007 - __main__ - INFO - Time: 2025-07-01 22:09:45
+2025-07-01 22:09:45,007 - __main__ - INFO - Active Kill Zone: LONDON CLOSE KILL ZONE (NY Time: 15:09)
+2025-07-01 22:09:46,200 - __main__ - INFO - EURUSD: Position already open (BUY)
+2025-07-01 22:09:57,130 - bot_components - INFO - GBPCAD: Spread 56 > max 50. Skipping.
+2025-07-01 22:09:59,925 - __main__ - INFO - Cycle completed in 14.9s. Sleeping for 45.1s...
+2025-07-01 22:10:45,007 - __main__ - INFO - 
+============================== Cycle 286 ==============================
+2025-07-01 22:10:45,007 - __main__ - INFO - Time: 2025-07-01 22:10:45
+2025-07-01 22:10:45,008 - __main__ - INFO - Active Kill Zone: LONDON CLOSE KILL ZONE (NY Time: 15:10)
+2025-07-01 22:10:46,199 - __main__ - INFO - EURUSD: Position already open (BUY)
+2025-07-01 22:10:56,918 - bot_components - INFO - GBPCAD: Spread 54 > max 50. Skipping.
+2025-07-01 22:10:59,710 - __main__ - INFO - Cycle completed in 14.7s. Sleeping for 45.3s...
+2025-07-01 22:11:45,008 - __main__ - INFO - 
+============================== Cycle 287 ==============================
+2025-07-01 22:11:45,008 - __main__ - INFO - Time: 2025-07-01 22:11:45
+2025-07-01 22:11:45,008 - __main__ - INFO - Active Kill Zone: LONDON CLOSE KILL ZONE (NY Time: 15:11)
+2025-07-01 22:11:46,227 - __main__ - INFO - EURUSD: Position already open (BUY)
+2025-07-01 22:11:57,079 - bot_components - INFO - GBPCAD: Spread 52 > max 50. Skipping.
+2025-07-01 22:11:59,908 - __main__ - INFO - Cycle completed in 14.9s. Sleeping for 45.1s...
+2025-07-01 22:12:45,008 - __main__ - INFO - 
+============================== Cycle 288 ==============================
+2025-07-01 22:12:45,009 - __main__ - INFO - Time: 2025-07-01 22:12:45
+2025-07-01 22:12:45,009 - __main__ - INFO - Active Kill Zone: LONDON CLOSE KILL ZONE (NY Time: 15:12)
+2025-07-01 22:12:46,253 - __main__ - INFO - EURUSD: Position already open (BUY)
+2025-07-01 22:12:54,014 - bot_components - INFO - EURNZD: Spread 52 > max 50. Skipping.
+2025-07-01 22:12:57,047 - bot_components - INFO - GBPCAD: Spread 53 > max 50. Skipping.
+2025-07-01 22:12:59,865 - __main__ - INFO - Cycle completed in 14.9s. Sleeping for 45.1s...
+2025-07-01 22:13:45,009 - __main__ - INFO - 
+============================== Cycle 289 ==============================
+2025-07-01 22:13:45,010 - __main__ - INFO - Time: 2025-07-01 22:13:45
+2025-07-01 22:13:45,010 - __main__ - INFO - Active Kill Zone: LONDON CLOSE KILL ZONE (NY Time: 15:13)
+2025-07-01 22:13:46,204 - __main__ - INFO - EURUSD: Position already open (BUY)
+2025-07-01 22:13:57,022 - bot_components - INFO - GBPCAD: Spread 54 > max 50. Skipping.
+2025-07-01 22:13:59,817 - __main__ - INFO - Cycle completed in 14.8s. Sleeping for 45.2s...
+2025-07-01 22:14:45,010 - __main__ - INFO - 
+============================== Cycle 290 ==============================
+2025-07-01 22:14:45,010 - __main__ - INFO - Time: 2025-07-01 22:14:45
+2025-07-01 22:14:45,010 - __main__ - INFO - Active Kill Zone: LONDON CLOSE KILL ZONE (NY Time: 15:14)
+2025-07-01 22:14:46,201 - __main__ - INFO - EURUSD: Position already open (BUY)
+2025-07-01 22:14:57,082 - bot_components - INFO - GBPCAD: Spread 53 > max 50. Skipping.
+2025-07-01 22:14:59,924 - __main__ - INFO - Cycle completed in 14.9s. Sleeping for 45.1s...
+2025-07-01 22:15:45,010 - __main__ - INFO - 
+============================== Cycle 291 ==============================
+2025-07-01 22:15:45,011 - __main__ - INFO - Time: 2025-07-01 22:15:45
+2025-07-01 22:15:45,011 - __main__ - INFO - Active Kill Zone: LONDON CLOSE KILL ZONE (NY Time: 15:15)
+2025-07-01 22:15:46,208 - __main__ - INFO - EURUSD: Position already open (BUY)
+2025-07-01 22:15:56,408 - bot_components - INFO - GBPAUD: Spread 51 > max 50. Skipping.
+2025-07-01 22:15:56,909 - bot_components - INFO - GBPCAD: Spread 54 > max 50. Skipping.
+2025-07-01 22:15:59,798 - __main__ - INFO - Cycle completed in 14.8s. Sleeping for 45.2s...
+2025-07-01 22:16:45,011 - __main__ - INFO - 
+============================== Cycle 292 ==============================
+2025-07-01 22:16:45,012 - __main__ - INFO - Time: 2025-07-01 22:16:45
+2025-07-01 22:16:45,012 - __main__ - INFO - Active Kill Zone: LONDON CLOSE KILL ZONE (NY Time: 15:16)
+2025-07-01 22:16:46,334 - __main__ - INFO - EURUSD: Position already open (BUY)
+2025-07-01 22:16:56,514 - bot_components - INFO - GBPAUD: Spread 52 > max 50. Skipping.
+2025-07-01 22:16:57,015 - bot_components - INFO - GBPCAD: Spread 55 > max 50. Skipping.
+2025-07-01 22:16:59,861 - __main__ - INFO - Cycle completed in 14.9s. Sleeping for 45.1s...
+2025-07-01 22:17:45,012 - __main__ - INFO - 
+============================== Cycle 293 ==============================
+2025-07-01 22:17:45,013 - __main__ - INFO - Time: 2025-07-01 22:17:45
+2025-07-01 22:17:45,014 - __main__ - INFO - Active Kill Zone: LONDON CLOSE KILL ZONE (NY Time: 15:17)
+2025-07-01 22:17:46,262 - __main__ - INFO - EURUSD: Position already open (BUY)
+2025-07-01 22:17:57,211 - bot_components - INFO - GBPCAD: Spread 56 > max 50. Skipping.
+2025-07-01 22:18:00,013 - __main__ - INFO - Cycle completed in 15.0s. Sleeping for 45.0s...
+2025-07-01 22:18:45,013 - __main__ - INFO - 
+============================== Cycle 294 ==============================
+2025-07-01 22:18:45,013 - __main__ - INFO - Time: 2025-07-01 22:18:45
+2025-07-01 22:18:45,013 - __main__ - INFO - Active Kill Zone: LONDON CLOSE KILL ZONE (NY Time: 15:18)
+2025-07-01 22:18:46,213 - __main__ - INFO - EURUSD: Position already open (BUY)
+2025-07-01 22:18:57,121 - bot_components - INFO - GBPCAD: Spread 54 > max 50. Skipping.
+2025-07-01 22:18:59,917 - __main__ - INFO - Cycle completed in 14.9s. Sleeping for 45.1s...
+2025-07-01 22:19:45,013 - __main__ - INFO - 
+============================== Cycle 295 ==============================
+2025-07-01 22:19:45,014 - __main__ - INFO - Time: 2025-07-01 22:19:45
+2025-07-01 22:19:45,014 - __main__ - INFO - Active Kill Zone: LONDON CLOSE KILL ZONE (NY Time: 15:19)
+2025-07-01 22:19:46,212 - __main__ - INFO - EURUSD: Position already open (BUY)
+2025-07-01 22:19:56,969 - bot_components - INFO - GBPCAD: Spread 52 > max 50. Skipping.
+2025-07-01 22:19:59,778 - __main__ - INFO - Cycle completed in 14.8s. Sleeping for 45.2s...
+2025-07-01 22:20:45,015 - __main__ - INFO - 
+============================== Cycle 296 ==============================
+2025-07-01 22:20:45,016 - __main__ - INFO - Time: 2025-07-01 22:20:45
+2025-07-01 22:20:45,016 - __main__ - INFO - Active Kill Zone: LONDON CLOSE KILL ZONE (NY Time: 15:20)
+2025-07-01 22:20:46,239 - __main__ - INFO - EURUSD: Position already open (BUY)
+2025-07-01 22:20:54,018 - bot_components - INFO - EURNZD: Spread 52 > max 50. Skipping.
+2025-07-01 22:20:57,050 - bot_components - INFO - GBPCAD: Spread 52 > max 50. Skipping.
+2025-07-01 22:20:59,824 - __main__ - INFO - Cycle completed in 14.8s. Sleeping for 45.2s...
+2025-07-01 22:21:45,015 - __main__ - INFO - 
+============================== Cycle 297 ==============================
+2025-07-01 22:21:45,016 - __main__ - INFO - Time: 2025-07-01 22:21:45
+2025-07-01 22:21:45,016 - __main__ - INFO - Active Kill Zone: LONDON CLOSE KILL ZONE (NY Time: 15:21)
+2025-07-01 22:21:46,279 - __main__ - INFO - EURUSD: Position already open (BUY)
+2025-07-01 22:21:53,999 - bot_components - INFO - EURNZD: Spread 53 > max 50. Skipping.
+2025-07-01 22:21:57,002 - bot_components - INFO - GBPCAD: Spread 53 > max 50. Skipping.
+2025-07-01 22:21:59,883 - __main__ - INFO - Cycle completed in 14.9s. Sleeping for 45.1s...
+2025-07-01 22:22:45,017 - __main__ - INFO - 
+============================== Cycle 298 ==============================
+2025-07-01 22:22:45,018 - __main__ - INFO - Time: 2025-07-01 22:22:45
+2025-07-01 22:22:45,019 - __main__ - INFO - Active Kill Zone: LONDON CLOSE KILL ZONE (NY Time: 15:22)
+2025-07-01 22:22:46,262 - __main__ - INFO - EURUSD: Position already open (BUY)
+2025-07-01 22:22:57,197 - bot_components - INFO - GBPCAD: Spread 53 > max 50. Skipping.
+2025-07-01 22:23:00,072 - __main__ - INFO - Cycle completed in 15.1s. Sleeping for 44.9s...
+2025-07-01 22:23:45,017 - __main__ - INFO - 
+============================== Cycle 299 ==============================
+2025-07-01 22:23:45,018 - __main__ - INFO - Time: 2025-07-01 22:23:45
+2025-07-01 22:23:45,019 - __main__ - INFO - Active Kill Zone: LONDON CLOSE KILL ZONE (NY Time: 15:23)
+2025-07-01 22:23:46,294 - __main__ - INFO - EURUSD: Position already open (BUY)
+2025-07-01 22:23:57,057 - bot_components - INFO - GBPCAD: Spread 58 > max 50. Skipping.
+2025-07-01 22:23:59,929 - __main__ - INFO - Cycle completed in 14.9s. Sleeping for 45.1s...
+2025-07-01 22:24:45,019 - __main__ - INFO - 
+============================== Cycle 300 ==============================
+2025-07-01 22:24:45,020 - __main__ - INFO - Time: 2025-07-01 22:24:45
+2025-07-01 22:24:45,021 - __main__ - INFO - Active Kill Zone: LONDON CLOSE KILL ZONE (NY Time: 15:24)
+2025-07-01 22:24:46,237 - __main__ - INFO - EURUSD: Position already open (BUY)
+2025-07-01 22:24:57,188 - bot_components - INFO - GBPCAD: Spread 59 > max 50. Skipping.
+2025-07-01 22:25:00,058 - __main__ - INFO - Cycle completed in 15.0s. Sleeping for 45.0s...
+2025-07-01 22:25:45,020 - __main__ - INFO - 
+============================== Cycle 301 ==============================
+2025-07-01 22:25:45,021 - __main__ - INFO - Time: 2025-07-01 22:25:45
+2025-07-01 22:25:45,022 - __main__ - INFO - Active Kill Zone: LONDON CLOSE KILL ZONE (NY Time: 15:25)
+2025-07-01 22:25:46,292 - __main__ - INFO - EURUSD: Position already open (BUY)
+2025-07-01 22:25:57,335 - bot_components - INFO - GBPCAD: Spread 56 > max 50. Skipping.
+2025-07-01 22:26:00,222 - __main__ - INFO - Cycle completed in 15.2s. Sleeping for 44.8s...
+2025-07-01 22:26:45,021 - __main__ - INFO - 
+============================== Cycle 302 ==============================
+2025-07-01 22:26:45,022 - __main__ - INFO - Time: 2025-07-01 22:26:45
+2025-07-01 22:26:45,022 - __main__ - INFO - Active Kill Zone: LONDON CLOSE KILL ZONE (NY Time: 15:26)
+2025-07-01 22:26:46,244 - __main__ - INFO - EURUSD: Position already open (BUY)
+2025-07-01 22:26:54,032 - bot_components - INFO - EURNZD: Spread 53 > max 50. Skipping.
+2025-07-01 22:26:57,057 - bot_components - INFO - GBPCAD: Spread 52 > max 50. Skipping.
+2025-07-01 22:26:59,864 - __main__ - INFO - Cycle completed in 14.8s. Sleeping for 45.2s...
+2025-07-01 22:27:45,022 - __main__ - INFO - 
+============================== Cycle 303 ==============================
+2025-07-01 22:27:45,023 - __main__ - INFO - Time: 2025-07-01 22:27:45
+2025-07-01 22:27:45,023 - __main__ - INFO - Active Kill Zone: LONDON CLOSE KILL ZONE (NY Time: 15:27)
+2025-07-01 22:27:46,220 - __main__ - INFO - EURUSD: Position already open (BUY)
+2025-07-01 22:27:54,146 - bot_components - INFO - EURNZD: Spread 51 > max 50. Skipping.
+2025-07-01 22:27:57,187 - bot_components - INFO - GBPCAD: Spread 52 > max 50. Skipping.
+2025-07-01 22:28:00,059 - __main__ - INFO - Cycle completed in 15.0s. Sleeping for 45.0s...
+2025-07-01 22:28:45,024 - __main__ - INFO - 
+============================== Cycle 304 ==============================
+2025-07-01 22:28:45,024 - __main__ - INFO - Time: 2025-07-01 22:28:45
+2025-07-01 22:28:45,025 - __main__ - INFO - Active Kill Zone: LONDON CLOSE KILL ZONE (NY Time: 15:28)
+2025-07-01 22:28:46,272 - __main__ - INFO - EURUSD: Position already open (BUY)
+2025-07-01 22:28:57,139 - bot_components - INFO - GBPCAD: Spread 52 > max 50. Skipping.
+2025-07-01 22:29:00,008 - __main__ - INFO - Cycle completed in 15.0s. Sleeping for 45.0s...
+2025-07-01 22:29:45,026 - __main__ - INFO - 
+============================== Cycle 305 ==============================
+2025-07-01 22:29:45,026 - __main__ - INFO - Time: 2025-07-01 22:29:45
+2025-07-01 22:29:45,026 - __main__ - INFO - Active Kill Zone: LONDON CLOSE KILL ZONE (NY Time: 15:29)
+2025-07-01 22:29:46,230 - __main__ - INFO - EURUSD: Position already open (BUY)
+2025-07-01 22:29:54,002 - bot_components - INFO - EURNZD: Spread 53 > max 50. Skipping.
+2025-07-01 22:29:57,053 - bot_components - INFO - GBPCAD: Spread 51 > max 50. Skipping.
+2025-07-01 22:29:59,951 - __main__ - INFO - Cycle completed in 14.9s. Sleeping for 45.1s...
+2025-07-01 22:30:45,026 - __main__ - INFO - 
+============================== Cycle 306 ==============================
+2025-07-01 22:30:45,027 - __main__ - INFO - Time: 2025-07-01 22:30:45
+2025-07-01 22:30:45,027 - __main__ - INFO - Active Kill Zone: LONDON CLOSE KILL ZONE (NY Time: 15:30)
+2025-07-01 22:30:46,210 - __main__ - INFO - EURUSD: Position already open (BUY)
+2025-07-01 22:30:53,843 - bot_components - INFO - EURNZD: Spread 51 > max 50. Skipping.
+2025-07-01 22:30:56,877 - bot_components - INFO - GBPCAD: Spread 53 > max 50. Skipping.
+2025-07-01 22:30:59,661 - __main__ - INFO - Cycle completed in 14.6s. Sleeping for 45.4s...
+2025-07-01 22:31:45,027 - __main__ - INFO - 
+============================== Cycle 307 ==============================
+2025-07-01 22:31:45,027 - __main__ - INFO - Time: 2025-07-01 22:31:45
+2025-07-01 22:31:45,028 - __main__ - INFO - Active Kill Zone: LONDON CLOSE KILL ZONE (NY Time: 15:31)
+2025-07-01 22:31:46,217 - __main__ - INFO - EURUSD: Position already open (BUY)
+2025-07-01 22:31:53,827 - bot_components - INFO - EURNZD: Spread 55 > max 50. Skipping.
+2025-07-01 22:31:56,817 - bot_components - INFO - GBPCAD: Spread 52 > max 50. Skipping.
+2025-07-01 22:31:59,597 - __main__ - INFO - Cycle completed in 14.6s. Sleeping for 45.4s...
+2025-07-01 22:32:45,028 - __main__ - INFO - 
+============================== Cycle 308 ==============================
+2025-07-01 22:32:45,028 - __main__ - INFO - Time: 2025-07-01 22:32:45
+2025-07-01 22:32:45,028 - __main__ - INFO - Active Kill Zone: LONDON CLOSE KILL ZONE (NY Time: 15:32)
+2025-07-01 22:32:46,213 - __main__ - INFO - EURUSD: Position already open (BUY)
+2025-07-01 22:32:56,866 - bot_components - INFO - GBPCAD: Spread 51 > max 50. Skipping.
+2025-07-01 22:32:59,649 - __main__ - INFO - Cycle completed in 14.6s. Sleeping for 45.4s...
+2025-07-01 22:33:45,029 - __main__ - INFO - 
+============================== Cycle 309 ==============================
+2025-07-01 22:33:45,029 - __main__ - INFO - Time: 2025-07-01 22:33:45
+2025-07-01 22:33:45,029 - __main__ - INFO - Active Kill Zone: LONDON CLOSE KILL ZONE (NY Time: 15:33)
+2025-07-01 22:33:46,216 - __main__ - INFO - EURUSD: Position already open (BUY)
+2025-07-01 22:33:53,814 - bot_components - INFO - EURNZD: Spread 54 > max 50. Skipping.
+2025-07-01 22:33:56,695 - bot_components - INFO - GBPCAD: Spread 53 > max 50. Skipping.
+2025-07-01 22:33:59,473 - __main__ - INFO - Cycle completed in 14.4s. Sleeping for 45.6s...
+2025-07-01 22:34:45,029 - __main__ - INFO - 
+============================== Cycle 310 ==============================
+2025-07-01 22:34:45,029 - __main__ - INFO - Time: 2025-07-01 22:34:45
+2025-07-01 22:34:45,030 - __main__ - INFO - Active Kill Zone: LONDON CLOSE KILL ZONE (NY Time: 15:34)
+2025-07-01 22:34:46,218 - __main__ - INFO - EURUSD: Position already open (BUY)
+2025-07-01 22:34:53,811 - bot_components - INFO - EURNZD: Spread 51 > max 50. Skipping.
+2025-07-01 22:34:56,802 - bot_components - INFO - GBPCAD: Spread 54 > max 50. Skipping.
+2025-07-01 22:34:59,576 - __main__ - INFO - Cycle completed in 14.5s. Sleeping for 45.5s...
+2025-07-01 22:35:45,030 - __main__ - INFO - 
+============================== Cycle 311 ==============================
+2025-07-01 22:35:45,030 - __main__ - INFO - Time: 2025-07-01 22:35:45
+2025-07-01 22:35:45,030 - __main__ - INFO - Active Kill Zone: LONDON CLOSE KILL ZONE (NY Time: 15:35)
+2025-07-01 22:35:46,213 - __main__ - INFO - EURUSD: Position already open (BUY)
+2025-07-01 22:35:53,805 - bot_components - INFO - EURNZD: Spread 52 > max 50. Skipping.
+2025-07-01 22:35:56,692 - bot_components - INFO - GBPCAD: Spread 55 > max 50. Skipping.
+2025-07-01 22:35:59,486 - __main__ - INFO - Cycle completed in 14.5s. Sleeping for 45.5s...
+2025-07-01 22:36:45,031 - __main__ - INFO - 
+============================== Cycle 312 ==============================
+2025-07-01 22:36:45,031 - __main__ - INFO - Time: 2025-07-01 22:36:45
+2025-07-01 22:36:45,031 - __main__ - INFO - Active Kill Zone: LONDON CLOSE KILL ZONE (NY Time: 15:36)
+2025-07-01 22:36:46,218 - __main__ - INFO - EURUSD: Position already open (BUY)
+2025-07-01 22:36:57,097 - bot_components - INFO - GBPCAD: Spread 55 > max 50. Skipping.
+2025-07-01 22:36:59,969 - __main__ - INFO - Cycle completed in 14.9s. Sleeping for 45.1s...
+2025-07-01 22:37:45,031 - __main__ - INFO - 
+============================== Cycle 313 ==============================
+2025-07-01 22:37:45,032 - __main__ - INFO - Time: 2025-07-01 22:37:45
+2025-07-01 22:37:45,032 - __main__ - INFO - Active Kill Zone: LONDON CLOSE KILL ZONE (NY Time: 15:37)
+2025-07-01 22:37:46,243 - __main__ - INFO - EURUSD: Position already open (BUY)
+2025-07-01 22:37:56,365 - bot_components - INFO - GBPAUD: Spread 52 > max 50. Skipping.
+2025-07-01 22:37:56,866 - bot_components - INFO - GBPCAD: Spread 54 > max 50. Skipping.
+2025-07-01 22:37:59,667 - __main__ - INFO - Cycle completed in 14.6s. Sleeping for 45.4s...
+2025-07-01 22:38:45,033 - __main__ - INFO - 
+============================== Cycle 314 ==============================
+2025-07-01 22:38:45,033 - __main__ - INFO - Time: 2025-07-01 22:38:45
+2025-07-01 22:38:45,033 - __main__ - INFO - Active Kill Zone: LONDON CLOSE KILL ZONE (NY Time: 15:38)
+2025-07-01 22:38:46,228 - __main__ - INFO - EURUSD: Position already open (BUY)
+2025-07-01 22:38:56,231 - bot_components - INFO - GBPAUD: Spread 54 > max 50. Skipping.
+2025-07-01 22:38:56,732 - bot_components - INFO - GBPCAD: Spread 52 > max 50. Skipping.
+2025-07-01 22:38:59,691 - __main__ - INFO - Cycle completed in 14.7s. Sleeping for 45.3s...
+2025-07-01 22:39:45,033 - __main__ - INFO - 
+============================== Cycle 315 ==============================
+2025-07-01 22:39:45,034 - __main__ - INFO - Time: 2025-07-01 22:39:45
+2025-07-01 22:39:45,034 - __main__ - INFO - Active Kill Zone: LONDON CLOSE KILL ZONE (NY Time: 15:39)
+2025-07-01 22:39:46,227 - __main__ - INFO - EURUSD: Position already open (BUY)
+2025-07-01 22:39:56,301 - bot_components - INFO - GBPAUD: Spread 51 > max 50. Skipping.
+2025-07-01 22:39:56,802 - bot_components - INFO - GBPCAD: Spread 54 > max 50. Skipping.
+2025-07-01 22:39:59,648 - __main__ - INFO - Cycle completed in 14.6s. Sleeping for 45.4s...
+2025-07-01 22:40:45,034 - __main__ - INFO - 
+============================== Cycle 316 ==============================
+2025-07-01 22:40:45,035 - __main__ - INFO - Time: 2025-07-01 22:40:45
+2025-07-01 22:40:45,035 - __main__ - INFO - Active Kill Zone: LONDON CLOSE KILL ZONE (NY Time: 15:40)
+2025-07-01 22:40:46,256 - __main__ - INFO - EURUSD: Position already open (BUY)
+2025-07-01 22:40:57,178 - bot_components - INFO - GBPCAD: Spread 53 > max 50. Skipping.
+2025-07-01 22:41:00,063 - __main__ - INFO - Cycle completed in 15.0s. Sleeping for 45.0s...
+2025-07-01 22:41:45,035 - __main__ - INFO - 
+============================== Cycle 317 ==============================
+2025-07-01 22:41:45,036 - __main__ - INFO - Time: 2025-07-01 22:41:45
+2025-07-01 22:41:45,037 - __main__ - INFO - Active Kill Zone: LONDON CLOSE KILL ZONE (NY Time: 15:41)
+2025-07-01 22:41:46,278 - __main__ - INFO - EURUSD: Position already open (BUY)
+2025-07-01 22:41:57,021 - bot_components - INFO - GBPCAD: Spread 52 > max 50. Skipping.
+2025-07-01 22:41:59,866 - __main__ - INFO - Cycle completed in 14.8s. Sleeping for 45.2s...
+2025-07-01 22:42:45,036 - __main__ - INFO - 
+============================== Cycle 318 ==============================
+2025-07-01 22:42:45,037 - __main__ - INFO - Time: 2025-07-01 22:42:45
+2025-07-01 22:42:45,037 - __main__ - INFO - Active Kill Zone: LONDON CLOSE KILL ZONE (NY Time: 15:42)
+2025-07-01 22:42:46,226 - __main__ - INFO - EURUSD: Position already open (BUY)
+2025-07-01 22:42:56,844 - bot_components - INFO - GBPCAD: Spread 52 > max 50. Skipping.
+2025-07-01 22:42:59,631 - __main__ - INFO - Cycle completed in 14.6s. Sleeping for 45.4s...
+2025-07-01 22:43:45,037 - __main__ - INFO - 
+============================== Cycle 319 ==============================
+2025-07-01 22:43:45,037 - __main__ - INFO - Time: 2025-07-01 22:43:45
+2025-07-01 22:43:45,038 - __main__ - INFO - Active Kill Zone: LONDON CLOSE KILL ZONE (NY Time: 15:43)
+2025-07-01 22:43:46,292 - __main__ - INFO - EURUSD: Position already open (BUY)
+2025-07-01 22:43:57,071 - bot_components - INFO - GBPCAD: Spread 53 > max 50. Skipping.
+2025-07-01 22:43:59,928 - __main__ - INFO - Cycle completed in 14.9s. Sleeping for 45.1s...
+2025-07-01 22:44:45,037 - __main__ - INFO - 
+============================== Cycle 320 ==============================
+2025-07-01 22:44:45,038 - __main__ - INFO - Time: 2025-07-01 22:44:45
+2025-07-01 22:44:45,038 - __main__ - INFO - Active Kill Zone: LONDON CLOSE KILL ZONE (NY Time: 15:44)
+2025-07-01 22:44:46,241 - __main__ - INFO - EURUSD: Position already open (BUY)
+2025-07-01 22:44:56,387 - bot_components - INFO - GBPAUD: Spread 52 > max 50. Skipping.
+2025-07-01 22:44:56,888 - bot_components - INFO - GBPCAD: Spread 54 > max 50. Skipping.
+2025-07-01 22:44:59,741 - __main__ - INFO - Cycle completed in 14.7s. Sleeping for 45.3s...
+2025-07-01 22:45:45,038 - __main__ - INFO - 
+============================== Cycle 321 ==============================
+2025-07-01 22:45:45,038 - __main__ - INFO - Time: 2025-07-01 22:45:45
+2025-07-01 22:45:45,039 - __main__ - INFO - Active Kill Zone: LONDON CLOSE KILL ZONE (NY Time: 15:45)
+2025-07-01 22:45:46,249 - __main__ - INFO - EURUSD: Position already open (BUY)
+2025-07-01 22:45:56,987 - bot_components - INFO - GBPCAD: Spread 52 > max 50. Skipping.
+2025-07-01 22:45:59,823 - __main__ - INFO - Cycle completed in 14.8s. Sleeping for 45.2s...
+2025-07-01 22:46:45,039 - __main__ - INFO - 
+============================== Cycle 322 ==============================
+2025-07-01 22:46:45,039 - __main__ - INFO - Time: 2025-07-01 22:46:45
+2025-07-01 22:46:45,039 - __main__ - INFO - Active Kill Zone: LONDON CLOSE KILL ZONE (NY Time: 15:46)
+2025-07-01 22:46:46,274 - __main__ - INFO - EURUSD: Position already open (BUY)
+2025-07-01 22:46:56,947 - bot_components - INFO - GBPCAD: Spread 52 > max 50. Skipping.
+2025-07-01 22:46:59,759 - __main__ - INFO - Cycle completed in 14.7s. Sleeping for 45.3s...
+2025-07-01 22:47:45,039 - __main__ - INFO - 
+============================== Cycle 323 ==============================
+2025-07-01 22:47:45,040 - __main__ - INFO - Time: 2025-07-01 22:47:45
+2025-07-01 22:47:45,040 - __main__ - INFO - Active Kill Zone: LONDON CLOSE KILL ZONE (NY Time: 15:47)
+2025-07-01 22:47:46,222 - __main__ - INFO - EURUSD: Position already open (BUY)
+2025-07-01 22:47:56,934 - bot_components - INFO - GBPCAD: Spread 62 > max 50. Skipping.
+2025-07-01 22:47:59,801 - __main__ - INFO - Cycle completed in 14.8s. Sleeping for 45.2s...
+2025-07-01 22:48:45,041 - __main__ - INFO - 
+============================== Cycle 324 ==============================
+2025-07-01 22:48:45,041 - __main__ - INFO - Time: 2025-07-01 22:48:45
+2025-07-01 22:48:45,042 - __main__ - INFO - Active Kill Zone: LONDON CLOSE KILL ZONE (NY Time: 15:48)
+2025-07-01 22:48:46,244 - __main__ - INFO - EURUSD: Position already open (BUY)
+2025-07-01 22:48:56,776 - bot_components - INFO - GBPCAD: Spread 59 > max 50. Skipping.
+2025-07-01 22:48:59,654 - __main__ - INFO - Cycle completed in 14.6s. Sleeping for 45.4s...
+2025-07-01 22:49:45,041 - __main__ - INFO - 
+============================== Cycle 325 ==============================
+2025-07-01 22:49:45,042 - __main__ - INFO - Time: 2025-07-01 22:49:45
+2025-07-01 22:49:45,042 - __main__ - INFO - Active Kill Zone: LONDON CLOSE KILL ZONE (NY Time: 15:49)
+2025-07-01 22:49:46,230 - __main__ - INFO - EURUSD: Position already open (BUY)
+2025-07-01 22:49:56,941 - bot_components - INFO - GBPCAD: Spread 59 > max 50. Skipping.
+2025-07-01 22:49:59,737 - __main__ - INFO - Cycle completed in 14.7s. Sleeping for 45.3s...
+2025-07-01 22:50:45,042 - __main__ - INFO - 
+============================== Cycle 326 ==============================
+2025-07-01 22:50:45,043 - __main__ - INFO - Time: 2025-07-01 22:50:45
+2025-07-01 22:50:45,043 - __main__ - INFO - Active Kill Zone: LONDON CLOSE KILL ZONE (NY Time: 15:50)
+2025-07-01 22:50:46,240 - __main__ - INFO - EURUSD: Position already open (BUY)
+2025-07-01 22:50:56,285 - bot_components - INFO - GBPAUD: Spread 51 > max 50. Skipping.
+2025-07-01 22:50:56,787 - bot_components - INFO - GBPCAD: Spread 61 > max 50. Skipping.
+2025-07-01 22:50:59,623 - __main__ - INFO - Cycle completed in 14.6s. Sleeping for 45.4s...
+2025-07-01 22:51:45,043 - __main__ - INFO - 
+============================== Cycle 327 ==============================
+2025-07-01 22:51:45,044 - __main__ - INFO - Time: 2025-07-01 22:51:45
+2025-07-01 22:51:45,045 - __main__ - INFO - Active Kill Zone: LONDON CLOSE KILL ZONE (NY Time: 15:51)
+2025-07-01 22:51:46,314 - __main__ - INFO - EURUSD: Position already open (BUY)
+2025-07-01 22:51:56,996 - bot_components - INFO - GBPCAD: Spread 57 > max 50. Skipping.
+2025-07-01 22:51:59,841 - __main__ - INFO - Cycle completed in 14.8s. Sleeping for 45.2s...
+2025-07-01 22:52:45,044 - __main__ - INFO - 
+============================== Cycle 328 ==============================
+2025-07-01 22:52:45,045 - __main__ - INFO - Time: 2025-07-01 22:52:45
+2025-07-01 22:52:45,045 - __main__ - INFO - Active Kill Zone: LONDON CLOSE KILL ZONE (NY Time: 15:52)
+2025-07-01 22:52:46,274 - __main__ - INFO - EURUSD: Position already open (BUY)
+2025-07-01 22:52:56,930 - bot_components - INFO - GBPCAD: Spread 55 > max 50. Skipping.
+2025-07-01 22:52:59,724 - __main__ - INFO - Cycle completed in 14.7s. Sleeping for 45.3s...
+2025-07-01 22:53:45,046 - __main__ - INFO - 
+============================== Cycle 329 ==============================
+2025-07-01 22:53:45,047 - __main__ - INFO - Time: 2025-07-01 22:53:45
+2025-07-01 22:53:45,047 - __main__ - INFO - Active Kill Zone: LONDON CLOSE KILL ZONE (NY Time: 15:53)
+2025-07-01 22:53:46,273 - __main__ - INFO - EURUSD: Position already open (BUY)
+2025-07-01 22:53:56,819 - bot_components - INFO - GBPCAD: Spread 55 > max 50. Skipping.
+2025-07-01 22:53:59,614 - __main__ - INFO - Cycle completed in 14.6s. Sleeping for 45.4s...
