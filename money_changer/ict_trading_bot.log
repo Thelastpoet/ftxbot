@@ -1,0 +1,387 @@
+2025-07-01 16:02:30,128 - position_manager - INFO - ICT Position Manager initialized
+2025-07-01 16:02:30,128 - __main__ - INFO - ICT Position Manager enabled
+2025-07-01 16:02:30,129 - __main__ - INFO - ============================================================
+2025-07-01 16:02:30,129 - __main__ - INFO - ICT Trading Bot - Initialization
+2025-07-01 16:02:30,129 - __main__ - INFO - ============================================================
+2025-07-01 16:02:30,144 - bot_components - INFO - Connected to account: 98103705, Server: XMGlobal-MT5 5, Balance: 326.10 USD
+2025-07-01 16:02:30,146 - bot_components - INFO - Initialized 25 symbols: ['AUDUSD', 'CHFJPY', 'EURUSD', 'GBPUSD', 'USDCAD', 'USDCHF', 'USDJPY', 'EURCAD', 'GBPJPY', 'AUDCHF', 'AUDCAD', 'AUDJPY', 'EURAUD', 'EURJPY', 'EURCHF', 'EURNZD', 'AUDNZD', 'GBPCHF', 'CADCHF', 'GBPAUD', 'GBPCAD', 'GBPNZD', 'NZDUSD', 'GOLD', 'SILVER']
+2025-07-01 16:02:30,147 - __main__ - INFO - Initialized with 25 symbols
+2025-07-01 16:02:30,147 - __main__ - INFO - Risk per trade: 1.0%
+2025-07-01 16:02:30,147 - __main__ - INFO - Max daily trades: 100
+2025-07-01 16:02:30,147 - __main__ - INFO - ============================================================
+2025-07-01 16:02:30,147 - __main__ - INFO - 
+ ICT Trading Bot Started
+
+2025-07-01 16:02:30,147 - __main__ - INFO - 
+============================== Cycle 1 ==============================
+2025-07-01 16:02:30,147 - __main__ - INFO - Time: 2025-07-01 16:02:30
+2025-07-01 16:02:30,147 - __main__ - INFO - New trading day: 2025-07-01
+2025-07-01 16:02:30,148 - __main__ - INFO - Active Kill Zone: NEW YORK KILL ZONE (NY Time: 09:02)
+2025-07-01 16:02:48,256 - bot_components - INFO - GBPCAD: Spread 51 > max 50. Skipping.
+2025-07-01 16:02:48,757 - bot_components - INFO - GBPNZD: Spread 69 > max 50. Skipping.
+2025-07-01 16:02:52,105 - __main__ - INFO - Cycle completed in 22.0s. Sleeping for 38.0s...
+2025-07-01 16:03:30,149 - __main__ - INFO - 
+============================== Cycle 2 ==============================
+2025-07-01 16:03:30,149 - __main__ - INFO - Time: 2025-07-01 16:03:30
+2025-07-01 16:03:30,150 - __main__ - INFO - Active Kill Zone: NEW YORK KILL ZONE (NY Time: 09:03)
+2025-07-01 16:03:42,750 - bot_components - INFO - GBPCAD: Spread 52 > max 50. Skipping.
+2025-07-01 16:03:43,252 - bot_components - INFO - GBPNZD: Spread 68 > max 50. Skipping.
+2025-07-01 16:03:45,750 - __main__ - INFO - Cycle completed in 15.6s. Sleeping for 44.4s...
+2025-07-01 16:04:30,149 - __main__ - INFO - 
+============================== Cycle 3 ==============================
+2025-07-01 16:04:30,150 - __main__ - INFO - Time: 2025-07-01 16:04:30
+2025-07-01 16:04:30,151 - __main__ - INFO - Active Kill Zone: NEW YORK KILL ZONE (NY Time: 09:04)
+2025-07-01 16:04:42,633 - bot_components - INFO - GBPCAD: Spread 57 > max 50. Skipping.
+2025-07-01 16:04:43,135 - bot_components - INFO - GBPNZD: Spread 77 > max 50. Skipping.
+2025-07-01 16:04:45,653 - __main__ - INFO - Cycle completed in 15.5s. Sleeping for 44.5s...
+2025-07-01 16:05:30,150 - __main__ - INFO - 
+============================== Cycle 4 ==============================
+2025-07-01 16:05:30,151 - __main__ - INFO - Time: 2025-07-01 16:05:30
+2025-07-01 16:05:30,152 - __main__ - INFO - Active Kill Zone: NEW YORK KILL ZONE (NY Time: 09:05)
+2025-07-01 16:05:42,789 - bot_components - INFO - GBPCAD: Spread 56 > max 50. Skipping.
+2025-07-01 16:05:43,290 - bot_components - INFO - GBPNZD: Spread 73 > max 50. Skipping.
+2025-07-01 16:05:45,898 - __main__ - INFO - Cycle completed in 15.7s. Sleeping for 44.3s...
+2025-07-01 16:06:30,151 - __main__ - INFO - 
+============================== Cycle 5 ==============================
+2025-07-01 16:06:30,152 - __main__ - INFO - Time: 2025-07-01 16:06:30
+2025-07-01 16:06:30,152 - __main__ - INFO - Active Kill Zone: NEW YORK KILL ZONE (NY Time: 09:06)
+2025-07-01 16:06:42,796 - bot_components - INFO - GBPCAD: Spread 53 > max 50. Skipping.
+2025-07-01 16:06:43,297 - bot_components - INFO - GBPNZD: Spread 69 > max 50. Skipping.
+2025-07-01 16:06:45,801 - __main__ - INFO - Cycle completed in 15.6s. Sleeping for 44.4s...
+2025-07-01 16:07:30,153 - __main__ - INFO - 
+============================== Cycle 6 ==============================
+2025-07-01 16:07:30,154 - __main__ - INFO - Time: 2025-07-01 16:07:30
+2025-07-01 16:07:30,154 - __main__ - INFO - Active Kill Zone: NEW YORK KILL ZONE (NY Time: 09:07)
+2025-07-01 16:07:42,705 - bot_components - INFO - GBPCAD: Spread 51 > max 50. Skipping.
+2025-07-01 16:07:43,207 - bot_components - INFO - GBPNZD: Spread 74 > max 50. Skipping.
+2025-07-01 16:07:45,729 - __main__ - INFO - Cycle completed in 15.6s. Sleeping for 44.4s...
+2025-07-01 16:08:30,155 - __main__ - INFO - 
+============================== Cycle 7 ==============================
+2025-07-01 16:08:30,156 - __main__ - INFO - Time: 2025-07-01 16:08:30
+2025-07-01 16:08:30,157 - __main__ - INFO - Active Kill Zone: NEW YORK KILL ZONE (NY Time: 09:08)
+2025-07-01 16:08:39,470 - bot_components - INFO - EURNZD: Spread 56 > max 50. Skipping.
+2025-07-01 16:08:42,539 - bot_components - INFO - GBPCAD: Spread 52 > max 50. Skipping.
+2025-07-01 16:08:43,040 - bot_components - INFO - GBPNZD: Spread 77 > max 50. Skipping.
+2025-07-01 16:08:45,560 - __main__ - INFO - Cycle completed in 15.4s. Sleeping for 44.6s...
+2025-07-01 16:09:30,155 - __main__ - INFO - 
+============================== Cycle 8 ==============================
+2025-07-01 16:09:30,156 - __main__ - INFO - Time: 2025-07-01 16:09:30
+2025-07-01 16:09:30,156 - __main__ - INFO - Active Kill Zone: NEW YORK KILL ZONE (NY Time: 09:09)
+2025-07-01 16:09:42,665 - bot_components - INFO - GBPCAD: Spread 52 > max 50. Skipping.
+2025-07-01 16:09:43,166 - bot_components - INFO - GBPNZD: Spread 74 > max 50. Skipping.
+2025-07-01 16:09:45,709 - __main__ - INFO - Cycle completed in 15.6s. Sleeping for 44.4s...
+2025-07-01 16:10:30,156 - __main__ - INFO - 
+============================== Cycle 9 ==============================
+2025-07-01 16:10:30,157 - __main__ - INFO - Time: 2025-07-01 16:10:30
+2025-07-01 16:10:30,157 - __main__ - INFO - Active Kill Zone: NEW YORK KILL ZONE (NY Time: 09:10)
+2025-07-01 16:10:42,586 - bot_components - INFO - GBPCAD: Spread 52 > max 50. Skipping.
+2025-07-01 16:10:43,087 - bot_components - INFO - GBPNZD: Spread 67 > max 50. Skipping.
+2025-07-01 16:10:45,568 - __main__ - INFO - Cycle completed in 15.4s. Sleeping for 44.6s...
+2025-07-01 16:11:30,157 - __main__ - INFO - 
+============================== Cycle 10 ==============================
+2025-07-01 16:11:30,158 - __main__ - INFO - Time: 2025-07-01 16:11:30
+2025-07-01 16:11:30,158 - __main__ - INFO - Active Kill Zone: NEW YORK KILL ZONE (NY Time: 09:11)
+2025-07-01 16:11:42,694 - bot_components - INFO - GBPCAD: Spread 52 > max 50. Skipping.
+2025-07-01 16:11:43,197 - bot_components - INFO - GBPNZD: Spread 76 > max 50. Skipping.
+2025-07-01 16:11:45,756 - __main__ - INFO - Cycle completed in 15.6s. Sleeping for 44.4s...
+2025-07-01 16:12:30,158 - __main__ - INFO - 
+============================== Cycle 11 ==============================
+2025-07-01 16:12:30,158 - __main__ - INFO - Time: 2025-07-01 16:12:30
+2025-07-01 16:12:30,159 - __main__ - INFO - Active Kill Zone: NEW YORK KILL ZONE (NY Time: 09:12)
+2025-07-01 16:12:42,825 - bot_components - INFO - GBPCAD: Spread 54 > max 50. Skipping.
+2025-07-01 16:12:43,326 - bot_components - INFO - GBPNZD: Spread 78 > max 50. Skipping.
+2025-07-01 16:12:45,859 - __main__ - INFO - Cycle completed in 15.7s. Sleeping for 44.3s...
+2025-07-01 16:13:30,159 - __main__ - INFO - 
+============================== Cycle 12 ==============================
+2025-07-01 16:13:30,159 - __main__ - INFO - Time: 2025-07-01 16:13:30
+2025-07-01 16:13:30,160 - __main__ - INFO - Active Kill Zone: NEW YORK KILL ZONE (NY Time: 09:13)
+2025-07-01 16:13:39,534 - bot_components - INFO - EURNZD: Spread 51 > max 50. Skipping.
+2025-07-01 16:13:42,560 - bot_components - INFO - GBPCAD: Spread 55 > max 50. Skipping.
+2025-07-01 16:13:43,062 - bot_components - INFO - GBPNZD: Spread 72 > max 50. Skipping.
+2025-07-01 16:13:45,566 - __main__ - INFO - Cycle completed in 15.4s. Sleeping for 44.6s...
+2025-07-01 16:14:30,161 - __main__ - INFO - 
+============================== Cycle 13 ==============================
+2025-07-01 16:14:30,162 - __main__ - INFO - Time: 2025-07-01 16:14:30
+2025-07-01 16:14:30,163 - __main__ - INFO - Active Kill Zone: NEW YORK KILL ZONE (NY Time: 09:14)
+2025-07-01 16:14:39,691 - bot_components - INFO - EURNZD: Spread 51 > max 50. Skipping.
+2025-07-01 16:14:42,698 - bot_components - INFO - GBPCAD: Spread 53 > max 50. Skipping.
+2025-07-01 16:14:43,199 - bot_components - INFO - GBPNZD: Spread 70 > max 50. Skipping.
+2025-07-01 16:14:45,719 - __main__ - INFO - Cycle completed in 15.6s. Sleeping for 44.4s...
+2025-07-01 16:15:30,162 - __main__ - INFO - 
+============================== Cycle 14 ==============================
+2025-07-01 16:15:30,162 - __main__ - INFO - Time: 2025-07-01 16:15:30
+2025-07-01 16:15:30,162 - __main__ - INFO - Active Kill Zone: NEW YORK KILL ZONE (NY Time: 09:15)
+2025-07-01 16:15:42,493 - bot_components - INFO - GBPCAD: Spread 51 > max 50. Skipping.
+2025-07-01 16:15:42,995 - bot_components - INFO - GBPNZD: Spread 73 > max 50. Skipping.
+2025-07-01 16:15:45,538 - __main__ - INFO - Cycle completed in 15.4s. Sleeping for 44.6s...
+2025-07-01 16:16:30,163 - __main__ - INFO - 
+============================== Cycle 15 ==============================
+2025-07-01 16:16:30,163 - __main__ - INFO - Time: 2025-07-01 16:16:30
+2025-07-01 16:16:30,164 - __main__ - INFO - Active Kill Zone: NEW YORK KILL ZONE (NY Time: 09:16)
+2025-07-01 16:16:39,582 - bot_components - INFO - EURNZD: Spread 52 > max 50. Skipping.
+2025-07-01 16:16:42,565 - bot_components - INFO - GBPCAD: Spread 54 > max 50. Skipping.
+2025-07-01 16:16:43,068 - bot_components - INFO - GBPNZD: Spread 78 > max 50. Skipping.
+2025-07-01 16:16:45,577 - __main__ - INFO - Cycle completed in 15.4s. Sleeping for 44.6s...
+2025-07-01 16:17:30,164 - __main__ - INFO - 
+============================== Cycle 16 ==============================
+2025-07-01 16:17:30,164 - __main__ - INFO - Time: 2025-07-01 16:17:30
+2025-07-01 16:17:30,165 - __main__ - INFO - Active Kill Zone: NEW YORK KILL ZONE (NY Time: 09:17)
+2025-07-01 16:17:42,740 - bot_components - INFO - GBPCAD: Spread 51 > max 50. Skipping.
+2025-07-01 16:17:43,241 - bot_components - INFO - GBPNZD: Spread 70 > max 50. Skipping.
+2025-07-01 16:17:45,810 - __main__ - INFO - Cycle completed in 15.6s. Sleeping for 44.4s...
+2025-07-01 16:18:30,164 - __main__ - INFO - 
+============================== Cycle 17 ==============================
+2025-07-01 16:18:30,165 - __main__ - INFO - Time: 2025-07-01 16:18:30
+2025-07-01 16:18:30,165 - __main__ - INFO - Active Kill Zone: NEW YORK KILL ZONE (NY Time: 09:18)
+2025-07-01 16:18:42,521 - bot_components - INFO - GBPCAD: Spread 55 > max 50. Skipping.
+2025-07-01 16:18:43,022 - bot_components - INFO - GBPNZD: Spread 70 > max 50. Skipping.
+2025-07-01 16:18:45,581 - __main__ - INFO - Cycle completed in 15.4s. Sleeping for 44.6s...
+2025-07-01 16:19:30,165 - __main__ - INFO - 
+============================== Cycle 18 ==============================
+2025-07-01 16:19:30,166 - __main__ - INFO - Time: 2025-07-01 16:19:30
+2025-07-01 16:19:30,167 - __main__ - INFO - Active Kill Zone: NEW YORK KILL ZONE (NY Time: 09:19)
+2025-07-01 16:19:42,538 - bot_components - INFO - GBPCAD: Spread 56 > max 50. Skipping.
+2025-07-01 16:19:43,039 - bot_components - INFO - GBPNZD: Spread 70 > max 50. Skipping.
+2025-07-01 16:19:45,539 - __main__ - INFO - Cycle completed in 15.4s. Sleeping for 44.6s...
+2025-07-01 16:20:30,166 - __main__ - INFO - 
+============================== Cycle 19 ==============================
+2025-07-01 16:20:30,166 - __main__ - INFO - Time: 2025-07-01 16:20:30
+2025-07-01 16:20:30,167 - __main__ - INFO - Active Kill Zone: NEW YORK KILL ZONE (NY Time: 09:20)
+2025-07-01 16:20:42,532 - bot_components - INFO - GBPCAD: Spread 60 > max 50. Skipping.
+2025-07-01 16:20:43,033 - bot_components - INFO - GBPNZD: Spread 70 > max 50. Skipping.
+2025-07-01 16:20:45,512 - __main__ - INFO - Cycle completed in 15.3s. Sleeping for 44.7s...
+2025-07-01 16:21:30,167 - __main__ - INFO - 
+============================== Cycle 20 ==============================
+2025-07-01 16:21:30,168 - __main__ - INFO - Time: 2025-07-01 16:21:30
+2025-07-01 16:21:30,168 - __main__ - INFO - Active Kill Zone: NEW YORK KILL ZONE (NY Time: 09:21)
+2025-07-01 16:21:42,431 - bot_components - INFO - GBPCAD: Spread 60 > max 50. Skipping.
+2025-07-01 16:21:42,932 - bot_components - INFO - GBPNZD: Spread 71 > max 50. Skipping.
+2025-07-01 16:21:45,419 - __main__ - INFO - Cycle completed in 15.3s. Sleeping for 44.7s...
+2025-07-01 16:22:30,168 - __main__ - INFO - 
+============================== Cycle 21 ==============================
+2025-07-01 16:22:30,169 - __main__ - INFO - Time: 2025-07-01 16:22:30
+2025-07-01 16:22:30,170 - __main__ - INFO - Active Kill Zone: NEW YORK KILL ZONE (NY Time: 09:22)
+2025-07-01 16:22:42,720 - bot_components - INFO - GBPCAD: Spread 60 > max 50. Skipping.
+2025-07-01 16:22:43,222 - bot_components - INFO - GBPNZD: Spread 68 > max 50. Skipping.
+2025-07-01 16:22:45,793 - __main__ - INFO - Cycle completed in 15.6s. Sleeping for 44.4s...
+2025-07-01 16:23:30,170 - __main__ - INFO - 
+============================== Cycle 22 ==============================
+2025-07-01 16:23:30,171 - __main__ - INFO - Time: 2025-07-01 16:23:30
+2025-07-01 16:23:30,171 - __main__ - INFO - Active Kill Zone: NEW YORK KILL ZONE (NY Time: 09:23)
+2025-07-01 16:23:42,695 - bot_components - INFO - GBPCAD: Spread 57 > max 50. Skipping.
+2025-07-01 16:23:43,196 - bot_components - INFO - GBPNZD: Spread 70 > max 50. Skipping.
+2025-07-01 16:23:45,683 - __main__ - INFO - Cycle completed in 15.5s. Sleeping for 44.5s...
+2025-07-01 16:24:30,170 - __main__ - INFO - 
+============================== Cycle 23 ==============================
+2025-07-01 16:24:30,170 - __main__ - INFO - Time: 2025-07-01 16:24:30
+2025-07-01 16:24:30,171 - __main__ - INFO - Active Kill Zone: NEW YORK KILL ZONE (NY Time: 09:24)
+2025-07-01 16:24:42,624 - bot_components - INFO - GBPCAD: Spread 56 > max 50. Skipping.
+2025-07-01 16:24:43,126 - bot_components - INFO - GBPNZD: Spread 70 > max 50. Skipping.
+2025-07-01 16:24:45,652 - __main__ - INFO - Cycle completed in 15.5s. Sleeping for 44.5s...
+2025-07-01 16:25:30,171 - __main__ - INFO - 
+============================== Cycle 24 ==============================
+2025-07-01 16:25:30,171 - __main__ - INFO - Time: 2025-07-01 16:25:30
+2025-07-01 16:25:30,172 - __main__ - INFO - Active Kill Zone: NEW YORK KILL ZONE (NY Time: 09:25)
+2025-07-01 16:25:42,671 - bot_components - INFO - GBPCAD: Spread 54 > max 50. Skipping.
+2025-07-01 16:25:43,173 - bot_components - INFO - GBPNZD: Spread 72 > max 50. Skipping.
+2025-07-01 16:25:45,675 - __main__ - INFO - Cycle completed in 15.5s. Sleeping for 44.5s...
+2025-07-01 16:26:30,172 - __main__ - INFO - 
+============================== Cycle 25 ==============================
+2025-07-01 16:26:30,173 - __main__ - INFO - Time: 2025-07-01 16:26:30
+2025-07-01 16:26:30,173 - __main__ - INFO - Active Kill Zone: NEW YORK KILL ZONE (NY Time: 09:26)
+2025-07-01 16:26:42,583 - bot_components - INFO - GBPCAD: Spread 54 > max 50. Skipping.
+2025-07-01 16:26:43,085 - bot_components - INFO - GBPNZD: Spread 65 > max 50. Skipping.
+2025-07-01 16:26:45,605 - __main__ - INFO - Cycle completed in 15.4s. Sleeping for 44.6s...
+2025-07-01 16:27:30,172 - __main__ - INFO - 
+============================== Cycle 26 ==============================
+2025-07-01 16:27:30,173 - __main__ - INFO - Time: 2025-07-01 16:27:30
+2025-07-01 16:27:30,173 - __main__ - INFO - Active Kill Zone: NEW YORK KILL ZONE (NY Time: 09:27)
+2025-07-01 16:27:42,549 - bot_components - INFO - GBPCAD: Spread 57 > max 50. Skipping.
+2025-07-01 16:27:43,051 - bot_components - INFO - GBPNZD: Spread 66 > max 50. Skipping.
+2025-07-01 16:27:45,546 - __main__ - INFO - Cycle completed in 15.4s. Sleeping for 44.6s...
+2025-07-01 16:28:30,173 - __main__ - INFO - 
+============================== Cycle 27 ==============================
+2025-07-01 16:28:30,174 - __main__ - INFO - Time: 2025-07-01 16:28:30
+2025-07-01 16:28:30,175 - __main__ - INFO - Active Kill Zone: NEW YORK KILL ZONE (NY Time: 09:28)
+2025-07-01 16:28:42,670 - bot_components - INFO - GBPCAD: Spread 54 > max 50. Skipping.
+2025-07-01 16:28:43,171 - bot_components - INFO - GBPNZD: Spread 68 > max 50. Skipping.
+2025-07-01 16:28:45,688 - __main__ - INFO - Cycle completed in 15.5s. Sleeping for 44.5s...
+2025-07-01 16:29:30,175 - __main__ - INFO - 
+============================== Cycle 28 ==============================
+2025-07-01 16:29:30,175 - __main__ - INFO - Time: 2025-07-01 16:29:30
+2025-07-01 16:29:30,175 - __main__ - INFO - Active Kill Zone: NEW YORK KILL ZONE (NY Time: 09:29)
+2025-07-01 16:29:42,641 - bot_components - INFO - GBPCAD: Spread 58 > max 50. Skipping.
+2025-07-01 16:29:43,142 - bot_components - INFO - GBPNZD: Spread 68 > max 50. Skipping.
+2025-07-01 16:29:45,655 - __main__ - INFO - Cycle completed in 15.5s. Sleeping for 44.5s...
+2025-07-01 16:30:30,176 - __main__ - INFO - 
+============================== Cycle 29 ==============================
+2025-07-01 16:30:30,176 - __main__ - INFO - Time: 2025-07-01 16:30:30
+2025-07-01 16:30:30,176 - __main__ - INFO - Active Kill Zone: NEW YORK KILL ZONE (NY Time: 09:30)
+2025-07-01 16:30:42,637 - bot_components - INFO - GBPCAD: Spread 53 > max 50. Skipping.
+2025-07-01 16:30:43,139 - bot_components - INFO - GBPNZD: Spread 78 > max 50. Skipping.
+2025-07-01 16:30:45,659 - __main__ - INFO - Cycle completed in 15.5s. Sleeping for 44.5s...
+2025-07-01 16:31:30,176 - __main__ - INFO - 
+============================== Cycle 30 ==============================
+2025-07-01 16:31:30,177 - __main__ - INFO - Time: 2025-07-01 16:31:30
+2025-07-01 16:31:30,178 - __main__ - INFO - Active Kill Zone: NEW YORK KILL ZONE (NY Time: 09:31)
+2025-07-01 16:31:42,605 - bot_components - INFO - GBPCAD: Spread 56 > max 50. Skipping.
+2025-07-01 16:31:43,106 - bot_components - INFO - GBPNZD: Spread 68 > max 50. Skipping.
+2025-07-01 16:31:45,619 - __main__ - INFO - Cycle completed in 15.4s. Sleeping for 44.6s...
+2025-07-01 16:32:30,177 - __main__ - INFO - 
+============================== Cycle 31 ==============================
+2025-07-01 16:32:30,177 - __main__ - INFO - Time: 2025-07-01 16:32:30
+2025-07-01 16:32:30,178 - __main__ - INFO - Active Kill Zone: NEW YORK KILL ZONE (NY Time: 09:32)
+2025-07-01 16:32:42,465 - bot_components - INFO - GBPCAD: Spread 59 > max 50. Skipping.
+2025-07-01 16:32:42,966 - bot_components - INFO - GBPNZD: Spread 66 > max 50. Skipping.
+2025-07-01 16:32:45,462 - __main__ - INFO - Cycle completed in 15.3s. Sleeping for 44.7s...
+2025-07-01 16:33:30,178 - __main__ - INFO - 
+============================== Cycle 32 ==============================
+2025-07-01 16:33:30,178 - __main__ - INFO - Time: 2025-07-01 16:33:30
+2025-07-01 16:33:30,179 - __main__ - INFO - Active Kill Zone: NEW YORK KILL ZONE (NY Time: 09:33)
+2025-07-01 16:33:42,545 - bot_components - INFO - GBPCAD: Spread 54 > max 50. Skipping.
+2025-07-01 16:33:43,046 - bot_components - INFO - GBPNZD: Spread 67 > max 50. Skipping.
+2025-07-01 16:33:45,602 - __main__ - INFO - Cycle completed in 15.4s. Sleeping for 44.6s...
+2025-07-01 16:34:30,179 - __main__ - INFO - 
+============================== Cycle 33 ==============================
+2025-07-01 16:34:30,179 - __main__ - INFO - Time: 2025-07-01 16:34:30
+2025-07-01 16:34:30,179 - __main__ - INFO - Active Kill Zone: NEW YORK KILL ZONE (NY Time: 09:34)
+2025-07-01 16:34:42,451 - bot_components - INFO - GBPCAD: Spread 56 > max 50. Skipping.
+2025-07-01 16:34:42,952 - bot_components - INFO - GBPNZD: Spread 69 > max 50. Skipping.
+2025-07-01 16:34:45,442 - __main__ - INFO - Cycle completed in 15.3s. Sleeping for 44.7s...
+2025-07-01 16:35:30,180 - __main__ - INFO - 
+============================== Cycle 34 ==============================
+2025-07-01 16:35:30,180 - __main__ - INFO - Time: 2025-07-01 16:35:30
+2025-07-01 16:35:30,180 - __main__ - INFO - Active Kill Zone: NEW YORK KILL ZONE (NY Time: 09:35)
+2025-07-01 16:35:42,672 - bot_components - INFO - GBPCAD: Spread 52 > max 50. Skipping.
+2025-07-01 16:35:43,173 - bot_components - INFO - GBPNZD: Spread 68 > max 50. Skipping.
+2025-07-01 16:35:45,668 - __main__ - INFO - Cycle completed in 15.5s. Sleeping for 44.5s...
+2025-07-01 16:36:30,181 - __main__ - INFO - 
+============================== Cycle 35 ==============================
+2025-07-01 16:36:30,181 - __main__ - INFO - Time: 2025-07-01 16:36:30
+2025-07-01 16:36:30,182 - __main__ - INFO - Active Kill Zone: NEW YORK KILL ZONE (NY Time: 09:36)
+2025-07-01 16:36:42,709 - bot_components - INFO - GBPCAD: Spread 52 > max 50. Skipping.
+2025-07-01 16:36:43,210 - bot_components - INFO - GBPNZD: Spread 74 > max 50. Skipping.
+2025-07-01 16:36:45,725 - __main__ - INFO - Cycle completed in 15.5s. Sleeping for 44.5s...
+2025-07-01 16:37:30,182 - __main__ - INFO - 
+============================== Cycle 36 ==============================
+2025-07-01 16:37:30,183 - __main__ - INFO - Time: 2025-07-01 16:37:30
+2025-07-01 16:37:30,183 - __main__ - INFO - Active Kill Zone: NEW YORK KILL ZONE (NY Time: 09:37)
+2025-07-01 16:37:39,560 - bot_components - INFO - EURNZD: Spread 52 > max 50. Skipping.
+2025-07-01 16:37:42,474 - bot_components - INFO - GBPCAD: Spread 53 > max 50. Skipping.
+2025-07-01 16:37:42,976 - bot_components - INFO - GBPNZD: Spread 74 > max 50. Skipping.
+2025-07-01 16:37:45,492 - __main__ - INFO - Cycle completed in 15.3s. Sleeping for 44.7s...
+2025-07-01 16:38:30,183 - __main__ - INFO - 
+============================== Cycle 37 ==============================
+2025-07-01 16:38:30,183 - __main__ - INFO - Time: 2025-07-01 16:38:30
+2025-07-01 16:38:30,184 - __main__ - INFO - Active Kill Zone: NEW YORK KILL ZONE (NY Time: 09:38)
+2025-07-01 16:38:42,476 - bot_components - INFO - GBPCAD: Spread 53 > max 50. Skipping.
+2025-07-01 16:38:42,978 - bot_components - INFO - GBPNZD: Spread 70 > max 50. Skipping.
+2025-07-01 16:38:45,514 - __main__ - INFO - Cycle completed in 15.3s. Sleeping for 44.7s...
+2025-07-01 16:39:30,184 - __main__ - INFO - 
+============================== Cycle 38 ==============================
+2025-07-01 16:39:30,185 - __main__ - INFO - Time: 2025-07-01 16:39:30
+2025-07-01 16:39:30,186 - __main__ - INFO - Active Kill Zone: NEW YORK KILL ZONE (NY Time: 09:39)
+2025-07-01 16:39:39,495 - bot_components - INFO - EURNZD: Spread 51 > max 50. Skipping.
+2025-07-01 16:39:42,395 - bot_components - INFO - GBPCAD: Spread 55 > max 50. Skipping.
+2025-07-01 16:39:42,897 - bot_components - INFO - GBPNZD: Spread 78 > max 50. Skipping.
+2025-07-01 16:39:45,383 - __main__ - INFO - Cycle completed in 15.2s. Sleeping for 44.8s...
+2025-07-01 16:40:30,185 - __main__ - INFO - 
+============================== Cycle 39 ==============================
+2025-07-01 16:40:30,186 - __main__ - INFO - Time: 2025-07-01 16:40:30
+2025-07-01 16:40:30,187 - __main__ - INFO - Active Kill Zone: NEW YORK KILL ZONE (NY Time: 09:40)
+2025-07-01 16:40:42,515 - bot_components - INFO - GBPCAD: Spread 59 > max 50. Skipping.
+2025-07-01 16:40:43,017 - bot_components - INFO - GBPNZD: Spread 75 > max 50. Skipping.
+2025-07-01 16:40:45,547 - __main__ - INFO - Cycle completed in 15.4s. Sleeping for 44.6s...
+2025-07-01 16:41:30,186 - __main__ - INFO - 
+============================== Cycle 40 ==============================
+2025-07-01 16:41:30,187 - __main__ - INFO - Time: 2025-07-01 16:41:30
+2025-07-01 16:41:30,187 - __main__ - INFO - Active Kill Zone: NEW YORK KILL ZONE (NY Time: 09:41)
+2025-07-01 16:41:42,553 - bot_components - INFO - GBPCAD: Spread 60 > max 50. Skipping.
+2025-07-01 16:41:43,054 - bot_components - INFO - GBPNZD: Spread 71 > max 50. Skipping.
+2025-07-01 16:41:45,575 - __main__ - INFO - Cycle completed in 15.4s. Sleeping for 44.6s...
+2025-07-01 16:42:30,187 - __main__ - INFO - 
+============================== Cycle 41 ==============================
+2025-07-01 16:42:30,187 - __main__ - INFO - Time: 2025-07-01 16:42:30
+2025-07-01 16:42:30,187 - __main__ - INFO - Active Kill Zone: NEW YORK KILL ZONE (NY Time: 09:42)
+2025-07-01 16:42:42,589 - bot_components - INFO - GBPCAD: Spread 52 > max 50. Skipping.
+2025-07-01 16:42:43,089 - bot_components - INFO - GBPNZD: Spread 77 > max 50. Skipping.
+2025-07-01 16:42:45,564 - __main__ - INFO - Cycle completed in 15.4s. Sleeping for 44.6s...
+2025-07-01 16:43:30,188 - __main__ - INFO - 
+============================== Cycle 42 ==============================
+2025-07-01 16:43:30,188 - __main__ - INFO - Time: 2025-07-01 16:43:30
+2025-07-01 16:43:30,189 - __main__ - INFO - Active Kill Zone: NEW YORK KILL ZONE (NY Time: 09:43)
+2025-07-01 16:43:43,920 - bot_components - INFO - GBPNZD: Spread 73 > max 50. Skipping.
+2025-07-01 16:43:46,462 - __main__ - INFO - Cycle completed in 16.3s. Sleeping for 43.7s...
+2025-07-01 16:44:30,189 - __main__ - INFO - 
+============================== Cycle 43 ==============================
+2025-07-01 16:44:30,190 - __main__ - INFO - Time: 2025-07-01 16:44:30
+2025-07-01 16:44:30,190 - __main__ - INFO - Active Kill Zone: NEW YORK KILL ZONE (NY Time: 09:44)
+2025-07-01 16:44:39,478 - bot_components - INFO - EURNZD: Spread 62 > max 50. Skipping.
+2025-07-01 16:44:41,843 - bot_components - INFO - GBPAUD: Spread 66 > max 50. Skipping.
+2025-07-01 16:44:42,344 - bot_components - INFO - GBPCAD: Spread 59 > max 50. Skipping.
+2025-07-01 16:44:42,845 - bot_components - INFO - GBPNZD: Spread 88 > max 50. Skipping.
+2025-07-01 16:44:45,380 - __main__ - INFO - Cycle completed in 15.2s. Sleeping for 44.8s...
+2025-07-01 16:45:30,189 - __main__ - INFO - 
+============================== Cycle 44 ==============================
+2025-07-01 16:45:30,190 - __main__ - INFO - Time: 2025-07-01 16:45:30
+2025-07-01 16:45:30,190 - __main__ - INFO - Active Kill Zone: NEW YORK KILL ZONE (NY Time: 09:45)
+2025-07-01 16:45:39,504 - bot_components - INFO - EURNZD: Spread 51 > max 50. Skipping.
+2025-07-01 16:45:42,432 - bot_components - INFO - GBPCAD: Spread 58 > max 50. Skipping.
+2025-07-01 16:45:42,933 - bot_components - INFO - GBPNZD: Spread 78 > max 50. Skipping.
+2025-07-01 16:45:45,481 - __main__ - INFO - Cycle completed in 15.3s. Sleeping for 44.7s...
+2025-07-01 16:46:30,190 - __main__ - INFO - 
+============================== Cycle 45 ==============================
+2025-07-01 16:46:30,191 - __main__ - INFO - Time: 2025-07-01 16:46:30
+2025-07-01 16:46:30,191 - __main__ - INFO - Active Kill Zone: NEW YORK KILL ZONE (NY Time: 09:46)
+2025-07-01 16:46:42,712 - bot_components - INFO - GBPCAD: Spread 55 > max 50. Skipping.
+2025-07-01 16:46:43,213 - bot_components - INFO - GBPNZD: Spread 75 > max 50. Skipping.
+2025-07-01 16:46:45,719 - __main__ - INFO - Cycle completed in 15.5s. Sleeping for 44.5s...
+2025-07-01 16:47:30,191 - __main__ - INFO - 
+============================== Cycle 46 ==============================
+2025-07-01 16:47:30,192 - __main__ - INFO - Time: 2025-07-01 16:47:30
+2025-07-01 16:47:30,192 - __main__ - INFO - Active Kill Zone: NEW YORK KILL ZONE (NY Time: 09:47)
+2025-07-01 16:47:42,623 - bot_components - INFO - GBPCAD: Spread 54 > max 50. Skipping.
+2025-07-01 16:47:43,124 - bot_components - INFO - GBPNZD: Spread 72 > max 50. Skipping.
+2025-07-01 16:47:45,660 - __main__ - INFO - Cycle completed in 15.5s. Sleeping for 44.5s...
+2025-07-01 16:48:30,192 - __main__ - INFO - 
+============================== Cycle 47 ==============================
+2025-07-01 16:48:30,193 - __main__ - INFO - Time: 2025-07-01 16:48:30
+2025-07-01 16:48:30,193 - __main__ - INFO - Active Kill Zone: NEW YORK KILL ZONE (NY Time: 09:48)
+2025-07-01 16:48:39,654 - bot_components - INFO - EURNZD: Spread 51 > max 50. Skipping.
+2025-07-01 16:48:42,579 - bot_components - INFO - GBPCAD: Spread 51 > max 50. Skipping.
+2025-07-01 16:48:43,079 - bot_components - INFO - GBPNZD: Spread 71 > max 50. Skipping.
+2025-07-01 16:48:45,646 - __main__ - INFO - Cycle completed in 15.5s. Sleeping for 44.5s...
+2025-07-01 16:49:30,193 - __main__ - INFO - 
+============================== Cycle 48 ==============================
+2025-07-01 16:49:30,194 - __main__ - INFO - Time: 2025-07-01 16:49:30
+2025-07-01 16:49:30,194 - __main__ - INFO - Active Kill Zone: NEW YORK KILL ZONE (NY Time: 09:49)
+2025-07-01 16:49:39,467 - bot_components - INFO - EURNZD: Spread 51 > max 50. Skipping.
+2025-07-01 16:49:42,367 - bot_components - INFO - GBPCAD: Spread 53 > max 50. Skipping.
+2025-07-01 16:49:42,868 - bot_components - INFO - GBPNZD: Spread 72 > max 50. Skipping.
+2025-07-01 16:49:45,449 - __main__ - INFO - Cycle completed in 15.3s. Sleeping for 44.7s...
+2025-07-01 16:50:30,194 - __main__ - INFO - 
+============================== Cycle 49 ==============================
+2025-07-01 16:50:30,195 - __main__ - INFO - Time: 2025-07-01 16:50:30
+2025-07-01 16:50:30,195 - __main__ - INFO - Active Kill Zone: NEW YORK KILL ZONE (NY Time: 09:50)
+2025-07-01 16:50:39,552 - bot_components - INFO - EURNZD: Spread 56 > max 50. Skipping.
+2025-07-01 16:50:42,479 - bot_components - INFO - GBPCAD: Spread 55 > max 50. Skipping.
+2025-07-01 16:50:42,980 - bot_components - INFO - GBPNZD: Spread 83 > max 50. Skipping.
+2025-07-01 16:50:45,600 - __main__ - INFO - Cycle completed in 15.4s. Sleeping for 44.6s...
+2025-07-01 16:51:30,196 - __main__ - INFO - 
+============================== Cycle 50 ==============================
+2025-07-01 16:51:30,196 - __main__ - INFO - Time: 2025-07-01 16:51:30
+2025-07-01 16:51:30,197 - __main__ - INFO - Active Kill Zone: NEW YORK KILL ZONE (NY Time: 09:51)
+2025-07-01 16:51:40,345 - bot_components - INFO - EURNZD: Spread 54 > max 50. Skipping.
+2025-07-01 16:51:42,675 - __main__ - INFO - GBPAUD: Position already open (SELL)
+2025-07-01 16:51:43,176 - bot_components - INFO - GBPCAD: Spread 55 > max 50. Skipping.
+2025-07-01 16:51:46,640 - __main__ - INFO - Cycle completed in 16.4s. Sleeping for 43.6s...
+2025-07-01 16:52:10,543 - __main__ - INFO - 
+ Bot stopped by user
+2025-07-01 16:52:10,543 - __main__ - INFO - 
+ Final Statistics:
+2025-07-01 16:52:10,544 - __main__ - INFO -   Total trades today: 0
+2025-07-01 16:52:10,545 - __main__ - INFO -   Session breakdown: {}
+2025-07-01 16:52:10,545 - bot_components - INFO - MT5 connection closed.
+2025-07-01 16:52:10,546 - __main__ - INFO - 
+ ICT Trading Bot Shutdown Complete
+
