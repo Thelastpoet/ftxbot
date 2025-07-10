@@ -26,6 +26,7 @@ class ICTNarrative:
     in_killzone: bool
     killzone_name: str
     ote_zone: Dict[str, float]  # {'high': x, 'sweet': x, 'low': x}
+    fvg_zone: Dict[str, float] # The FVG that confirms the MSS
     order_blocks: List[Dict]  # Refined OBs in play
     current_price: float
     entry_model: str  # Which ICT model is being used
@@ -63,13 +64,13 @@ class ICTAnalyzer:
         manipulation = po3_analysis.get('manipulation', {'detected': False})
         
         # Step 3: Analyze the rest of the market concepts using the robust bias
-        structure = self._get_structure(ohlc_df, swings, session_context, daily_bias, manipulation)
+        structure, fvg_zone = self._get_structure(ohlc_df, swings, session_context, daily_bias, manipulation)
         order_blocks = self._get_order_blocks(ohlc_df, swings)
         fair_value_gaps = self._get_fvgs(ohlc_df)
         liquidity_levels = self.liquidity_detector.get_liquidity_levels(ohlc_df, session_context, daily_df)
         pd_analysis = self._analyze_premium_discount(ohlc_df, swings)
-        ote_zones = self._calculate_ote_zones(ohlc_df, swings, daily_bias, manipulation)
-        htf_levels = self._get_htf_levels(h4_df)  # ✅ Now uses real H4 data
+        ote_zones = self._calculate_ote_zones(ohlc_df, swings, daily_bias, manipulation, fvg_zone)
+        htf_levels = self._get_htf_levels(h4_df) 
         
         analysis_result = {
             'symbol': symbol, 'current_price': ohlc_df['close'].iloc[-1],
@@ -77,7 +78,7 @@ class ICTAnalyzer:
             'daily_bias': daily_bias, 'po3_analysis': po3_analysis, 'manipulation': manipulation,
             'order_blocks': order_blocks, 'fair_value_gaps': fair_value_gaps,
             'liquidity_levels': liquidity_levels, 'premium_discount': pd_analysis,
-            'ote_zones': ote_zones, 'session': session_context, 'htf_levels': htf_levels
+            'ote_zones': ote_zones, 'fvg_zone': fvg_zone, 'session': session_context, 'htf_levels': htf_levels
         }
         
         # Cache the analysis
@@ -123,14 +124,14 @@ class ICTAnalyzer:
     def _get_structure(self, ohlc_df, swings, session_context, daily_bias, manipulation):
         """Analyze ICT market structure using framework context."""
         if swings.empty:
-            return pd.DataFrame()
+            return pd.DataFrame(), None
             
         try:
-            structure = self._get_ict_structure(ohlc_df, swings, session_context, daily_bias, manipulation)
-            return structure
+            structure, fvg_zone = self._get_ict_structure(ohlc_df, swings, session_context, daily_bias, manipulation)
+            return structure, fvg_zone
         except Exception as e:
             logger.error(f"Error getting ICT structure: {e}")
-            return pd.DataFrame()
+            return pd.DataFrame(), None
         
     def _get_session_context(self, ohlc_df: pd.DataFrame) -> dict:
         """
@@ -207,22 +208,21 @@ class ICTAnalyzer:
     
     def _determine_daily_bias(self, ohlc_df: pd.DataFrame, symbol: str, daily_df: pd.DataFrame = None) -> Tuple[str, Dict]:
         """
-        Determines bias using actual daily timeframe data
+        [REFINED] Determines bias using actual daily timeframe data for all components.
         """
         logger.debug(f"\n--- {symbol} ICT BIAS CHECKLIST ---")
 
-        # Use daily data if provided, otherwise warn and use M15
-        if daily_df is None or daily_df.empty:
-            logger.warning(f"{symbol}: No daily data provided for bias determination. Results may be inaccurate.")
-            analysis_df = ohlc_df
-        else:
-            analysis_df = daily_df
+        if daily_df is None or daily_df.empty or len(daily_df) < 20:
+            logger.warning(f"{symbol}: Insufficient daily data for bias determination. Bias will be neutral.")
+            return 'neutral', {}
 
-        # 1. Gather all evidence from source functions
-        htf_order_flow = self._analyze_daily_order_flow(analysis_df)
-        liquidity_draw = self._analyze_liquidity_draw(ohlc_df)  # Still use M15 for immediate liquidity
-        swings = self._get_swings(ohlc_df)  # M15 swings for PD zones
-        pd_analysis = self._analyze_premium_discount(ohlc_df, swings)
+        # 1. Gather all evidence from the DAILY chart
+        htf_order_flow = self._analyze_daily_order_flow(daily_df)
+        # Use daily data to find the draw on weekly liquidity
+        liquidity_draw = self._analyze_liquidity_draw(daily_df, is_daily_context=True)
+        # Use daily swings to find the daily premium/discount zone
+        pd_analysis = self._analyze_premium_discount(daily_df, is_daily_context=True)
+        
         is_in_discount = 'discount' in pd_analysis.get('current_zone', '')
         is_in_premium = 'premium' in pd_analysis.get('current_zone', '')
         
@@ -230,24 +230,21 @@ class ICTAnalyzer:
         reasons = []
 
         # 2. Apply ICT rules with hierarchy (most important checks first)
-        # The primary driver is HTF Order Flow from daily chart
         if htf_order_flow == 'bullish':
             reasons.append("Primary Factor: Daily Order Flow is Bullish (HH+HL)")
             final_bias = 'bullish'
-            
-            # Additional factors strengthen the bias but aren't required
             if is_in_discount:
-                reasons.append("Supporting Factor: Price is in a Discount zone")
+                reasons.append("Supporting Factor: Price is in a Daily Discount zone")
             if liquidity_draw == 'bullish':
-                reasons.append("Supporting Factor: Draw on Liquidity is Buyside")
+                reasons.append("Supporting Factor: Draw on Liquidity is towards Weekly Buyside")
+
         elif htf_order_flow == 'bearish':
             reasons.append("Primary Factor: Daily Order Flow is Bearish (LH+LL)")
             final_bias = 'bearish'
-            
             if is_in_premium:
-                reasons.append("Supporting Factor: Price is in a Premium zone")
+                reasons.append("Supporting Factor: Price is in a Daily Premium zone")
             if liquidity_draw == 'bearish':
-                reasons.append("Supporting Factor: Draw on Liquidity is Sellside")
+                reasons.append("Supporting Factor: Draw on Liquidity is towards Weekly Sellside")
         else:
             reasons.append("Primary Factor: Daily Order Flow is Neutral. No clear bias.")
             final_bias = 'neutral'
@@ -344,53 +341,67 @@ class ICTAnalyzer:
             
     def _check_market_structure_shift(self, ohlc_df, sweep_index, direction, swept_level):
         """
-        Corrected version using a more robust definition of a Market Structure Shift (MSS)
-        based on ICT principles.
+        [REFINED & FIXED] Confirms a Market Structure Shift (MSS) with DISPLACEMENT.
+        An MSS is valid if the break of structure is energetic, confirmed by either:
+        1. Leaving behind a Fair Value Gap (FVG).
+        2. A strong, high-range candle breaking the level.
         """
         try:
-            # 1. Isolate the data of the last price leg leading to the sweep.
-            # We look back from the point of the sweep to find the move that took liquidity.
-            lookback = 50 
-            start_index = max(0, sweep_index - lookback)
-            last_leg_df = ohlc_df.iloc[start_index:sweep_index]
+            # 1. Find the leg that broke the structure point
+            post_sweep_df = ohlc_df.iloc[sweep_index:]
+            breaking_candle_idx = -1
+            breaking_candle = None
 
-            if len(last_leg_df) < 5:
-                return False, None
-
-            # 2. Find the internal swings within this last leg ONLY.
-            # A shorter swing length is used to find the more sensitive internal structure.
-            internal_swings = smc.swing_highs_lows(last_leg_df, swing_length=5)
+            for i in range(len(post_sweep_df)):
+                candle = post_sweep_df.iloc[i]
+                if (direction == 'bearish' and candle['close'] < swept_level) or \
+                   (direction == 'bullish' and candle['close'] > swept_level):
+                    breaking_candle_idx = sweep_index + i
+                    breaking_candle = candle
+                    break
             
-            if internal_swings.empty:
-                return False, None
+            if breaking_candle_idx == -1:
+                return False, None, None # Structure not broken
 
-            # 3. Identify the specific internal swing high/low to be broken.
-            mss_level = None
-            if direction == 'bearish':  # Swept high, looking for break of internal low
-                internal_lows = internal_swings[internal_swings['HighLow'] == -1].dropna()
-                if internal_lows.empty:
-                    return False, None
-                mss_level = internal_lows['Level'].iloc[-1]
+            # 2. Check for DISPLACEMENT via FVG (Primary confirmation)
+            fvg_check_start = max(0, breaking_candle_idx - 2)
+            fvg_check_end = min(len(ohlc_df), breaking_candle_idx + 2)
+            fvg_df = ohlc_df.iloc[fvg_check_start:fvg_check_end]
             
-            else:  # 'bullish'. Swept low, looking for break of internal high
-                internal_highs = internal_swings[internal_swings['HighLow'] == 1].dropna()
-                if internal_highs.empty:
-                    return False, None
-                mss_level = internal_highs['Level'].iloc[-1]
+            fvgs = self._get_fvgs(fvg_df)
+            fvg_found = None
+            for fvg in fvgs:
+                if (direction == 'bullish' and fvg['type'] == 'bullish') or \
+                   (direction == 'bearish' and fvg['type'] == 'bearish'):
+                    fvg_found = fvg
+                    break
 
-            # 4. Check for a break of the identified internal MSS level.
-            post_sweep_data = ohlc_df.iloc[sweep_index:]
-            for idx, candle in post_sweep_data.head(10).iterrows():
-                if direction == 'bearish' and candle['close'] < mss_level:
-                    return True, mss_level
-                elif direction == 'bullish' and candle['close'] > mss_level:
-                    return True, mss_level
-            
-            return False, None
+            if fvg_found:
+                return True, swept_level, fvg_found
+
+            # 3. If no FVG, check for DISPLACEMENT via candle force (Secondary confirmation)
+            displacement_window = ohlc_df.iloc[max(0, breaking_candle_idx - 2) : breaking_candle_idx + 1]
+            if len(displacement_window) > 1:
+                avg_range = (displacement_window['high'][:-1] - displacement_window['low'][:-1]).mean()
+                breaking_range = breaking_candle['high'] - breaking_candle['low']
+
+                if breaking_range > avg_range * 1.5: # Energetic break
+                    candle_range = breaking_range
+                    if candle_range > 0:
+                        if direction == 'bullish':
+                            close_position = (breaking_candle['close'] - breaking_candle['low']) / candle_range
+                            if close_position >= 0.75 and breaking_candle['close'] > breaking_candle['open']:
+                                return True, swept_level, None # No FVG, but displacement confirmed
+                        else: # bearish
+                            close_position = (breaking_candle['close'] - breaking_candle['low']) / candle_range
+                            if close_position <= 0.25 and breaking_candle['close'] < breaking_candle['open']:
+                                return True, swept_level, None # No FVG, but displacement confirmed
+
+            return False, None, None
 
         except Exception as e:
             logger.error(f"Error checking MSS: {e}", exc_info=True)
-            return False, None
+            return False, None, None
         
     def _analyze_daily_order_flow(self, daily_df):
         """
@@ -525,8 +536,9 @@ class ICTAnalyzer:
         
     def _check_manipulation_patterns(self, ohlc_df, daily_bias, session_context):
         """
-        [CORRECTED & COMPLETE] Checks for a sequence of manipulation patterns (Judas, Turtle Soup, etc.)
+        [CORRECTED & COMPLETE V3] Checks for a sequence of manipulation patterns (Judas, Turtle Soup, etc.)
         and returns the first one found that aligns with the established daily bias.
+        Fixes the MSS check to look for a break of the correct internal structure that *precedes* the sweep.
         """
         if daily_bias == 'neutral':
             return None
@@ -543,18 +555,30 @@ class ICTAnalyzer:
                     if not sweep_up.empty:
                         sweep_time = sweep_up.index[0]
                         sweep_index = ohlc_df.index.get_loc(sweep_time)
-                        mss_confirmed, mss_level = self._check_market_structure_shift(ohlc_df, sweep_index, 'bearish', asian_high)
-                        if mss_confirmed:
-                            return {'type': 'bearish_judas', 'level': sweep_up['high'].iloc[0], 'index': sweep_index, 'mss_level': mss_level}
+                        
+                        # Find the last swing LOW *before* the sweep to be broken for a bearish MSS
+                        swings = self._get_swings(ohlc_df)
+                        candidate_lows = swings[(swings['HighLow'] == -1) & (swings.index < sweep_time)].dropna()
+                        if not candidate_lows.empty:
+                            mss_target_level = candidate_lows['Level'].iloc[-1]
+                            mss_confirmed, mss_level, _ = self._check_market_structure_shift(ohlc_df, sweep_index, 'bearish', mss_target_level)
+                            if mss_confirmed:
+                                return {'type': 'bearish_judas', 'level': sweep_up['high'].iloc[0], 'index': sweep_index, 'mss_level': mss_level}
                 
                 elif daily_bias == 'bullish':
                     sweep_down = search_window[search_window['low'] < asian_low]
                     if not sweep_down.empty:
                         sweep_time = sweep_down.index[0]
                         sweep_index = ohlc_df.index.get_loc(sweep_time)
-                        mss_confirmed, mss_level = self._check_market_structure_shift(ohlc_df, sweep_index, 'bullish', asian_low)
-                        if mss_confirmed:
-                            return {'type': 'bullish_judas', 'level': sweep_down['low'].iloc[0], 'index': sweep_index, 'mss_level': mss_level}
+
+                        # Find the last swing HIGH *before* the sweep to be broken for a bullish MSS
+                        swings = self._get_swings(ohlc_df)
+                        candidate_highs = swings[(swings['HighLow'] == 1) & (swings.index < sweep_time)].dropna()
+                        if not candidate_highs.empty:
+                            mss_target_level = candidate_highs['Level'].iloc[-1]
+                            mss_confirmed, mss_level, _ = self._check_market_structure_shift(ohlc_df, sweep_index, 'bullish', mss_target_level)
+                            if mss_confirmed:
+                                return {'type': 'bullish_judas', 'level': sweep_down['low'].iloc[0], 'index': sweep_index, 'mss_level': mss_level}
 
         # PATTERN 2: Turtle Soup (General price action pattern)
         turtle_soup = self._check_turtle_soup_pattern(ohlc_df, daily_bias)
@@ -619,26 +643,36 @@ class ICTAnalyzer:
                 # --- Check for a Bearish Sweep + MSS ---
                 if daily_bias == 'bearish' and swing['HighLow'] == 1: # Target swing highs
                     swept_level = swing['Level']
-                    # Did this candle sweep the high?
                     if sweep_candle['high'] > swept_level:
-                        # Proof: Did this sweep lead to a bearish MSS?
-                        mss_confirmed, mss_level = self._check_market_structure_shift(
-                            ohlc_df, sweep_index, 'bearish', swept_level
-                        )
-                        if mss_confirmed:
-                            return {'type': 'bearish_liquidity_sweep_mss', 'level': sweep_candle['high'], 'swept_level': swept_level, 'index': sweep_index, 'mss_level': mss_level}
+                        # After sweeping a high, the MSS is a break of a swing LOW
+                        pre_sweep_df = ohlc_df.iloc[:sweep_index]
+                        pre_sweep_swings = smc.swing_highs_lows(pre_sweep_df, swing_length=5)
+                        swing_lows = pre_sweep_swings[pre_sweep_swings['HighLow'] == -1].dropna()
+                        
+                        if not swing_lows.empty:
+                            mss_target_level = swing_lows['Level'].iloc[-1]
+                            mss_confirmed, mss_level, _ = self._check_market_structure_shift(
+                                ohlc_df, sweep_index, 'bearish', mss_target_level
+                            )
+                            if mss_confirmed:
+                                return {'type': 'bearish_liquidity_sweep_mss', 'level': sweep_candle['high'], 'swept_level': swept_level, 'index': sweep_index, 'mss_level': mss_level}
 
                 # --- Check for a Bullish Sweep + MSS ---
                 elif daily_bias == 'bullish' and swing['HighLow'] == -1: # Target swing lows
                     swept_level = swing['Level']
-                    # Did this candle sweep the low?
                     if sweep_candle['low'] < swept_level:
-                        # Proof: Did this sweep lead to a bullish MSS?
-                        mss_confirmed, mss_level = self._check_market_structure_shift(
-                            ohlc_df, sweep_index, 'bullish', swept_level
-                        )
-                        if mss_confirmed:
-                            return {'type': 'bullish_liquidity_sweep_mss', 'level': sweep_candle['low'], 'swept_level': swept_level, 'index': sweep_index, 'mss_level': mss_level}
+                        # After sweeping a low, the MSS is a break of a swing HIGH
+                        pre_sweep_df = ohlc_df.iloc[:sweep_index]
+                        pre_sweep_swings = smc.swing_highs_lows(pre_sweep_df, swing_length=5)
+                        swing_highs = pre_sweep_swings[pre_sweep_swings['HighLow'] == 1].dropna()
+
+                        if not swing_highs.empty:
+                            mss_target_level = swing_highs['Level'].iloc[-1]
+                            mss_confirmed, mss_level, _ = self._check_market_structure_shift(
+                                ohlc_df, sweep_index, 'bullish', mss_target_level
+                            )
+                            if mss_confirmed:
+                                return {'type': 'bullish_liquidity_sweep_mss', 'level': sweep_candle['low'], 'swept_level': swept_level, 'index': sweep_index, 'mss_level': mss_level}
         return None
     
     def _get_ict_structure(self, ohlc_df, swings, session_context, daily_bias, manipulation):
@@ -655,7 +689,7 @@ class ICTAnalyzer:
         
         # Get external range context (Asian session = major liquidity)
         if not session_context['last_asian_range']:
-            return self._create_empty_structure(n)
+            return self._create_empty_structure(n), None
         
         asian_range = session_context['last_asian_range']
         external_high = asian_range['high']
@@ -664,7 +698,7 @@ class ICTAnalyzer:
         # Get internal swings (within Asian range)
         internal_swings = swings.dropna()
         if internal_swings.empty:
-            return self._create_empty_structure(n)
+            return self._create_empty_structure(n), None
         
         # Track key internal levels based on bias direction
         key_internal_high = None
@@ -674,10 +708,11 @@ class ICTAnalyzer:
         
         # Identify the key internal levels to watch
         manipulation_index = manipulation.get('index', -1)
-        
+        manipulation_time = ohlc_df.index[manipulation_index] if manipulation_index != -1 else pd.Timestamp(0, tz='UTC')
+
         if daily_bias == 'bullish':
             # In bullish bias, watch for break of internal low (CHoCH signal)
-            post_manipulation_swings = internal_swings[internal_swings.index > manipulation_index]
+            post_manipulation_swings = internal_swings[internal_swings.index > manipulation_time]
             internal_lows = post_manipulation_swings[post_manipulation_swings['HighLow'] == -1]
             
             if not internal_lows.empty:
@@ -687,7 +722,7 @@ class ICTAnalyzer:
         
         elif daily_bias == 'bearish':
             # In bearish bias, watch for break of internal high (CHoCH signal)
-            post_manipulation_swings = internal_swings[internal_swings.index > manipulation_index]
+            post_manipulation_swings = internal_swings[internal_swings.index > manipulation_time]
             internal_highs = post_manipulation_swings[post_manipulation_swings['HighLow'] == 1]
             
             if not internal_highs.empty:
@@ -695,6 +730,7 @@ class ICTAnalyzer:
                 key_internal_high = internal_highs['Level'].iloc[-1]
                 internal_high_idx = internal_highs.index[-1]
         
+        fvg_zone = None
         # Process each candle for structure breaks
         for i in range(manipulation_index + 1, n):  # Only check after manipulation
             current_close = ohlc_df['close'].iloc[i]
@@ -702,48 +738,52 @@ class ICTAnalyzer:
             # Check for EXTERNAL range breaks (major BOS)
             if daily_bias == 'bullish' and current_close > external_high:
                 # Bullish BOS - break of external high WITH trend
-                if self._validate_displacement_break(ohlc_df, i, external_high, 'bullish'):
+                mss_confirmed, mss_level, fvg = self._check_market_structure_shift(ohlc_df, i, 'bullish', external_high)
+                if mss_confirmed:
                     # Find index where external high was set (start of Asian session)
                     asian_start_idx = ohlc_df.index.get_loc(asian_range['start_time_utc'])
                     bos[asian_start_idx] = 1
                     level[asian_start_idx] = external_high
                     broken_index[asian_start_idx] = i
+                    fvg_zone = fvg
             
             elif daily_bias == 'bearish' and current_close < external_low:
                 # Bearish BOS - break of external low WITH trend  
-                if self._validate_displacement_break(ohlc_df, i, external_low, 'bearish'):
+                mss_confirmed, mss_level, fvg = self._check_market_structure_shift(ohlc_df, i, 'bearish', external_low)
+                if mss_confirmed:  
                     asian_start_idx = ohlc_df.index.get_loc(asian_range['start_time_utc'])
                     bos[asian_start_idx] = -1
                     level[asian_start_idx] = external_low
                     broken_index[asian_start_idx] = i
+                    fvg_zone = fvg
             
             # Check for INTERNAL structure breaks (CHoCH signals)
             if daily_bias == 'bullish' and key_internal_low is not None:
-                if current_close < key_internal_low:
-                    # Break of internal low AGAINST bullish bias = CHoCH
-                    if self._validate_displacement_break(ohlc_df, i, key_internal_low, 'bearish'):
-                        choch[internal_low_idx] = -1
-                        level[internal_low_idx] = key_internal_low
-                        broken_index[internal_low_idx] = i
-                        # This internal level is now broken
-                        key_internal_low = None
+                mss_confirmed, mss_level, fvg = self._check_market_structure_shift(ohlc_df, i, 'bearish', key_internal_low)
+                if mss_confirmed:
+                    choch[internal_low_idx] = -1
+                    level[internal_low_idx] = key_internal_low
+                    broken_index[internal_low_idx] = i
+                    fvg_zone = fvg
+                    # This internal level is now broken
+                    key_internal_low = None
             
             elif daily_bias == 'bearish' and key_internal_high is not None:
-                if current_close > key_internal_high:
-                    # Break of internal high AGAINST bearish bias = CHoCH
-                    if self._validate_displacement_break(ohlc_df, i, key_internal_high, 'bullish'):
-                        choch[internal_high_idx] = 1
-                        level[internal_high_idx] = key_internal_high
-                        broken_index[internal_high_idx] = i
-                        # This internal level is now broken
-                        key_internal_high = None
+                mss_confirmed, mss_level, fvg = self._check_market_structure_shift(ohlc_df, i, 'bullish', key_internal_high)
+                if mss_confirmed:
+                    choch[internal_high_idx] = 1
+                    level[internal_high_idx] = key_internal_high
+                    broken_index[internal_high_idx] = i
+                    fvg_zone = fvg
+                    # This internal level is now broken
+                    key_internal_high = None
         
         return pd.DataFrame({
             'BOS': bos,
             'CHOCH': choch,
             'Level': level,
             'BrokenIndex': broken_index
-        })
+        }), fvg_zone
 
     def _validate_displacement_break(self, ohlc_df, break_index, level, direction):
         """
@@ -855,302 +895,61 @@ class ICTAnalyzer:
             logger.error(f"Error getting FVGs: {e}")
             return []
     
-    def _get_liquidity(self, ohlc_df, swings):
-        """Get liquidity zones."""
-        try:
-            range_percent = 0.01
-            
-            liquidity = smc.liquidity(ohlc_df, swings, range_percent=range_percent)
-            if liquidity.empty:
-                return []
-            
-            # Get recent liquidity zones (last 50 candles)
-            recent_liq = liquidity.iloc[-50:] if len(liquidity) > 50 else liquidity
-            
-            # Filter for valid, unswept liquidity
-            # Swept == 0 means unswept, Swept > 0 means swept at that index
-            unswept = recent_liq[
-                recent_liq['Liquidity'].notna() & 
-                (recent_liq['Swept'] == 0)
-            ]
-            
-            # Convert to list
-            liq_list = []
-            for idx, liq in unswept.iterrows():
-                liq_list.append({
-                    'index': idx,
-                    'type': 'bullish' if liq['Liquidity'] == 1 else 'bearish',
-                    'level': liq['Level']
-                })
-            
-            logger.debug(f"Found {len(liq_list)} unswept liquidity zones")
-            return liq_list
-            
-        except Exception as e:
-            logger.error(f"Error getting liquidity: {e}")
-            return []
     
-    def _analyze_premium_discount(self, ohlc_df: pd.DataFrame, swings: pd.DataFrame) -> Dict:
-        """
-        Analyze premium/discount zones based on the most recent dealing range
-        defined by swing highs and lows, aligning with ICT principles.
-        """
-        if swings.empty:
-            return {}
-
-        # Find the last two swing points to define the current dealing range
-        recent_swings = swings.dropna().tail(20)
-        if len(recent_swings) < 4:
-            return {} # Not enough swings to create a range
-
-        # The dealing range is the high and low of the last two swing points
-        high = recent_swings['Level'].max()
-        low = recent_swings['Level'].min()
-        
-        if high == low:
-            return {} # Invalid range
-
-        range_size = high - low
-        
-        # Key Fibonacci levels
-        levels = {
-            'high': high,
-            'low': low,
-            'range': range_size,
-            'equilibrium': low + (range_size * 0.5),
-            'premium_75': low + (range_size * 0.75),
-            'premium_80': low + (range_size * 0.80),
-            'discount_25': low + (range_size * 0.25),
-            'discount_20': low + (range_size * 0.20),
-        }
-        
-        current_price = ohlc_df['close'].iloc[-1]
-        
-        # Determine zone
-        if current_price > levels['equilibrium']:
-            zone = 'premium'
-        else:
-            zone = 'discount'
-
-        # Add deep zones for more granularity if needed
-        if zone == 'premium' and current_price > levels['premium_75']:
-            zone = 'deep_premium'
-        elif zone == 'discount' and current_price < levels['discount_25']:
-            zone = 'deep_discount'
-        
-        levels['current_zone'] = zone
-        
-        return levels
     
-    def _calculate_ote_zones(self, ohlc_df, swings, daily_bias, manipulation):
+    def _calculate_ote_zones(self, ohlc_df, swings, daily_bias, manipulation, fvg_zone):
         """
-        Calculate Optimal Trade Entry (OTE) zones based on the specific
-        price leg created by the manipulation, aligning with ICT principles.
+        [REFINED] Calculate OTE zones from the true displacement leg.
+        The leg is measured from the manipulation point to the extreme of the
+        move that created the FVG after the Market Structure Shift.
         """
-        if not manipulation.get('detected') or swings.empty:
+        if not manipulation.get('detected') or not fvg_zone:
             return []
 
-        ote_zones = []
         manipulation_level = manipulation['level']
-        manipulation_index = manipulation.get('index', -1)
+        
+        # The displacement leg starts at the manipulation level
+        start_of_leg = manipulation_level
+
+        # The end of the leg is the extreme of the candle that created the FVG
+        fvg_candle_index = fvg_zone['index']
+        fvg_candle = ohlc_df.iloc[fvg_candle_index]
 
         if daily_bias == 'bullish':
-            # After a bullish manipulation (sweep down), we look for a swing high that forms AFTER it.
-            # The range is from the manipulation low up to that swing high.
-            swing_highs_after = swings[(swings['HighLow'] == 1) & (swings.index > manipulation_index)]
-            if not swing_highs_after.empty:
-                subsequent_high = swing_highs_after['Level'].iloc[0]
-                # Ensure the high is actually above the manipulation level to form a valid range
-                if subsequent_high > manipulation_level:
-                    range_size = subsequent_high - manipulation_level
-                    ote_zones.append({
-                        'direction': 'bullish',
-                        'high': subsequent_high - (range_size * 0.62),
-                        'sweet': subsequent_high - (range_size * 0.705),
-                        'low': subsequent_high - (range_size * 0.79),
-                        'swing_high': subsequent_high,
-                        'swing_low': manipulation_level
-                    })
+            # After a bullish MSS, the displacement leg is from the low of manipulation
+            # up to the high of the candle that formed the bullish FVG.
+            end_of_leg = fvg_candle['high']
+            if end_of_leg < start_of_leg: return [] # Invalid range
+            range_size = end_of_leg - start_of_leg
+            return [{
+                'direction': 'bullish',
+                'high': end_of_leg - (range_size * 0.62),
+                'sweet': end_of_leg - (range_size * 0.705),
+                'low': end_of_leg - (range_size * 0.79),
+                'swing_high': end_of_leg,
+                'swing_low': start_of_leg
+            }]
 
         elif daily_bias == 'bearish':
-            # After a bearish manipulation (sweep up), we look for a swing low that forms AFTER it.
-            # The range is from the manipulation high down to that swing low.
-            swing_lows_after = swings[(swings['HighLow'] == -1) & (swings.index > manipulation_index)]
-            if not swing_lows_after.empty:
-                subsequent_low = swing_lows_after['Level'].iloc[0]
-                # Ensure the low is actually below the manipulation level
-                if subsequent_low < manipulation_level:
-                    range_size = manipulation_level - subsequent_low
-                    ote_zones.append({
-                        'direction': 'bearish',
-                        'high': subsequent_low + (range_size * 0.79),
-                        'sweet': subsequent_low + (range_size * 0.705),
-                        'low': subsequent_low + (range_size * 0.62),
-                        'swing_high': manipulation_level,
-                        'swing_low': subsequent_low
-                    })
+            # After a bearish MSS, the displacement leg is from the high of manipulation
+            # down to the low of the candle that formed the bearish FVG.
+            end_of_leg = fvg_candle['low']
+            if end_of_leg > start_of_leg: return [] # Invalid range
+            range_size = start_of_leg - end_of_leg
+            return [{
+                'direction': 'bearish',
+                'high': end_of_leg + (range_size * 0.79),
+                'sweet': end_of_leg + (range_size * 0.705),
+                'low': end_of_leg + (range_size * 0.62),
+                'swing_high': start_of_leg,
+                'swing_low': end_of_leg
+            }]
         
-        return ote_zones
+        return []
         
-    def _get_htf_levels(self, ohlc_df):
-        """Get higher timeframe levels."""
-        try:
-            # Get H4 levels
-            htf_levels = smc.previous_high_low(ohlc_df, time_frame="4h")
-            
-            if htf_levels is not None and not htf_levels.empty:
-                return {
-                    'h4_high': htf_levels['PreviousHigh'].iloc[-1],
-                    'h4_low': htf_levels['PreviousLow'].iloc[-1],
-                    'h4_broken_high': htf_levels['BrokenHigh'].iloc[-1] == 1,
-                    'h4_broken_low': htf_levels['BrokenLow'].iloc[-1] == 1
-                }
-        except Exception as e:
-            logger.warning(f"Error getting HTF levels: {e}")
-        
-        return {}
+    
 
-    def _analyze_market_phase(self, ohlc_df, manipulation, daily_bias):
-        """
-        Determine current ICT PO3 phase (Accumulation, Manipulation, Distribution) based on 
-        session context, manipulation detection, and market behavior.
-        Returns: Dict with phase info and key levels
-        """
-        current_utc = ohlc_df.index[-1]
-        current_ny = current_utc.astimezone(self.config.NY_TIMEZONE)
-        current_ny_hour = current_ny.hour
-        current_price = ohlc_df['close'].iloc[-1]
-        
-        manipulation_detected = manipulation.get('detected', False)
-        manipulation_index = manipulation.get('index', -1)
-        manipulation_price = manipulation.get('level', current_price)
-        
-        # Default values
-        phase = 'unknown'
-        can_enter = False
-        retracement_percent = 0
-        extreme_price = current_price
-        
-        # Determine phase based on ICT PO3 session structure and manipulation state
-        
-        # === ACCUMULATION PHASE ===
-        # Asian Session (7 PM - 12 AM NY) = Accumulation Phase
-        if 19 <= current_ny_hour < 24 or 0 <= current_ny_hour < 1:
-            phase = 'accumulation'
-            can_enter = False  # Don't trade during accumulation
-            logger.debug(f"Asian Session - Accumulation Phase detected")
-            
-        # === MANIPULATION PHASE ===  
-        # London Session (2 AM - 5 AM NY) = Manipulation Phase
-        elif 2 <= current_ny_hour < 5:
-            if manipulation_detected:
-                phase = 'manipulation_active'
-                # Check if manipulation just happened (within last 5 candles)
-                bars_since_manipulation = len(ohlc_df) - 1 - manipulation_index if manipulation_index >= 0 else 999
-                
-                if bars_since_manipulation <= 5:
-                    can_enter = getattr(self.config, 'ALLOW_MANIPULATION_PHASE_ENTRY', False)
-                    logger.debug(f"Active manipulation detected {bars_since_manipulation} bars ago")
-                else:
-                    phase = 'manipulation_complete'
-                    can_enter = True
-                    logger.debug(f"Manipulation completed, ready for distribution")
-            else:
-                phase = 'manipulation_pending'
-                can_enter = False
-                logger.debug(f"London Session - Waiting for manipulation")
-        
-        # === DISTRIBUTION PHASE ===
-        # New York Session (7 AM - 11 AM NY) = Distribution Phase  
-        elif 7 <= current_ny_hour < 11:
-            if manipulation_detected:
-                phase = 'distribution'
-                
-                # Calculate retracement from manipulation
-                post_manipulation = ohlc_df.iloc[manipulation_index:] if manipulation_index >= 0 else ohlc_df.tail(10)
-                
-                if daily_bias == 'bullish':
-                    # After bullish manipulation (sweep down), look for move up
-                    post_high = post_manipulation['high'].max()
-                    extreme_price = post_high
-                    
-                    if current_price < manipulation_price:
-                        phase = 'invalidated'
-                        can_enter = False
-                    else:
-                        # Calculate retracement from the high
-                        retracement_range = post_high - manipulation_price
-                        current_retracement = post_high - current_price
-                        retracement_percent = (current_retracement / retracement_range * 100) if retracement_range > 0 else 0
-                        
-                        retracement_threshold = getattr(self.config, 'RETRACEMENT_THRESHOLD_PERCENT', 25.0)
-                        
-                        if retracement_percent >= retracement_threshold:
-                            phase = 'distribution_retracement'
-                            can_enter = True
-                        elif 0 < retracement_percent < retracement_threshold:
-                            phase = 'distribution_shallow_pullback'
-                            can_enter = False
-                        else:
-                            phase = 'distribution_expansion'
-                            can_enter = False
-                            
-                else:  # bearish bias
-                    # After bearish manipulation (sweep up), look for move down
-                    post_low = post_manipulation['low'].min()
-                    extreme_price = post_low
-                    
-                    if current_price > manipulation_price:
-                        phase = 'invalidated'
-                        can_enter = False
-                    else:
-                        # Calculate retracement from the low
-                        retracement_range = manipulation_price - post_low
-                        current_retracement = current_price - post_low
-                        retracement_percent = (current_retracement / retracement_range * 100) if retracement_range > 0 else 0
-                        
-                        retracement_threshold = getattr(self.config, 'RETRACEMENT_THRESHOLD_PERCENT', 25.0)
-                        
-                        if retracement_percent >= retracement_threshold:
-                            phase = 'distribution_retracement'
-                            can_enter = True
-                        elif 0 < retracement_percent < retracement_threshold:
-                            phase = 'distribution_shallow_pullback'
-                            can_enter = False
-                        else:
-                            phase = 'distribution_expansion'
-                            can_enter = False
-            else:
-                phase = 'distribution_no_manipulation'
-                can_enter = False
-                logger.debug(f"NY Session but no manipulation detected - waiting")
-        
-        # === POST-DISTRIBUTION / CONSOLIDATION ===
-        # After NY session or outside main sessions
-        else:
-            if manipulation_detected:
-                phase = 'post_distribution'
-                can_enter = False  # Avoid trading outside main sessions
-            else:
-                phase = 'consolidation'
-                can_enter = False
-        
-        # Calculate bars since manipulation for additional context
-        bars_since_manipulation = 0
-        if manipulation_index >= 0:
-            bars_since_manipulation = len(ohlc_df) - 1 - manipulation_index
-        
-        return {
-            'phase': phase,
-            'can_enter': can_enter,
-            'retracement_percent': round(retracement_percent, 1),
-            'manipulation_price': manipulation_price,
-            'extreme_price': extreme_price,
-            'bars_since_manipulation': bars_since_manipulation,
-            'current_session': 'Asian' if (19 <= current_ny_hour < 24 or 0 <= current_ny_hour < 1) else
-                            'London' if 2 <= current_ny_hour < 5 else
-                            'NewYork' if 7 <= current_ny_hour < 11 else 'Other'
-        }
+    
         
     def _check_rejection_confirmation(self, ohlc_df, level, bias, lookback=3):
         """
@@ -1291,6 +1090,11 @@ class ICTSignalGenerator:
 
         # --- Final Validation ---
         if entry_signal:
+            # Check for signal invalidation before final trade validation
+            if not self._is_signal_still_valid(analysis, narrative, ohlc_df):
+                logger.info(f"{narrative.entry_model}: Signal invalidated by subsequent price action.")
+                return None, None, None, None
+
             if not self._validate_trade(entry_signal, analysis['current_price'], sl_price, tp_price, narrative):
                 return None, None, None, None
             
@@ -1319,12 +1123,15 @@ class ICTSignalGenerator:
         narrative.manipulation_level = manipulation['level']
         
         # Confirm with MSS
-        mss_confirmed, mss_level = self.analyzer._check_market_structure_shift(ohlc_df, manipulation['index'], analysis['daily_bias'], manipulation['swept_level'])
+        mss_confirmed, mss_level, fvg_found = self.analyzer._check_market_structure_shift(ohlc_df, manipulation['index'], analysis['daily_bias'], manipulation['swept_level'])
         if not mss_confirmed:
             return None, None, None, None
         
         narrative.structure_broken = True
         narrative.structure_level = mss_level
+
+        # Set the FVG as the new POI for entry
+        narrative.fvg_zone = fvg_found
 
         # Setup trade
         signal, sl, tp = self._setup_entry_from_manipulation(analysis, manipulation, ohlc_df, spread)
@@ -1339,13 +1146,14 @@ class ICTSignalGenerator:
         if london_range:
             manipulation = self._check_session_sweep(ohlc_df, analysis['daily_bias'], london_range, 'london')
             if manipulation:
-                mss_confirmed, mss_level = self.analyzer._check_market_structure_shift(ohlc_df, manipulation['index'], analysis['daily_bias'], manipulation['swept_level'])
+                mss_confirmed, mss_level, fvg_found = self.analyzer._check_market_structure_shift(ohlc_df, manipulation['index'], analysis['daily_bias'], manipulation['swept_level'])
                 if mss_confirmed:
                     narrative.entry_model = "NY_LONDON_SWEEP"
                     narrative.manipulation_confirmed = True
                     narrative.manipulation_level = manipulation['level']
                     narrative.structure_broken = True
                     narrative.structure_level = mss_level
+                    narrative.fvg_zone = fvg_found
                     signal, sl, tp = self._setup_entry_from_manipulation(analysis, manipulation, ohlc_df, spread)
                     return signal, sl, tp, narrative
 
@@ -1395,6 +1203,43 @@ class ICTSignalGenerator:
         
         return None
 
+    def _is_signal_still_valid(self, analysis, narrative, ohlc_df):
+        """
+        Checks if the generated signal is still valid based on current price action.
+        A signal is invalidated if:
+        1. The manipulation level has been violated.
+        2. The FVG that confirmed the MSS has been violated.
+        """
+        current_price = ohlc_df['close'].iloc[-1]
+        
+        # Check 1: Manipulation level violation
+        if narrative.manipulation_confirmed:
+            manipulation_level = narrative.manipulation_level
+            if narrative.daily_bias == 'bullish': # Swept low, price should stay above
+                if current_price < manipulation_level:
+                    logger.debug(f"Signal invalidated: Price ({current_price:.5f}) below manipulation low ({manipulation_level:.5f})")
+                    return False
+            elif narrative.daily_bias == 'bearish': # Swept high, price should stay below
+                if current_price > manipulation_level:
+                    logger.debug(f"Signal invalidated: Price ({current_price:.5f}) above manipulation high ({manipulation_level:.5f})")
+                    return False
+
+        # Check 2: FVG violation (if an FVG was part of the narrative)
+        if narrative.fvg_zone:
+            fvg_top = narrative.fvg_zone['top']
+            fvg_bottom = narrative.fvg_zone['bottom']
+            
+            if narrative.daily_bias == 'bullish': # Bullish FVG, price should not go below bottom
+                if current_price < fvg_bottom:
+                    logger.debug(f"Signal invalidated: Price ({current_price:.5f}) below bullish FVG bottom ({fvg_bottom:.5f})")
+                    return False
+            elif narrative.daily_bias == 'bearish': # Bearish FVG, price should not go above top
+                if current_price > fvg_top:
+                    logger.debug(f"Signal invalidated: Price ({current_price:.5f}) above bearish FVG top ({fvg_top:.5f})")
+                    return False
+
+        return True
+
     def _setup_entry_from_manipulation(self, analysis, manipulation, ohlc_df, spread):
         """Generic trade setup based on a manipulation event."""
         bias = analysis['daily_bias']
@@ -1402,12 +1247,10 @@ class ICTSignalGenerator:
         
         if bias == 'bullish':
             signal = "BUY"
-            sl_price = manipulation['level'] - self._calculate_atr_buffer(ohlc_df)
+            sl_price = manipulation['level'] - (self._calculate_atr_buffer(ohlc_df) * 0.5) # 0.5 ATR buffer below manipulation
         else: # bearish
             signal = "SELL"
-            # For SELL orders, SL must be above current price
-            reference_level = max(manipulation['level'], current_price)
-            sl_price = reference_level + self._calculate_atr_buffer(ohlc_df)
+            sl_price = manipulation['level'] + (self._calculate_atr_buffer(ohlc_df) * 0.5) # 0.5 ATR buffer above manipulation
         
         tp_price = self._calculate_target(current_price, sl_price, bias, analysis)
         return signal, sl_price, tp_price
@@ -1455,12 +1298,10 @@ class ICTSignalGenerator:
 
         if bias == 'bullish':
             signal = "BUY"
-            sl_price = min(fvg_entry['bottom'], manipulation.get('level', fvg_entry['bottom'])) - self._calculate_atr_buffer(ohlc_df)
+            sl_price = fvg_entry['bottom'] - (self._calculate_atr_buffer(ohlc_df) * 0.5)
         else: # bearish
             signal = "SELL"
-            # For SELL orders, SL must be above current price
-            reference_level = max(fvg_entry['top'], manipulation.get('level', fvg_entry['top']), current_price)
-            sl_price = reference_level + self._calculate_atr_buffer(ohlc_df)
+            sl_price = fvg_entry['top'] + (self._calculate_atr_buffer(ohlc_df) * 0.5)
         
         tp_price = self._calculate_target(current_price, sl_price, bias, analysis)
         return signal, sl_price, tp_price
@@ -1576,9 +1417,10 @@ class ICTSignalGenerator:
         return True
     
     def _build_narrative(self, analysis) -> ICTNarrative:
-        """Build the complete ICT narrative from analysis."""
+        """Build the complete ICT narrative from analysis.""" 
         manipulation = analysis['manipulation']
         structure = analysis['structure']
+        fvg_zone = analysis['fvg_zone']
         
         # Get most recent structure break
         recent_bos = None
@@ -1611,6 +1453,7 @@ class ICTSignalGenerator:
             in_killzone=analysis['session']['in_killzone'],
             killzone_name=analysis['session']['killzone_name'] or '',
             ote_zone=analysis['ote_zones'][0] if analysis['ote_zones'] else {},
+            fvg_zone=fvg_zone if fvg_zone else {},
             order_blocks=analysis['order_blocks'],
             current_price=analysis['current_price'],
             entry_model=''
@@ -1637,12 +1480,10 @@ class ICTSignalGenerator:
         
         if bias == 'bullish':
             signal = "BUY"
-            sl_price = ote_zone['swing_low'] - self._calculate_atr_buffer(ohlc_df)
+            sl_price = ote_zone['swing_low'] - (self._calculate_atr_buffer(ohlc_df) * 0.5)
         else:  # bearish
             signal = "SELL"
-            # For SELL orders, SL must be above current price
-            reference_level = max(ote_zone['swing_high'], current_price)
-            sl_price = reference_level + self._calculate_atr_buffer(ohlc_df)
+            sl_price = ote_zone['swing_high'] + (self._calculate_atr_buffer(ohlc_df) * 0.5)
         
         tp_price = self._calculate_target(current_price, sl_price, bias, analysis)        
         return signal, sl_price, tp_price
@@ -1651,12 +1492,10 @@ class ICTSignalGenerator:
         """Setup entry from order block."""
         if bias == 'bullish':
             signal = "BUY"
-            sl_price = order_block['bottom'] - self._calculate_atr_buffer(ohlc_df)
+            sl_price = order_block['bottom'] - (self._calculate_atr_buffer(ohlc_df) * 0.5)
         else:
             signal = "SELL"
-            # For SELL orders, SL must be above current price
-            reference_level = max(order_block['top'], current_price)
-            sl_price = reference_level + self._calculate_atr_buffer(ohlc_df)
+            sl_price = order_block['top'] + (self._calculate_atr_buffer(ohlc_df) * 0.5)
         
         tp_price = self._calculate_target(current_price, sl_price, bias, analysis)
         
@@ -1667,12 +1506,10 @@ class ICTSignalGenerator:
         if bias == 'bullish':
             signal = "BUY"
             # SL below the Judas sweep low
-            sl_price = manipulation.get('level', current_price) - self._calculate_atr_buffer(ohlc_df)
+            sl_price = manipulation.get('level', current_price) - (self._calculate_atr_buffer(ohlc_df) * 0.5)
         else:  # bearish
             signal = "SELL"
-            # For SELL orders, SL must be above current price
-            reference_level = max(manipulation.get('level', current_price), current_price)
-            sl_price = reference_level + self._calculate_atr_buffer(ohlc_df)
+            sl_price = manipulation.get('level', current_price) + (self._calculate_atr_buffer(ohlc_df) * 0.5)
         
         # Target the opposite side of Asian range or liquidity
         tp_price = self._calculate_target(current_price, sl_price, bias, analysis)

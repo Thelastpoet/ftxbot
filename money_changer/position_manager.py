@@ -352,7 +352,7 @@ class PositionManager:
             return scale_levels
         
         # Get analysis for potential scale levels
-        analysis = self.signal_generator.analyze(market_data, symbol)
+        analysis = self.signal_generator.analyzer.analyze(market_data, symbol)
         if not analysis:
             return scale_levels
         
@@ -433,7 +433,7 @@ class PositionManager:
         exit_targets = []
         
         # Get liquidity analysis
-        analysis = self.signal_generator.analyze(market_data, symbol)
+        analysis = self.signal_generator.analyzer.analyze(market_data, symbol)
         if not analysis:
             # Fallback to initial TP
             return [{'price': initial_tp, 'volume_pct': 100.0, 'type': 'initial_target'}]

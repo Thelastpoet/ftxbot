@@ -57,7 +57,7 @@ BROKER_TIMEZONE = 'Etc/GMT-3'  # For UTC+3 broker
 # Bot Operation
 LOOP_SLEEP_SECONDS = 60  # Check every minute during active sessions
 LOG_FILE = "ict_trading_bot.log"
-LOG_LEVEL = "INFO"  # Options: DEBUG, INFO, WARNING, ERROR, CRITICAL
+LOG_LEVEL = "DEBUG"  # Options: DEBUG, INFO, WARNING, ERROR, CRITICAL
 MAGIC_NUMBER_PREFIX = 2025
 
 # Entry Configuration
