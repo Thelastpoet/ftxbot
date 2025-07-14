@@ -19,7 +19,7 @@ class LiquidityDetector:
         self.swing_lookback = swing_lookback
         
     def get_liquidity_levels(self, ohlc_df: pd.DataFrame, session_context: dict, 
-                           daily_df: pd.DataFrame = None) -> Dict[str, List[Dict]]:
+                       daily_df: pd.DataFrame = None, structure: pd.DataFrame = None) -> Dict[str, List[Dict]]:
         """Get all liquidity levels following ICT methodology."""
         current_price = ohlc_df['close'].iloc[-1]
         
@@ -38,7 +38,7 @@ class LiquidityDetector:
         liquidity_levels['sell_side'].extend(equal_levels['sell_side'])
         
         # Recent swing highs/lows (REFACTORED IMPLEMENTATION)
-        swing_liquidity = self._get_swing_liquidity(ohlc_df, swings)
+        swing_liquidity = self._get_swing_liquidity(ohlc_df, swings, structure)
         liquidity_levels['buy_side'].extend(swing_liquidity['buy_side'])
         liquidity_levels['sell_side'].extend(swing_liquidity['sell_side'])
         
@@ -98,8 +98,41 @@ class LiquidityDetector:
                 elif row['Liquidity'] == 1:
                     liquidity['buy_side'].append({'level': row['Level'], 'type': 'equal_highs', 'priority': 'very_high', 'description': 'Equal Highs'})
         return liquidity
+    
+    def get_preliminary_liquidity(self, ohlc_df: pd.DataFrame, session_context: dict,
+                                daily_df: pd.DataFrame = None) -> Dict[str, List[Dict]]:
+        """
+        Gets only the high-level, obvious liquidity pools that do NOT depend on
+        market structure analysis. Used for the initial daily bias check.
+        """
+        current_price = ohlc_df['close'].iloc[-1]
+        swings = smc.swing_highs_lows(ohlc_df, swing_length=self.swing_lookback)
+        
+        liquidity_levels = {'buy_side': [], 'sell_side': []}
+        
+        # Session-based liquidity (highest priority)
+        session_liquidity = self._get_session_liquidity(session_context, ohlc_df)
+        liquidity_levels['buy_side'].extend(session_liquidity['buy_side'])
+        liquidity_levels['sell_side'].extend(session_liquidity['sell_side'])
+        
+        # Equal highs/lows (very high priority)
+        equal_levels = self._get_equal_highs_lows(ohlc_df, swings)
+        liquidity_levels['buy_side'].extend(equal_levels['buy_side'])
+        liquidity_levels['sell_side'].extend(equal_levels['sell_side'])
+        
+        # Daily/Weekly levels
+        if daily_df is not None:
+            htf_liquidity = self._get_htf_liquidity(daily_df)
+            liquidity_levels['buy_side'].extend(htf_liquidity['buy_side'])
+            liquidity_levels['sell_side'].extend(htf_liquidity['sell_side'])
+        
+        # Finalize and sort levels
+        liquidity_levels['buy_side'] = self._finalize_levels(liquidity_levels['buy_side'], current_price, 'above')
+        liquidity_levels['sell_side'] = self._finalize_levels(liquidity_levels['sell_side'], current_price, 'below')
 
-    def _get_swing_liquidity(self, ohlc_df: pd.DataFrame, swings: pd.DataFrame) -> Dict[str, List[Dict]]:
+        return liquidity_levels
+
+    def _get_swing_liquidity(self, ohlc_df: pd.DataFrame, swings: pd.DataFrame, structure: pd.DataFrame) -> Dict[str, List[Dict]]:
         """
         Gets liquidity from SIGNIFICANT swing points
         """
@@ -107,8 +140,6 @@ class LiquidityDetector:
         valid_swings = swings.dropna()
         if len(valid_swings) < 2:
             return liquidity
-
-        structure = smc.bos_choch(ohlc_df, swings)
         
         # Loop backwards through the last 30 valid swings using positional indexing
         start_index = len(valid_swings) - 1
@@ -141,10 +172,17 @@ class LiquidityDetector:
             if not relevant_breaks.empty:
                 first_break_after_swing = relevant_breaks.iloc[0]
                 break_level = first_break_after_swing['Level']
-                if current_swing['HighLow'] == -1 and (first_break_after_swing['BOS'] == 1 or first_break_after_swing['CHOCH'] == 1):
+                is_bullish_break = (pd.notna(first_break_after_swing['BOS']) and first_break_after_swing['BOS'] == 1) or \
+                       (pd.notna(first_break_after_swing['CHOCH']) and first_break_after_swing['CHOCH'] == 1)
+
+                # Check for a bearish break (BOS is -1 or CHOCH is -1)
+                is_bearish_break = (pd.notna(first_break_after_swing['BOS']) and first_break_after_swing['BOS'] == -1) or \
+                                (pd.notna(first_break_after_swing['CHOCH']) and first_break_after_swing['CHOCH'] == -1)
+                       
+                if current_swing['HighLow'] == -1 and is_bullish_break:
                     significance_score += 3
                     description_parts.append(f"Caused BOS/CHOCH at {break_level:.5f}")
-                elif current_swing['HighLow'] == 1 and (first_break_after_swing['BOS'] == -1 or first_break_after_swing['CHOCH'] == -1):
+                elif current_swing['HighLow'] == 1 and is_bearish_break:
                     significance_score += 3
                     description_parts.append(f"Caused BOS/CHOCH at {break_level:.5f}")
 

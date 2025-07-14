@@ -70,36 +70,30 @@ class smc:
         """
 
         fvg = np.where(
-            (
-                (ohlc["high"].shift(1) < ohlc["low"].shift(-1))
-                & (ohlc["close"] > ohlc["open"])
+            ohlc["high"].shift(1) < ohlc["low"].shift(-1),  # Bullish FVG condition
+            1,
+            np.where(
+                ohlc["low"].shift(1) > ohlc["high"].shift(-1), # Bearish FVG condition
+                -1,
+                np.nan
             )
-            | (
-                (ohlc["low"].shift(1) > ohlc["high"].shift(-1))
-                & (ohlc["close"] < ohlc["open"])
-            ),
-            np.where(ohlc["close"] > ohlc["open"], 1, -1),
-            np.nan,
         )
 
         top = np.where(
-            ~np.isnan(fvg),
+            fvg == 1, ohlc["low"].shift(-1),   # For Bullish FVG, top is the low of the 3rd candle
             np.where(
-                ohlc["close"] > ohlc["open"],
-                ohlc["low"].shift(-1),
-                ohlc["low"].shift(1),
-            ),
-            np.nan,
+                fvg == -1, ohlc["low"].shift(1),    # For Bearish FVG, top is the low of the 1st candle
+                np.nan
+            )
         )
 
+        # 3. Define the Bottom of the FVG zone
         bottom = np.where(
-            ~np.isnan(fvg),
+            fvg == 1, ohlc["high"].shift(1),  # For Bullish FVG, bottom is the high of the 1st candle
             np.where(
-                ohlc["close"] > ohlc["open"],
-                ohlc["high"].shift(1),
-                ohlc["high"].shift(-1),
-            ),
-            np.nan,
+                fvg == -1, ohlc["high"].shift(-1), # For Bearish FVG, bottom is the high of the 3rd candle
+                np.nan
+            )
         )
 
         # if there are multiple consecutive fvg then join them together using the highest top and lowest bottom and the last index
@@ -134,80 +128,81 @@ class smc:
         )
 
     @classmethod
-    def swing_highs_lows(cls, ohlc: DataFrame, swing_length: int = 50) -> Series:
+    def swing_highs_lows(cls, ohlc: DataFrame, swing_length: int = 2) -> Series:
         """
-        Swing Highs and Lows
-        A swing high is when the current high is the highest high out of the swing_length amount of candles before and after.
-        A swing low is when the current low is the lowest low out of the swing_length amount of candles before and after.
+        Swing Highs and Lows (Corrected Fractal Implementation)
+        Identifies swing points based on a classic fractal pattern.
+
+        A swing high is a candle with 'n' lower highs on both sides.
+        A swing low is a candle with 'n' higher lows on both sides.
 
         parameters:
-        swing_length: int - the amount of candles to look back and forward to determine the swing high or low
+        swing_length: int - The number of candles to check on each side of the pivot candle.
+                        Default is 2, creating a 5-bar fractal (2 past, 1 pivot, 2 future).
+                        A value of 1 would create a 3-bar fractal.
 
         returns:
         HighLow = 1 if swing high, -1 if swing low
-        Level = the level of the swing high or low
+        Level = the price level of the swing high or low
         """
+        highs = ohlc['high']
+        lows = ohlc['low']
+        
+        # Use numpy arrays for performance
+        highs_arr = highs.values
+        lows_arr = lows.values
+        n = len(ohlc)
+        
+        swing_highs_lows = np.full(n, np.nan)
 
-        swing_length *= 2
-        # set the highs to 1 if the current high is the highest high in the last 5 candles and next 5 candles
-        swing_highs_lows = np.where(
-            ohlc["high"]
-            == ohlc["high"].shift(-(swing_length // 2)).rolling(swing_length).max(),
-            1,
-            np.where(
-                ohlc["low"]
-                == ohlc["low"].shift(-(swing_length // 2)).rolling(swing_length).min(),
-                -1,
-                np.nan,
-            ),
-        )
+        for i in range(swing_length, n - swing_length):
+            # Swing High Condition
+            is_swing_high = True
+            for j in range(1, swing_length + 1):
+                if highs_arr[i] <= highs_arr[i-j] or highs_arr[i] <= highs_arr[i+j]:
+                    is_swing_high = False
+                    break
+            if is_swing_high:
+                swing_highs_lows[i] = 1
+                continue # Move to next candle
 
-        while True:
-            positions = np.where(~np.isnan(swing_highs_lows))[0]
+            # Swing Low Condition
+            is_swing_low = True
+            for j in range(1, swing_length + 1):
+                if lows_arr[i] >= lows_arr[i-j] or lows_arr[i] >= lows_arr[i+j]:
+                    is_swing_low = False
+                    break
+            if is_swing_low:
+                swing_highs_lows[i] = -1
 
-            if len(positions) < 2:
-                break
-
-            current = swing_highs_lows[positions[:-1]]
-            next = swing_highs_lows[positions[1:]]
-
-            highs = ohlc["high"].iloc[positions[:-1]].values
-            lows = ohlc["low"].iloc[positions[:-1]].values
-
-            next_highs = ohlc["high"].iloc[positions[1:]].values
-            next_lows = ohlc["low"].iloc[positions[1:]].values
-
-            index_to_remove = np.zeros(len(positions), dtype=bool)
-
-            consecutive_highs = (current == 1) & (next == 1)
-            index_to_remove[:-1] |= consecutive_highs & (highs < next_highs)
-            index_to_remove[1:] |= consecutive_highs & (highs >= next_highs)
-
-            consecutive_lows = (current == -1) & (next == -1)
-            index_to_remove[:-1] |= consecutive_lows & (lows > next_lows)
-            index_to_remove[1:] |= consecutive_lows & (lows <= next_lows)
-
-            if not index_to_remove.any():
-                break
-
-            swing_highs_lows[positions[index_to_remove]] = np.nan
-
+        # Post-processing to remove consecutive swings of the same type
         positions = np.where(~np.isnan(swing_highs_lows))[0]
+        if len(positions) > 1:
+            for i in range(len(positions) - 1):
+                pos1_idx, pos2_idx = positions[i], positions[i+1]
+                
+                # Skip if one has already been nullified
+                if np.isnan(swing_highs_lows[pos1_idx]) or np.isnan(swing_highs_lows[pos2_idx]):
+                    continue
 
-        if len(positions) > 0:
-            if swing_highs_lows[positions[0]] == 1:
-                swing_highs_lows[0] = -1
-            if swing_highs_lows[positions[0]] == -1:
-                swing_highs_lows[0] = 1
-            if swing_highs_lows[positions[-1]] == -1:
-                swing_highs_lows[-1] = 1
-            if swing_highs_lows[positions[-1]] == 1:
-                swing_highs_lows[-1] = -1
-
+                # If two consecutive swings are of the same type
+                if swing_highs_lows[pos1_idx] == swing_highs_lows[pos2_idx]:
+                    if swing_highs_lows[pos1_idx] == 1: # Both are swing highs
+                        # Keep the higher one
+                        if highs_arr[pos1_idx] >= highs_arr[pos2_idx]:
+                            swing_highs_lows[pos2_idx] = np.nan
+                        else:
+                            swing_highs_lows[pos1_idx] = np.nan
+                    else: # Both are swing lows
+                        # Keep the lower one
+                        if lows_arr[pos1_idx] <= lows_arr[pos2_idx]:
+                            swing_highs_lows[pos2_idx] = np.nan
+                        else:
+                            swing_highs_lows[pos1_idx] = np.nan
+        
         level = np.where(
-            ~np.isnan(swing_highs_lows),
-            np.where(swing_highs_lows == 1, ohlc["high"], ohlc["low"]),
-            np.nan,
+            swing_highs_lows == 1, highs_arr,
+            np.where(swing_highs_lows == -1, lows_arr, np.nan)
         )
 
         return pd.concat(

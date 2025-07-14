@@ -47,19 +47,41 @@ class ICTAnalyzer:
         self.entry_models = EntryModels(config, self.liquidity_detector)
         
     def analyze(self, ohlc_df: pd.DataFrame, symbol: str, daily_df: pd.DataFrame = None, h4_df: pd.DataFrame = None) -> Dict:
-        """Perform comprehensive ICT analysis following the narrative sequence."""
+        """Perform ICT analysis."""
         if ohlc_df is None or len(ohlc_df) < self.structure_lookback:
             logger.warning(f"{symbol}: Insufficient data for ICT analysis")
             return {}
         
+        # Foundational Elements
         swings = self._get_swings(ohlc_df)
         session_context = self._get_session_context(ohlc_df)
         if session_context.get('error'):
             logger.warning(f"{symbol}: Could not determine session context. Reason: {session_context['error']}")
             return {}
+
+        # Narrative Core: Bias and Structure
+        daily_bias, po3_analysis = self._analyze_session_po3(ohlc_df, session_context, symbol, daily_df, swings)
+        manipulation = po3_analysis.get('manipulation', {'detected': False})
+        structure = self._get_structure(ohlc_df, swings, daily_bias)
         
-        liquidity_levels = self.liquidity_detector.get_liquidity_levels(ohlc_df, session_context, daily_df)
+        # Liquidity Analysis (using reliable structure data)
+        liquidity_levels = self.liquidity_detector.get_liquidity_levels(
+            ohlc_df, session_context, daily_df, structure=structure
+        )
+
+        # Identify Potential Entry Points (PD Arrays) and Context
+        order_blocks = self._get_order_blocks(ohlc_df, swings, structure)
+        fair_value_gaps = self._get_fvgs(ohlc_df)
+        premium_discount_analysis = self._analyze_premium_discount(ohlc_df, swings)
+        ote_zones = self._calculate_ote_zones(ohlc_df, daily_bias, manipulation)
+        htf_levels = self._get_htf_levels(h4_df)
         
+        # Advanced Entry Model Identification
+        breaker_blocks = self.entry_models.identify_breaker_blocks(ohlc_df, swings, order_blocks, liquidity_levels)
+        mitigation_blocks = self.entry_models.identify_mitigation_blocks(ohlc_df, swings, order_blocks, daily_bias)
+        unicorn_setups = self.entry_models.identify_unicorn_setups(fair_value_gaps, breaker_blocks, premium_discount_analysis)
+        
+        # External and Macro Context
         ipda_analysis = {}
         if daily_df is not None and len(daily_df) >= 60:
             ipda_analysis = self.ipda_analyzer.analyze_ipda_data_ranges(daily_df, symbol, ohlc_df, session_context)
@@ -71,32 +93,29 @@ class ICTAnalyzer:
             macro_setup = self.macro_analyzer.analyze_macro_setup(ohlc_df, symbol)
             if macro_setup:
                 macro_analysis.update(macro_setup)
-        
-        daily_bias, po3_analysis = self._analyze_session_po3(ohlc_df, session_context, symbol, daily_df, swings, ipda_analysis)
-        manipulation = po3_analysis.get('manipulation', {'detected': False})
-        
-        structure = self._get_structure(ohlc_df, swings, daily_bias)
-        order_blocks = self._get_order_blocks(ohlc_df, swings)
-        fair_value_gaps = self._get_fvgs(ohlc_df)
-        premium_discount_analysis = self._analyze_premium_discount(ohlc_df, swings)
-        breaker_blocks = self.entry_models.identify_breaker_blocks(ohlc_df, swings, order_blocks, liquidity_levels)
-        mitigation_blocks = self.entry_models.identify_mitigation_blocks(ohlc_df, swings, order_blocks, daily_bias)
-        unicorn_setups = self.entry_models.identify_unicorn_setups(fair_value_gaps, breaker_blocks, premium_discount_analysis)
-        pd_analysis = self._analyze_premium_discount(ohlc_df, swings)
-        ote_zones = self._calculate_ote_zones(ohlc_df, daily_bias, manipulation)
-        htf_levels = self._get_htf_levels(h4_df)
-        
+                
+        # Assemble the Final Analysis Dictionary
         analysis_result = {
             'symbol': symbol, 'current_price': ohlc_df['close'].iloc[-1],
-            'timestamp': ohlc_df.index[-1], 'swings': swings, 'structure': structure,
-            'daily_bias': daily_bias, 'po3_analysis': po3_analysis, 'manipulation': manipulation,
-            'order_blocks': order_blocks, 'fair_value_gaps': fair_value_gaps,
-            'breaker_blocks': breaker_blocks, 'mitigation_blocks': mitigation_blocks,
-            'unicorn_setups': unicorn_setups, 'premium_discount': pd_analysis,
-            'liquidity_levels': liquidity_levels, 'ote_zones': ote_zones,
-            'session': session_context, 'htf_levels': htf_levels,
-            'ipda_analysis': ipda_analysis, 'macro_analysis': macro_analysis,
+            'timestamp': ohlc_df.index[-1], 
             'ohlc_df': ohlc_df, 'daily_df': daily_df,
+            'swings': swings, 
+            'structure': structure,
+            'daily_bias': daily_bias,
+            'po3_analysis': po3_analysis, 
+            'manipulation': manipulation,
+            'order_blocks': order_blocks, 
+            'fair_value_gaps': fair_value_gaps,
+            'breaker_blocks': breaker_blocks, 
+            'mitigation_blocks': mitigation_blocks,
+            'unicorn_setups': unicorn_setups, 
+            'premium_discount': premium_discount_analysis,
+            'liquidity_levels': liquidity_levels, 
+            'ote_zones': ote_zones,
+            'session': session_context, 
+            'htf_levels': htf_levels,
+            'ipda_analysis': ipda_analysis, 
+            'macro_analysis': macro_analysis,
         }
         
         return analysis_result
@@ -150,7 +169,7 @@ class ICTAnalyzer:
             return pd.DataFrame()
         
     def _get_session_context(self, ohlc_df: pd.DataFrame) -> dict:
-        """Get proper ICT session context with corrected Asian range timing."""
+        """Get ICT session context"""
         context = {
             'last_asian_range': None,
             'in_killzone': False,
@@ -240,7 +259,6 @@ class ICTAnalyzer:
     def _determine_daily_bias(self, ohlc_df: pd.DataFrame, symbol: str, daily_df: pd.DataFrame = None) -> Tuple[str, Dict]:
         """
         Determines bias using HTF Order Flow as the primary driver, and Draw on Liquidity as the contextual target.
-        --- CORRECTED IMPLEMENTATION ---
         """
         logger.debug(f"\n--- {symbol} ICT BIAS CHECKLIST ---")
         if daily_df is None or daily_df.empty:
@@ -262,7 +280,7 @@ class ICTAnalyzer:
 
         # 2. Secondary Factor: Determine the most likely Draw on Liquidity
         session_context = self._get_session_context(ohlc_df)
-        liquidity_levels = self.liquidity_detector.get_liquidity_levels(ohlc_df, session_context, daily_df)
+        liquidity_levels = self.liquidity_detector.get_preliminary_liquidity(ohlc_df, session_context, daily_df)
         
         best_buyside_target = self.liquidity_detector.get_target_for_bias('bullish', liquidity_levels, ohlc_df['close'].iloc[-1])
         best_sellside_target = self.liquidity_detector.get_target_for_bias('bearish', liquidity_levels, ohlc_df['close'].iloc[-1])
@@ -433,43 +451,74 @@ class ICTAnalyzer:
         return 'neutral'
    
     def _analyze_premium_discount(self, ohlc_df: pd.DataFrame, swings: pd.DataFrame = None) -> Dict:
-        """Use SMC retracements for premium/discount analysis."""
+        """
+        Calculates the current trading range's premium, discount, and equilibrium (50%) level.
+        """
         try:
             if swings is None or swings.empty:
                 swings = smc.swing_highs_lows(ohlc_df, swing_length=self.swing_lookback)
-                
-            retracements = smc.retracements(ohlc_df, swings)
             
-            if retracements.empty:
+            valid_swings = swings.dropna()
+            if len(valid_swings) < 2:
                 return {}
-                
-            current_retracement = retracements['CurrentRetracement%'].iloc[-1]
-            direction = retracements['Direction'].iloc[-1]
+
+            # 1. Determine the current dealing range from the last two opposing swings
+            last_swing = valid_swings.iloc[-1]
+            prev_swing = valid_swings.iloc[-2]
+
+            if last_swing['HighLow'] == prev_swing['HighLow']:
+                # If last two swings are the same, grab the one before that
+                if len(valid_swings) < 3: return {}
+                prev_swing = valid_swings.iloc[-3]
+
+            swing_high = max(last_swing['Level'], prev_swing['Level'])
+            swing_low = min(last_swing['Level'], prev_swing['Level'])
             
-            if pd.isna(current_retracement):
-                zone = 'unknown'
-            elif current_retracement < 38.2:
-                zone = 'deep_discount' if direction == 1 else 'deep_premium'
-            elif current_retracement < 50:
-                zone = 'discount' if direction == 1 else 'premium'  
-            elif current_retracement < 61.8:
-                zone = 'premium' if direction == 1 else 'discount'
-            else:
-                zone = 'deep_premium' if direction == 1 else 'deep_discount'
-                
+            # 2. Calculate Equilibrium
+            equilibrium = (swing_high + swing_low) / 2
+            
+            # 3. Determine if current price is in premium or discount
+            current_price = ohlc_df['close'].iloc[-1]
+            current_zone = 'unknown'
+            direction = 0 # 1 for bullish range, -1 for bearish range
+            
+            if last_swing['HighLow'] == 1 and prev_swing['HighLow'] == -1: # Bullish range (low to high)
+                direction = 1
+                if current_price > equilibrium:
+                    current_zone = 'premium'
+                else:
+                    current_zone = 'discount'
+            elif last_swing['HighLow'] == -1 and prev_swing['HighLow'] == 1: # Bearish range (high to low)
+                direction = -1
+                if current_price < equilibrium:
+                    current_zone = 'discount'
+                else:
+                    current_zone = 'premium'
+
+            # 4. Calculate retracement percentage
+            range_size = swing_high - swing_low
+            retracement_percent = 0
+            if range_size > 0:
+                if direction == 1: # Bullish range
+                    retracement_percent = ((swing_high - current_price) / range_size) * 100
+                elif direction == -1: # Bearish range
+                    retracement_percent = ((current_price - swing_low) / range_size) * 100
+
             return {
-                'current_zone': zone,
-                'retracement_percent': current_retracement,
+                'current_zone': current_zone,
+                'retracement_percent': round(retracement_percent, 2),
                 'direction': direction,
-                'deepest_retracement': retracements['DeepestRetracement%'].iloc[-1]
+                'equilibrium': equilibrium, # <-- The FIX: Now returning the equilibrium price
+                'swing_high': swing_high,
+                'swing_low': swing_low
             }
             
         except Exception as e:
-            logger.error(f"Error in premium/discount analysis: {e}")
+            logger.error(f"Error in premium/discount analysis: {e}", exc_info=True)
             return {}
         
     def _check_manipulation_patterns(self, ohlc_df, daily_bias, session_context, swings):
-        """Checks for manipulation patterns with corrected Judas Swing timing."""
+        """Checks for manipulation patterns."""
         if daily_bias == 'neutral' or swings.empty:
             return None
 
@@ -600,62 +649,90 @@ class ICTAnalyzer:
         
         return None
         
-    def _get_ict_structure(self, ohlc_df, swings: pd.DataFrame, daily_bias: str):
+    def _get_ict_structure(self, ohlc_df: pd.DataFrame, swings: pd.DataFrame, daily_bias: str) -> pd.DataFrame:
         """
-        Detects BOS and CHoCH based on swing breaks validated by displacement.
-        --- CORRECTED IMPLEMENTATION ---
+        Detects BOS and CHoCH based on swing breaks that are VALIDATED by displacement (an FVG).
         """
         n = len(ohlc_df)
-        bos, choch, level, broken_index = [np.full(n, np.nan) for _ in range(4)]
-        
+        bos = pd.Series(np.nan, index=ohlc_df.index, dtype=float)
+        choch = pd.Series(np.nan, index=ohlc_df.index, dtype=float)
+        level = pd.Series(np.nan, index=ohlc_df.index, dtype=float)
+        broken_index = pd.Series(np.nan, index=ohlc_df.index, dtype=float)
+
         relevant_swings = swings.dropna().tail(50)
         all_fvgs = self._get_fvgs(ohlc_df)
+        
+        # log fvgs for debugging
+        if not all_fvgs:
+            logger.debug("No FVGs found for structure validation.")
 
-        for swing_idx, swing in relevant_swings.iterrows():
+        if relevant_swings.empty:
+            return self._create_empty_structure(n)
+
+        for swing_timestamp, swing in relevant_swings.iterrows():
             swing_level, swing_type = swing['Level'], swing['HighLow']
+            
             try:
-                swing_position = ohlc_df.index.get_loc(swing_idx)
+                swing_pos = ohlc_df.index.get_loc(swing_timestamp)
             except KeyError:
                 continue
-            
-            post_swing_data = ohlc_df.iloc[swing_position + 1:]
+
+            # Define the search space for the break
+            post_swing_data = ohlc_df.iloc[swing_pos + 1:]
             if post_swing_data.empty:
                 continue
 
-            breaking_candles = post_swing_data[post_swing_data['close'] > swing_level] if swing_type == 1 else post_swing_data[post_swing_data['close'] < swing_level]
+            # 1. Find the candle that breaks the structure
+            if swing_type == 1: # Bullish swing (high) looking for a bearish break
+                breaking_candles = post_swing_data[post_swing_data['close'] < swing_level]
+            else: # Bearish swing (low) looking for a bullish break
+                breaking_candles = post_swing_data[post_swing_data['close'] > swing_level]
+
             if breaking_candles.empty:
                 continue
             
-            break_candle_idx = ohlc_df.index.get_loc(breaking_candles.index[0])
+            break_candle_timestamp = breaking_candles.index[0]
+            break_candle_pos = ohlc_df.index.get_loc(break_candle_timestamp)
 
+            # 2. VALIDATE with Displacement: Check for an FVG in the structural-breaking leg
+            # The "leg" is the series of candles from the swing to the break.
             fvg_confirmed = False
-            break_direction = 'bullish' if swing_type == 1 else 'bearish'
+            break_direction = 'bullish' if swing_type == -1 else 'bearish'
+
             for fvg in all_fvgs:
-                # --- START: BUG FIX ---
-                # Convert the FVG's timestamp to an integer position for valid comparison
+                # Ensure the FVG type matches the direction of the break
+                if fvg.get('type') != break_direction:
+                    continue
+                
                 try:
-                    fvg_position = ohlc_df.index.get_loc(fvg['index'])
+                    # Get the integer position of the FVG
+                    fvg_pos = ohlc_df.index.get_loc(fvg['index'])
                 except (KeyError, TypeError):
                     continue
-
-                if (fvg['type'] == break_direction and
-                        swing_position < fvg_position <= break_candle_idx):
-                    fvg_confirmed = True
-                    break
-                # --- END: BUG FIX ---
-            
-            if fvg_confirmed:
-                is_bos = (daily_bias == break_direction)
-                target_array = bos if is_bos else choch
-                signal_value = 1 if break_direction == 'bullish' else -1
                 
-                # Use .loc with the original swing_idx (timestamp) to be precise
-                bos.loc[swing_idx] = signal_value if is_bos else np.nan
-                choch.loc[swing_idx] = signal_value if not is_bos else np.nan
-                level.loc[swing_idx] = swing_level
-                broken_index.loc[swing_idx] = break_candle_idx
+                # The FVG must have formed *after* the swing but *at or before* the break
+                if swing_pos < fvg_pos <= break_candle_pos:
+                    fvg_confirmed = True
+                    logger.debug(f"Structure break at {break_candle_timestamp} validated by FVG at {fvg['index']}")
+                    break 
+            
+            # 3. If validated, classify as BOS or CHoCH
+            if fvg_confirmed:
+                # A break is a BOS if it's in the direction of HTF bias. Otherwise, it's a CHoCH.
+                is_bos = (daily_bias == 'bullish' and swing_type == -1) or \
+                         (daily_bias == 'bearish' and swing_type == 1)
+                
+                target_series = bos if is_bos else choch
+                signal_value = 1 if break_direction == 'bullish' else -1
 
-        return pd.DataFrame({'BOS': bos, 'CHOCH': choch, 'Level': level, 'BrokenIndex': broken_index}, index=ohlc_df.index)
+                # Use .loc with the original swing_timestamp to assign the value
+                target_series.loc[swing_timestamp] = signal_value
+                level.loc[swing_timestamp] = swing_level
+                broken_index.loc[swing_timestamp] = break_candle_pos
+
+        return pd.DataFrame({
+            'BOS': bos, 'CHOCH': choch, 'Level': level, 'BrokenIndex': broken_index.astype('Int64') # Use nullable integer
+        })
     
     def _create_empty_structure(self, length):
         """Create empty structure DataFrame."""
@@ -666,66 +743,158 @@ class ICTAnalyzer:
             'BrokenIndex': np.full(length, np.nan)
         })
                 
-    def _get_order_blocks(self, ohlc_df, swings):
+    def _get_order_blocks(self, ohlc_df: pd.DataFrame, swings: pd.DataFrame, structure: pd.DataFrame) -> List[Dict]:
         """
-        Get refined order blocks.
-        --- CORRECTED IMPLEMENTATION ---
+        Identifies high-probability ICT Order Blocks that have caused a valid Market Structure Shift.
         """
-        try:
-            obs = smc.ob(ohlc_df, swings, close_mitigation=False)
-            if obs.empty:
-                return []
-            
-            unmitigated = obs[
-                obs['OB'].notna() & 
-                obs['MitigatedIndex'].isna()
-            ]
-            
-            ob_list = []
-            for idx, ob in unmitigated.iterrows():
-                ob_list.append({
-                    'index': idx,
-                    'type': 'bullish' if ob['OB'] == 1 else 'bearish',
-                    'top': ob['Top'],
-                    'bottom': ob['Bottom'],
-                    'volume': ob.get('OBVolume', 0)
-                })
-            
-            return ob_list
-            
-        except Exception as e:
-            logger.error(f"Error getting order blocks: {e}")
+        if structure.empty or swings.empty:
             return []
+
+        # We only care about breaks that actually happened and have a "BrokenIndex"
+        valid_breaks = structure[structure['BrokenIndex'].notna()].dropna(subset=['BOS', 'CHOCH'], how='all')
+        
+        if valid_breaks.empty:
+            return []
+
+        order_blocks = []
+        # Keep track of OBs to avoid duplicates from the same move
+        processed_indices = set()
+
+        # Iterate backwards to find the most recent OBs first
+        for break_timestamp, break_info in valid_breaks.iloc[::-1].iterrows():
+            
+            # 1. Determine the context from the break
+            break_level = break_info['Level']
+            break_type_is_bos = pd.notna(break_info['BOS'])
+            break_direction = 'bullish' if (break_type_is_bos and break_info['BOS'] == 1) or \
+                                           (not break_type_is_bos and break_info['CHOCH'] == 1) else 'bearish'
+            
+            # Get the integer position of the swing that was broken
+            try:
+                swing_pos = ohlc_df.index.get_loc(break_timestamp)
+            except KeyError:
+                continue
+
+            # 2. Find the candle that initiated the move that caused the break
+            # We must find the opposing swing high/low that occurred *before* the structural break
+            if break_direction == 'bullish':
+                # For a bullish break, we need the swing low that started the up-move
+                candidate_swings = swings[(swings.index < break_timestamp) & (swings['HighLow'] == -1)]
+                if candidate_swings.empty: continue
+                origin_swing_timestamp = candidate_swings.index[-1]
+            else: # Bearish break
+                # For a bearish break, we need the swing high that started the down-move
+                candidate_swings = swings[(swings.index < break_timestamp) & (swings['HighLow'] == 1)]
+                if candidate_swings.empty: continue
+                origin_swing_timestamp = candidate_swings.index[-1]
+            
+            try:
+                origin_swing_pos = ohlc_df.index.get_loc(origin_swing_timestamp)
+            except KeyError:
+                continue
+
+            # 3. Identify the Order Block Candle itself
+            # The OB is the last opposing candle before the displacement move began.
+            # We search between the origin swing and the swing that was broken.
+            search_df = ohlc_df.iloc[origin_swing_pos:swing_pos]
+            
+            if break_direction == 'bullish': # Bullish OB is the last DOWN candle
+                ob_candle_series = search_df[search_df['close'] < search_df['open']]
+                if ob_candle_series.empty: continue
+                ob_candle = ob_candle_series.iloc[-1]
+            else: # Bearish OB is the last UP candle
+                ob_candle_series = search_df[search_df['close'] > search_df['open']]
+                if ob_candle_series.empty: continue
+                ob_candle = ob_candle_series.iloc[-1]
+
+            ob_index = ob_candle.name
+            if ob_index in processed_indices:
+                continue
+
+            # 4. Check if the OB has been mitigated
+            # Mitigation: Price trades back through the OB after the structural break
+            post_break_data = ohlc_df.iloc[int(break_info['BrokenIndex']) + 1:]
+            mitigated = False
+            if not post_break_data.empty:
+                if break_direction == 'bullish' and post_break_data['low'].min() < ob_candle['low']:
+                    mitigated = True
+                elif break_direction == 'bearish' and post_break_data['high'].max() > ob_candle['high']:
+                    mitigated = True
+            
+            if not mitigated:
+                order_blocks.append({
+                    'index': ob_index,
+                    'type': break_direction,
+                    'top': ob_candle['high'],
+                    'bottom': ob_candle['low'],
+                    'volume': ob_candle.get('volume', 0),
+                    'source_break_level': break_level
+                })
+                processed_indices.add(ob_index)
+
+        return sorted(order_blocks, key=lambda x: x['index'], reverse=True)
     
-    def _get_fvgs(self, ohlc_df):
+    def _get_fvgs(self, ohlc_df: pd.DataFrame) -> List[Dict]:
         """
-        Get fair value gaps.
-        --- CORRECTED IMPLEMENTATION ---
+        Identifies unmitigated Fair Value Gaps (FVGs) from OHLC data.
         """
-        try:
-            fvgs = smc.fvg(ohlc_df, join_consecutive=True)
-            if fvgs.empty:
-                return []
+        fvg_list = []
+        high = ohlc_df['high']
+        low = ohlc_df['low']
+
+        # Vectorized conditions for identifying potential FVGs
+        # Bullish FVG: The high of the previous candle is lower than the low of the next candle.
+        bullish_fvg_mask = high.shift(1) < low.shift(-1)
+        
+        # Bearish FVG: The low of the previous candle is higher than the high of the next candle.
+        bearish_fvg_mask = low.shift(1) > high.shift(-1)
+
+        # Get the indices where potential FVGs occur
+        potential_fvg_indices = ohlc_df.index[bullish_fvg_mask | bearish_fvg_mask]
+
+        for idx in potential_fvg_indices:
+            try:
+                i = ohlc_df.index.get_loc(idx)
+                # Ensure we have room for previous and next candles
+                if i == 0 or i == len(ohlc_df) - 1:
+                    continue
+            except KeyError:
+                continue
+
+            fvg_type = 'bullish' if bullish_fvg_mask.loc[idx] else 'bearish'
             
-            unmitigated = fvgs[
-                fvgs['FVG'].notna() & 
-                fvgs['MitigatedIndex'].isna()
-            ]
+            if fvg_type == 'bullish':
+                fvg_top = low.iloc[i+1]
+                fvg_bottom = high.iloc[i-1]
+            else: # bearish
+                fvg_top = low.iloc[i-1]
+                fvg_bottom = high.iloc[i+1]
+
+            # Check for mitigation
+            mitigated = False
+            # Look for mitigation in candles after the FVG formed (i+2 onwards)
+            for j in range(i + 2, len(ohlc_df)):
+                if fvg_type == 'bullish' and low.iloc[j] <= fvg_top:
+                    mitigated = True
+                    break
+                elif fvg_type == 'bearish' and high.iloc[j] >= fvg_bottom:
+                    mitigated = True
+                    break
             
-            fvg_list = []
-            for idx, fvg in unmitigated.iterrows():
+            if not mitigated:
                 fvg_list.append({
                     'index': idx,
-                    'type': 'bullish' if fvg['FVG'] == 1 else 'bearish',
-                    'top': fvg['Top'],
-                    'bottom': fvg['Bottom']
+                    'type': fvg_type,
+                    'top': fvg_top,
+                    'bottom': fvg_bottom
                 })
+        
+        if fvg_list:
+            logger.debug(f"Found {len(fvg_list)} unmitigated FVGs using the new detector.")
+        else:
+            logger.debug("No unmitigated FVGs were found in the provided data.")
             
-            return fvg_list
-            
-        except Exception as e:
-            logger.error(f"Error getting FVGs: {e}")
-            return []
+        return fvg_list
         
     def _calculate_ote_zones(self, ohlc_df, daily_bias, manipulation):
         """Calculate OTE zones following ICT's methodology."""
@@ -873,7 +1042,6 @@ class ICTAnalyzer:
     def _confirm_displacement_and_mss(self, ohlc_df: pd.DataFrame, reaction_index: int, bias: str, swings: pd.DataFrame) -> bool:
         """
         Confirms displacement and MSS by leveraging existing FVG detection.
-        --- CORRECTED IMPLEMENTATION ---
         """
         if not self.config.REQUIRE_ENTRY_CONFIRMATION:
             return True
@@ -1194,7 +1362,7 @@ class ICTSignalGenerator:
             
             if self.analyzer._confirm_displacement_and_mss(ohlc_df, sweep_candle_pos, 'bullish', swings):
                 logger.info("LCKZ Reversal: CONFIRMED. Sweep of NY Low followed by Bullish Displacement & MSS.")
-                fvg_entry = self._find_retracement_fvg(analysis['fair_value_gaps'], 'bullish', analysis['current_price'], analysis['manipulation'], ohlc_df, swings)
+                fvg_entry = self._find_retracement_fvg(analysis)
                 if fvg_entry:
                     return self._setup_fvg_entry('bullish', analysis['current_price'], fvg_entry, {'level': lckz_data['low'].min()}, ohlc_df, analysis)
 
@@ -1204,11 +1372,20 @@ class ICTSignalGenerator:
 
             if self.analyzer._confirm_displacement_and_mss(ohlc_df, sweep_candle_pos, 'bearish', swings):
                 logger.info("LCKZ Reversal: CONFIRMED. Sweep of NY High followed by Bearish Displacement & MSS.")
-                fvg_entry = self._find_retracement_fvg(analysis['fair_value_gaps'], 'bearish', analysis['current_price'], analysis['manipulation'], ohlc_df, swings)
+                fvg_entry = self._find_retracement_fvg(analysis)
                 if fvg_entry:
                     return self._setup_fvg_entry('bearish', analysis['current_price'], fvg_entry, {'level': lckz_data['high'].max()}, ohlc_df, analysis)
 
         return None, None, None
+    
+    def _check_zone_overlap(self, zone1: Dict, zone2: Dict) -> bool:
+        """Helper function to check if two price zones (like an FVG and OB) overlap."""
+        try:
+            # True if the top of one zone is below the bottom of the other
+            no_overlap = zone1['top'] < zone2['bottom'] or zone2['top'] < zone1['bottom']
+            return not no_overlap
+        except (KeyError, TypeError):
+            return False
     
     def _find_poi_reaction_index(self, ohlc_df: pd.DataFrame, poi_range: Dict[str, float], lookback: int = 10) -> Optional[int]:
         """Scans backwards to find the integer index of the candle that first touched a POI."""
@@ -1229,58 +1406,73 @@ class ICTSignalGenerator:
     def _find_continuation_entry(self, analysis, daily_bias, current_price, ohlc_df, spread, manipulation):
         """Finds continuation entries with a priority: Unicorn > Breaker > FVG > OTE."""
         swings = analysis.get('swings', pd.DataFrame())
+        data_len = len(ohlc_df)
 
+        # --- UNICORN ENTRY ---
         unicorn_setups = analysis.get('unicorn_setups', [])
         for unicorn in unicorn_setups:
             if unicorn['breaker_block']['original_ob_type'] != daily_bias:
                 poi_range = {'top': unicorn['top'], 'bottom': unicorn['bottom']}
                 reaction_index = self._find_poi_reaction_index(ohlc_df, poi_range)
-                if reaction_index and self.analyzer._confirm_displacement_and_mss(ohlc_df, reaction_index, daily_bias, swings):
-                    logger.info(f"{analysis['symbol']}: UNICORN entry confirmed with Displacement & MSS.")
-                    return self._setup_unicorn_entry(daily_bias, current_price, unicorn, ohlc_df, analysis)
+                if reaction_index is not None and reaction_index < data_len - 1:
+                    if self.analyzer._confirm_displacement_and_mss(ohlc_df, reaction_index, daily_bias, swings):
+                        logger.info(f"{analysis['symbol']}: UNICORN entry confirmed with Displacement & MSS.")
+                        return self._setup_unicorn_entry(daily_bias, current_price, unicorn, ohlc_df, analysis)
 
+        # --- BREAKER BLOCK ENTRY ---
         breaker_blocks = analysis.get('breaker_blocks', [])
         for breaker in breaker_blocks:
             if (daily_bias == 'bullish' and breaker['original_ob_type'] == 'bearish') or \
-               (daily_bias == 'bearish' and breaker['original_ob_type'] == 'bullish'):
+                (daily_bias == 'bearish' and breaker['original_ob_type'] == 'bullish'):
                 poi_range = {'top': breaker['top'], 'bottom': breaker['bottom']}
                 reaction_index = self._find_poi_reaction_index(ohlc_df, poi_range)
-                if reaction_index and self.analyzer._confirm_displacement_and_mss(ohlc_df, reaction_index, daily_bias, swings):
-                    logger.info(f"{analysis['symbol']}: BREAKER BLOCK entry confirmed with Displacement & MSS.")
-                    return self._setup_breaker_entry(daily_bias, current_price, breaker, ohlc_df, analysis)
+                if reaction_index is not None and reaction_index < data_len - 1:
+                    if self.analyzer._confirm_displacement_and_mss(ohlc_df, reaction_index, daily_bias, swings):
+                        logger.info(f"{analysis['symbol']}: BREAKER BLOCK entry confirmed with Displacement & MSS.")
+                        return self._setup_breaker_entry(daily_bias, current_price, breaker, ohlc_df, analysis)
 
-        fvg_entry = self._find_retracement_fvg(analysis['fair_value_gaps'], daily_bias, current_price, manipulation, ohlc_df, swings)
+        # --- FVG ENTRY ---
+        fvg_entry = self._find_retracement_fvg(analysis)
         if fvg_entry:
             reaction_index = self._find_poi_reaction_index(ohlc_df, {'top': fvg_entry['top'], 'bottom': fvg_entry['bottom']})
-            if reaction_index is not None and self.analyzer._confirm_displacement_and_mss(ohlc_df, reaction_index, daily_bias, swings):
-                logger.info(f"{analysis['symbol']}: FVG continuation entry confirmed with Displacement & MSS.")
-                return self._setup_fvg_entry(daily_bias, current_price, fvg_entry, manipulation, ohlc_df, analysis)
+            if reaction_index is not None and reaction_index < data_len - 1:
+                if self.analyzer._confirm_displacement_and_mss(ohlc_df, reaction_index, daily_bias, swings):
+                    logger.info(f"{analysis['symbol']}: FVG continuation entry confirmed with Displacement & MSS.")
+                    return self._setup_fvg_entry(daily_bias, current_price, fvg_entry, manipulation, ohlc_df, analysis)
 
+        # --- OTE ENTRY ---
         ote_zones = analysis['ote_zones']
         ote_zone = next((z for z in ote_zones if z['direction'].lower() == daily_bias), None)
         if ote_zone and self._is_price_in_ote(current_price, [ote_zone], daily_bias):
             reaction_index = self._find_poi_reaction_index(ohlc_df, {'top': ote_zone['high'], 'bottom': ote_zone['low']})
-            if reaction_index is not None and self.analyzer._confirm_displacement_and_mss(ohlc_df, reaction_index, daily_bias, swings):
-                logger.info(f"{analysis['symbol']}: OTE continuation entry confirmed with Displacement & MSS.")
-                return self._setup_ote_entry(daily_bias, current_price, ote_zones, manipulation, ohlc_df, spread, analysis)
+            if reaction_index is not None and reaction_index < data_len - 1:
+                if self.analyzer._confirm_displacement_and_mss(ohlc_df, reaction_index, daily_bias, swings):
+                    logger.info(f"{analysis['symbol']}: OTE continuation entry confirmed with Displacement & MSS.")
+                    return self._setup_ote_entry(daily_bias, current_price, ote_zones, manipulation, ohlc_df, spread, analysis)
 
         return None, None, None
         
-    def _find_retracement_fvg(self, fair_value_gaps, daily_bias, current_price, manipulation, ohlc_df, swings):
-        """Find FVGs suitable for continuation entries following ICT methodology."""
-        if not fair_value_gaps or ohlc_df.empty:
+    def _find_retracement_fvg(self, analysis: Dict) -> Optional[Dict]:
+        """
+        Finds the highest-probability FVG for a continuation entry by calculating a confluence score.
+        --- ADVANCED IMPLEMENTATION ---
+        """
+        # Extract all necessary data from the main analysis dictionary
+        fair_value_gaps = analysis.get('fair_value_gaps', [])
+        daily_bias = analysis.get('daily_bias')
+        current_price = analysis.get('current_price')
+        manipulation = analysis.get('manipulation', {})
+        ohlc_df = analysis.get('ohlc_df')
+        order_blocks = analysis.get('order_blocks', [])
+        structure = analysis.get('structure', pd.DataFrame())
+        premium_discount = analysis.get('premium_discount', {})
+
+        if not fair_value_gaps or ohlc_df.empty or not premium_discount:
             return None
         
         atr = ATR(ohlc_df['high'], ohlc_df['low'], ohlc_df['close'], timeperiod=14).iloc[-1]
         manipulation_index = manipulation.get('index', -1)
-        
-        premium_discount = self.analyzer._analyze_premium_discount(ohlc_df, swings=swings)
         equilibrium = premium_discount.get('equilibrium')
-        if equilibrium is None:
-             logger.warning("Could not determine equilibrium for FVG selection, premium/discount checks will be skipped.")
-             last_swing_high = swings[swings['HighLow'] == 1]['Level'].iloc[-1] if not swings[swings['HighLow'] == 1].empty else current_price
-             last_swing_low = swings[swings['HighLow'] == -1]['Level'].iloc[-1] if not swings[swings['HighLow'] == -1].empty else current_price
-             equilibrium = (last_swing_high + last_swing_low) / 2
         
         logger.debug(f"FVG Search: Bias={daily_bias}, Current Price={current_price:.5f}, "
                     f"Equilibrium={equilibrium:.5f}, Current Zone={premium_discount.get('current_zone', 'unknown')}")
@@ -1288,51 +1480,82 @@ class ICTSignalGenerator:
         valid_fvgs = []
         
         for fvg in fair_value_gaps:
+            # --- Basic Filtering ---
             if (daily_bias == 'bullish' and fvg.get('type') != 'bullish') or \
                (daily_bias == 'bearish' and fvg.get('type') != 'bearish'):
                 continue
             
-            fvg_top = fvg['top']
-            fvg_bottom = fvg['bottom']
-            fvg_midpoint = (fvg_top + fvg_bottom) / 2
-            fvg_size = abs(fvg_top - fvg_bottom)
-
-            if daily_bias == 'bullish' and fvg_midpoint > equilibrium:
-                logger.debug(f"Skipping FVG at {fvg_midpoint:.5f} - in premium zone (above {equilibrium:.5f})")
+            fvg_top, fvg_bottom = fvg['top'], fvg['bottom']
+            
+            # Filter out FVGs that are in the wrong P/D array
+            if daily_bias == 'bullish' and fvg_bottom > equilibrium:
                 continue
-            elif daily_bias == 'bearish' and fvg_midpoint < equilibrium:
-                logger.debug(f"Skipping FVG at {fvg_midpoint:.5f} - in discount zone (below {equilibrium:.5f})")
+            elif daily_bias == 'bearish' and fvg_top < equilibrium:
                 continue
             
+            # Filter out FVGs that price has already traded completely through
             if (daily_bias == 'bullish' and current_price < fvg_bottom) or \
                (daily_bias == 'bearish' and current_price > fvg_top):
-                 logger.debug(f"Skipping FVG - price {current_price:.5f} already traded through FVG ({fvg_bottom:.5f} - {fvg_top:.5f})")
                  continue
             
-            if fvg_size > atr * 2:
-                logger.debug(f"Skipping large FVG - size {fvg_size:.5f} > 2x ATR {atr*2:.5f}")
-                continue
-            
+            # --- Confluence Scoring ---
             priority_score = 0
+            score_reasons = []
+
+            # 1. Post-Manipulation Factor (+2)
+            if manipulation_index != -1:
+                try:
+                    fvg_position = ohlc_df.index.get_loc(fvg['index'])
+                    if fvg_position > manipulation_index:
+                        priority_score += 2
+                        score_reasons.append("Post-Manipulation")
+                except (KeyError, TypeError):
+                    pass
+
+            # 2. Optimal Trade Entry (OTE) Factor (+2)
+            pd_range = premium_discount.get('swing_high', 0) - premium_discount.get('swing_low', 0)
+            if pd_range > 0:
+                ote_low = premium_discount['swing_low'] + (pd_range * 0.618)
+                ote_high = premium_discount['swing_high'] - (pd_range * 0.618)
+                if (daily_bias == 'bullish' and fvg_bottom >= ote_low) or \
+                   (daily_bias == 'bearish' and fvg_top <= ote_high):
+                    priority_score += 2
+                    score_reasons.append("In OTE Zone")
+
+            # 3. Confluence with Order Block Factor (+4)
+            for ob in order_blocks:
+                if ob.get('type') == daily_bias and self._check_zone_overlap(fvg, ob):
+                    priority_score += 4
+                    score_reasons.append("OB Confluence")
+                    break # Only score once for OB confluence
+
+            # 4. Caused Break of Structure Factor (+3)
+            if not structure.empty:
+                valid_breaks = structure[structure['BrokenIndex'].notna()].dropna(subset=['BOS'], how='all')
+                for _, brk in valid_breaks.iterrows():
+                    if (daily_bias == 'bullish' and brk['BOS'] == 1) or (daily_bias == 'bearish' and brk['BOS'] == -1):
+                        try:
+                             fvg_pos = ohlc_df.index.get_loc(fvg['index'])
+                             break_pos = int(brk['BrokenIndex'])
+                             if fvg_pos <= break_pos: # Simplified check: FVG must exist at or before the break
+                                 priority_score += 3
+                                 score_reasons.append("Caused BOS")
+                                 break
+                        except (KeyError, TypeError):
+                             continue
             
-            try:
-                fvg_position = ohlc_df.index.get_loc(fvg['index'])
-                if manipulation_index != -1 and fvg_position > manipulation_index:
-                    priority_score += 3
-                    logger.debug(f"FVG at index {fvg_position} is post-manipulation (+3 priority)")
-            except (KeyError, TypeError):
-                pass
-            
-            valid_fvgs.append({
-                'fvg': fvg,
-                'priority_score': priority_score,
-            })
+            fvg['priority_score'] = priority_score
+            fvg['score_reasons'] = " & ".join(score_reasons) if score_reasons else "N/A"
+            valid_fvgs.append(fvg)
         
         if valid_fvgs:
-            valid_fvgs.sort(key=lambda x: x['priority_score'], reverse=True)
+            # Sort by score (descending), then by proximity to current price (ascending)
+            valid_fvgs.sort(key=lambda x: (-x['priority_score'], abs(current_price - x['top'])))
+            
             best_fvg = valid_fvgs[0]
-            logger.info(f"Selected FVG: {best_fvg['fvg']['type']}, score={best_fvg['priority_score']:.2f}")
-            result = best_fvg['fvg'].copy()
+            logger.info(f"Selected FVG: {best_fvg['type']}, Score: {best_fvg['priority_score']:.2f}, Reasons: {best_fvg['score_reasons']}")
+            
+            result = best_fvg.copy()
             result['consequent_encroachment'] = (result['top'] + result['bottom']) / 2
             return result
         
@@ -1378,6 +1601,36 @@ class ICTSignalGenerator:
             current_price=analysis['current_price'],
             entry_model=''
         )
+        
+    def _is_safe_entry_location(self, entry_price: float, sl_price: float, tp_price: float, daily_bias: str) -> bool:
+        """
+        Validates the proposed trade's Risk:Reward ratio against the configured minimum.
+        """
+        # Ensure prices are valid to prevent division by zero or nonsensical calculations
+        if tp_price is None or sl_price is None or entry_price is None:
+            logger.warning("Cannot validate trade safety: Missing entry, SL, or TP price.")
+            return False
+
+        risk = abs(entry_price - sl_price)
+        reward = abs(tp_price - entry_price)
+
+        if risk == 0:
+            logger.warning("Risk is zero, trade is invalid.")
+            return False
+
+        min_rr = getattr(self.config, 'MIN_TARGET_RR', 1.0)
+
+        # The core validation: Does the actual reward meet the minimum required R:R?
+        if reward < (risk * min_rr):
+            actual_rr = round(reward / risk, 2) if risk > 0 else float('inf')
+            logger.warning(
+                f"Trade Rejected: The proposed trade does not meet the minimum R:R of {min_rr}:1. "
+                f"Actual R:R is {actual_rr}:1 (Risk: {risk:.5f}, Reward: {reward:.5f})."
+            )
+            return False
+        
+        logger.info(f"Trade geometry validated. R:R is sufficient.")
+        return True
         
     def _is_price_in_ote(self, current_price, ote_zones, daily_bias):
         """Check if price is within OTE zone."""

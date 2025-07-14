@@ -21,7 +21,7 @@ TP_RR_RATIO = 1.5
 MIN_TARGET_RR = 1.0
 
 # Kill Zone Times (New York Time)
-ICT_ASIAN_RANGE = {'start': time(20, 0), 'end': time(0, 0)}
+ICT_ASIAN_RANGE = {'start': time(20, 0), 'end': time(2, 0)}
 ICT_LONDON_KILLZONE = {'start': time(2, 0), 'end': time(5, 0)}
 ICT_NEW_YORK_KILLZONE = {'start': time(7, 0), 'end': time(10, 0)} 
 ICT_LONDON_CLOSE_KILLZONE = {'start': time(10, 0), 'end': time(12, 0)}

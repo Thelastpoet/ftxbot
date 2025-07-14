@@ -67,13 +67,12 @@ class EntryModels:
                             if self._confirm_mss_after_ob_failure(ohlc_df, swings, failure_info):
                                 breaker = self._create_breaker_block(order_block, failure_info)
                                 breaker_blocks.append(breaker)
-                                logger.debug(f"Breaker block: {order_block['type']} OB failed at {failure_info['failure_price']:.5f}")
+                                logger.debug(f"Breaker block: {order_block['type']} OB failed at {failure_info['price']:.5f}")
                 
                 except Exception as e:
                     logger.error(f"Error analyzing order block {order_block.get('index')}: {e}")
                     continue
             
-            logger.info(f"Identified {len(breaker_blocks)} authentic breaker blocks")
             return breaker_blocks
             
         except Exception as e:
@@ -264,7 +263,6 @@ class EntryModels:
                     if mitigation_block:
                         mitigation_blocks.append(mitigation_block)
             
-            logger.info(f"Identified {len(mitigation_blocks)} mitigation blocks")
             return mitigation_blocks
             
         except Exception as e:

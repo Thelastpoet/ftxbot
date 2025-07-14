@@ -2,7 +2,10 @@ import pytz
 from datetime import time
 
 # Trading Parameters
-SYMBOLS = ['AUDUSD', 'EURUSD', 'GBPUSD', 'USDCAD', 'USDCHF', 'USDJPY', 'NZDUSD', 'XAUUSD']
+SYMBOLS = ['AUDUSD', 'CHFJPY', 'EURUSD', 'GBPUSD', 'USDCAD', 'USDCHF', 'USDJPY',
+ 'EURCAD', 'GBPJPY', 'AUDCHF', 'AUDCAD', 'AUDJPY', 'EURAUD', 'EURJPY',
+'EURCHF', 'EURNZD', 'AUDNZD', 'GBPCHF', 'CADCHF', 'GBPAUD', 'GBPCAD',
+'GBPNZD', 'NZDUSD']
 TIMEFRAME_STR = "M15"
 
 # Risk Management
@@ -11,7 +14,7 @@ MAX_TRADES_PER_DAY = 100
 MAX_CORRELATION_EXPOSURE = 2
 
 # Structure Parameters
-SWING_LOOKBACK = 20
+SWING_LOOKBACK = 2
 STRUCTURE_LOOKBACK = 50
 DATA_LOOKBACK = 1000
 
@@ -21,7 +24,7 @@ TP_RR_RATIO = 1.5
 MIN_TARGET_RR = 1.0
 
 # Kill Zone Times (New York Time)
-ICT_ASIAN_RANGE = {'start': time(20, 0), 'end': time(0, 0)}
+ICT_ASIAN_RANGE = {'start': time(20, 0), 'end': time(2, 0)}
 ICT_LONDON_KILLZONE = {'start': time(2, 0), 'end': time(5, 0)}
 ICT_NEW_YORK_KILLZONE = {'start': time(7, 0), 'end': time(10, 0)} 
 ICT_LONDON_CLOSE_KILLZONE = {'start': time(10, 0), 'end': time(12, 0)}
@@ -51,13 +54,28 @@ ICT_SESSIONS = {
 
 # Maximum Acceptable Spread in Points
 MAX_SPREAD_POINTS = {
-    'AUDUSD': 20,
     'EURUSD': 15,
     'GBPUSD': 20,
-    'USDCAD': 25,
-    'USDCHF': 20,
     'USDJPY': 15,
+    'USDCHF': 20,
+    'AUDUSD': 20,
+    'USDCAD': 25,
     'NZDUSD': 25,
-    'XAUUSD': 35, 
+    'EURJPY': 20,
+    'GBPJPY': 25,
+    'AUDJPY': 20,
+    'CHFJPY': 25,
+    'EURCAD': 30,
+    'EURCHF': 25,
+    'EURAUD': 30,
+    'EURNZD': 35,
+    'GBPAUD': 35,
+    'GBPCAD': 40,
+    'GBPCHF': 30,
+    'GBPNZD': 45,
+    'AUDCAD': 25,
+    'AUDCHF': 25,
+    'AUDNZD': 30,
+    'CADCHF': 25,
     'DEFAULT': 50
 }
