@@ -132,10 +132,10 @@ class LiquidityDetector:
 
         return liquidity_levels
 
-    def _get_swing_liquidity(self, ohlc_df: pd.DataFrame, swings: pd.DataFrame, structure: pd.DataFrame) -> Dict[str, List[Dict]]:
-        """
-        Gets liquidity from SIGNIFICANT swing points
-        """
+    def _get_swing_liquidity(self, ohlc_df, swings, structure):
+        """Identifies liquidity pools around swing highs and lows."""
+        if swings.empty or structure is None or structure.empty:
+            return {'buy_side': [], 'sell_side': []}
         liquidity = {'buy_side': [], 'sell_side': []}
         valid_swings = swings.dropna()
         if len(valid_swings) < 2:

@@ -651,88 +651,17 @@ class ICTAnalyzer:
         
     def _get_ict_structure(self, ohlc_df: pd.DataFrame, swings: pd.DataFrame, daily_bias: str) -> pd.DataFrame:
         """
-        Detects BOS and CHoCH based on swing breaks that are VALIDATED by displacement (an FVG).
+        Detects BOS and CHoCH based on swing breaks.
         """
-        n = len(ohlc_df)
-        bos = pd.Series(np.nan, index=ohlc_df.index, dtype=float)
-        choch = pd.Series(np.nan, index=ohlc_df.index, dtype=float)
-        level = pd.Series(np.nan, index=ohlc_df.index, dtype=float)
-        broken_index = pd.Series(np.nan, index=ohlc_df.index, dtype=float)
+        if swings.empty:
+            return self._create_empty_structure(len(ohlc_df))
 
-        relevant_swings = swings.dropna().tail(50)
-        all_fvgs = self._get_fvgs(ohlc_df)
+        structure = smc.bos_choch(ohlc_df, swings, close_break=True)
         
-        # log fvgs for debugging
-        if not all_fvgs:
-            logger.debug("No FVGs found for structure validation.")
-
-        if relevant_swings.empty:
-            return self._create_empty_structure(n)
-
-        for swing_timestamp, swing in relevant_swings.iterrows():
-            swing_level, swing_type = swing['Level'], swing['HighLow']
-            
-            try:
-                swing_pos = ohlc_df.index.get_loc(swing_timestamp)
-            except KeyError:
-                continue
-
-            # Define the search space for the break
-            post_swing_data = ohlc_df.iloc[swing_pos + 1:]
-            if post_swing_data.empty:
-                continue
-
-            # 1. Find the candle that breaks the structure
-            if swing_type == 1: # Bullish swing (high) looking for a bearish break
-                breaking_candles = post_swing_data[post_swing_data['close'] < swing_level]
-            else: # Bearish swing (low) looking for a bullish break
-                breaking_candles = post_swing_data[post_swing_data['close'] > swing_level]
-
-            if breaking_candles.empty:
-                continue
-            
-            break_candle_timestamp = breaking_candles.index[0]
-            break_candle_pos = ohlc_df.index.get_loc(break_candle_timestamp)
-
-            # 2. VALIDATE with Displacement: Check for an FVG in the structural-breaking leg
-            # The "leg" is the series of candles from the swing to the break.
-            fvg_confirmed = False
-            break_direction = 'bullish' if swing_type == -1 else 'bearish'
-
-            for fvg in all_fvgs:
-                # Ensure the FVG type matches the direction of the break
-                if fvg.get('type') != break_direction:
-                    continue
-                
-                try:
-                    # Get the integer position of the FVG
-                    fvg_pos = ohlc_df.index.get_loc(fvg['index'])
-                except (KeyError, TypeError):
-                    continue
-                
-                # The FVG must have formed *after* the swing but *at or before* the break
-                if swing_pos < fvg_pos <= break_candle_pos:
-                    fvg_confirmed = True
-                    logger.debug(f"Structure break at {break_candle_timestamp} validated by FVG at {fvg['index']}")
-                    break 
-            
-            # 3. If validated, classify as BOS or CHoCH
-            if fvg_confirmed:
-                # A break is a BOS if it's in the direction of HTF bias. Otherwise, it's a CHoCH.
-                is_bos = (daily_bias == 'bullish' and swing_type == -1) or \
-                         (daily_bias == 'bearish' and swing_type == 1)
-                
-                target_series = bos if is_bos else choch
-                signal_value = 1 if break_direction == 'bullish' else -1
-
-                # Use .loc with the original swing_timestamp to assign the value
-                target_series.loc[swing_timestamp] = signal_value
-                level.loc[swing_timestamp] = swing_level
-                broken_index.loc[swing_timestamp] = break_candle_pos
-
-        return pd.DataFrame({
-            'BOS': bos, 'CHOCH': choch, 'Level': level, 'BrokenIndex': broken_index.astype('Int64') # Use nullable integer
-        })
+        # Ensure the structure dataframe has the same index as the ohlc_df
+        structure.index = ohlc_df.index
+        
+        return structure
     
     def _create_empty_structure(self, length):
         """Create empty structure DataFrame."""
