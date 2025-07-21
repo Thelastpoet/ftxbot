@@ -100,23 +100,40 @@ class EntryModels:
             post_ob_data = ohlc_df.iloc[ob_position + 1:]
             
             for i, (timestamp, candle) in enumerate(post_ob_data.iterrows()):
-                # Check for authentic failure conditions
-                if ob_type == 'bullish' and candle['close'] < ob_bottom:
-                    return {
-                        'timestamp': timestamp,
-                        'price': candle['close'],
-                        'direction': 'bearish_break',
-                        'candle_index': ob_position + i + 1,
-                        'original_ob': order_block
-                    }
-                elif ob_type == 'bearish' and candle['close'] > ob_top:
-                    return {
-                        'timestamp': timestamp,
-                        'price': candle['close'],
-                        'direction': 'bullish_break',
-                        'candle_index': ob_position + i + 1,
-                        'original_ob': order_block
-                    }
+                # Enhanced failure detection per ICT methodology
+                ob_range = ob_top - ob_bottom
+                
+                if ob_type == 'bullish':
+                    # For bullish OB failure: significant wick below + structural context
+                    wick_penetration = (candle['low'] < ob_bottom)
+                    body_penetration = (candle['close'] < ob_bottom)
+                    significant_violation = wick_penetration and (ob_bottom - candle['low']) > (ob_range * 0.3)
+                    
+                    if significant_violation or body_penetration:
+                        return {
+                            'timestamp': timestamp,
+                            'price': candle['low'] if significant_violation else candle['close'],
+                            'direction': 'bearish_break',
+                            'candle_index': ob_position + i + 1,
+                            'original_ob': order_block,
+                            'failure_type': 'significant_wick' if significant_violation else 'body_close'
+                        }
+                        
+                elif ob_type == 'bearish':
+                    # For bearish OB failure: significant wick above + structural context
+                    wick_penetration = (candle['high'] > ob_top)
+                    body_penetration = (candle['close'] > ob_top)
+                    significant_violation = wick_penetration and (candle['high'] - ob_top) > (ob_range * 0.3)
+                    
+                    if significant_violation or body_penetration:
+                        return {
+                            'timestamp': timestamp,
+                            'price': candle['high'] if significant_violation else candle['close'],
+                            'direction': 'bullish_break',
+                            'candle_index': ob_position + i + 1,
+                            'original_ob': order_block,
+                            'failure_type': 'significant_wick' if significant_violation else 'body_close'
+                        }
             
             return None
             
@@ -340,24 +357,25 @@ class EntryModels:
         3. Premium/discount context
         """
         try:
-            # Fix directional alignment check
+            # Clearer directional alignment logic per ICT methodology
             fvg_type = fvg.get('type')  # 'bullish' or 'bearish'
             
-            breaker_type = breaker.get('type', '')
+            # Focus on what the breaker provides, not how it was created
+            original_ob_type = breaker.get('original_ob_type', '')
             
-            if 'bearish_break' in breaker_type:
-                breaker_entry_direction = 'bullish'  # This breaker is for bullish entries
-            elif 'bullish_break' in breaker_type:
-                breaker_entry_direction = 'bearish'  # This breaker is for bearish entries
+            if original_ob_type == 'bullish':
+                # Failed bullish OB becomes bearish resistance (bearish breaker)
+                breaker_provides_bias = 'bearish'
+            elif original_ob_type == 'bearish':
+                # Failed bearish OB becomes bullish support (bullish breaker)
+                breaker_provides_bias = 'bullish'
             else:
-                # Fallback for other breaker types
-                original_ob_type = breaker.get('original_ob_type', '')
-                # If original OB was bearish and it failed, the breaker is bullish
-                breaker_entry_direction = 'bullish' if original_ob_type == 'bearish' else 'bearish'
+                logger.debug("Unicorn alignment failed: Unknown original OB type")
+                return False  # Skip if unclear
             
-            # Now check if FVG and breaker are aligned for same direction entry
-            if fvg_type != breaker_entry_direction:
-                logger.debug(f"Unicorn alignment failed: FVG={fvg_type}, Breaker for={breaker_entry_direction}")
+            # Check if FVG and breaker align for same direction entry
+            if fvg_type != breaker_provides_bias:
+                logger.debug(f"Unicorn alignment failed: FVG={fvg_type}, Breaker provides={breaker_provides_bias}")
                 return False
             
             # Check geometric overlap

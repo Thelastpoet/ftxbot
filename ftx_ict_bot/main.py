@@ -247,7 +247,7 @@ class ICTTradingBot:
                 in_any_killzone = True
                 active_zone = "LONDON KILL ZONE"
                 
-            # Check New York Kill Zone (8:30-11 AM NY)
+            # Check New York Kill Zone (8:30-11:00 AM NY) - Corrected timing per ICT
             elif time_obj(8, 30) <= current_ny_time < time_obj(11, 0):
                 in_any_killzone = True
                 active_zone = "NEW YORK KILL ZONE"

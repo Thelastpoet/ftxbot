@@ -8,6 +8,7 @@ import numpy as np
 import logging
 from logger import operations_logger as logger
 from dataclasses import dataclass
+from datetime import timedelta, datetime
 from typing import Optional, Dict, Tuple, List
 from smc import smc
 from talib import ATR
@@ -178,8 +179,8 @@ class ICTAnalyzer:
             'error': None
         }
         
-        if ohlc_df is not None and ohlc_df.index.tz is None:
-            context['error'] = "DataFrame index is not timezone-aware."
+        if ohlc_df is None or ohlc_df.index.tz is None:
+            context['error'] = "DataFrame is None or index is not timezone-aware."
             logger.error(context['error'])
             return context
 
@@ -187,49 +188,60 @@ class ICTAnalyzer:
             latest_utc_time = ohlc_df.index[-1]
             latest_ny_time = latest_utc_time.astimezone(self.config.NY_TIMEZONE)
             
-            current_ny_date = latest_ny_time.date()
+            # Try to find the Asian range for the last 3 days, starting with the most recent valid day.
+            # This handles Monday mornings by automatically looking back to Friday.
+            for i in range(4):
+                current_ny_date_to_check = (latest_ny_time - timedelta(days=i)).date()
+                
+                # Skip weekends
+                if current_ny_date_to_check.weekday() in [5, 6]: # Saturday or Sunday
+                    continue
+
+                # Determine the start of the Asian session for the given date.
+                # The Asian session for a trading day (e.g., Monday) starts on the evening of the previous calendar day (e.g., Sunday).
+                # So, for Monday's session, we look at Sunday evening.
+                asian_session_date = current_ny_date_to_check - timedelta(days=1) if current_ny_date_to_check.weekday() != 0 else current_ny_date_to_check
+
+                # On a Monday, the Asian session starts on Sunday evening.
+                if latest_ny_time.weekday() == 0 and i == 0: # It's Monday
+                     asian_session_date = latest_ny_time.date() - timedelta(days=1)
+                else: # For other days, it's the previous day
+                     asian_session_date = (latest_ny_time - timedelta(days=i)).date() - timedelta(days=1)
+
+
+                # Define the start and end times for the Asian range in NY time
+                asian_start_ny = datetime.combine(
+                    asian_session_date, 
+                    self.config.ICT_ASIAN_RANGE['start'], 
+                    self.config.NY_TIMEZONE
+                )
+                asian_end_ny = (asian_start_ny + timedelta(hours=7)).replace(hour=2, minute=0) # 7 PM NY to 2 AM NY
+
+                # Convert to UTC to filter the dataframe
+                asian_start_utc = asian_start_ny.astimezone(pytz.UTC)
+                asian_end_utc = asian_end_ny.astimezone(pytz.UTC)
+                
+                asian_data = ohlc_df[(ohlc_df.index >= asian_start_utc) & (ohlc_df.index < asian_end_utc)]
+                
+                if not asian_data.empty:
+                    context['last_asian_range'] = {
+                        'start_time_utc': asian_data.index[0],
+                        'end_time_utc': asian_end_utc,
+                        'high': asian_data['high'].max(),
+                        'low': asian_data['low'].min(),
+                        'start_idx': ohlc_df.index.get_loc(asian_data.index[0]),
+                        'date_found': current_ny_date_to_check.strftime('%Y-%m-%d')
+                    }
+                    logger.info(f"Found valid Asian Range for trading day {current_ny_date_to_check.strftime('%Y-%m-%d')} "
+                                f"(High={context['last_asian_range']['high']:.5f}, Low={context['last_asian_range']['low']:.5f})")
+                    break # Exit loop once the most recent range is found
+            
+            if context['last_asian_range'] is None:
+                 logger.warning(f"No valid Asian range found within the last 3 trading days for {latest_ny_time.date()}")
+
+            # Check Kill Zones using NY time
             current_ny_hour = latest_ny_time.hour
             current_ny_minute = latest_ny_time.minute
-            
-            # Determine which Asian range to use
-            if current_ny_hour < 19:
-                asian_date = current_ny_date - pd.Timedelta(days=1)
-            else:
-                asian_date = current_ny_date
-            
-            # Create Asian range times
-            asian_start_ny = latest_ny_time.replace(
-                year=asian_date.year,
-                month=asian_date.month,
-                day=asian_date.day,
-                hour=self.config.ICT_ASIAN_RANGE['start'].hour,
-                minute=self.config.ICT_ASIAN_RANGE['start'].minute,
-                second=0,
-                microsecond=0
-            )
-
-            # Per the log message "Asian Range (7PM-10PM NY)", the range ends at 10 PM.
-            # The original code extended this to the London open, which was inconsistent.
-            asian_end_ny = asian_start_ny.replace(hour=22, minute=0)
-            
-            asian_start_utc = asian_start_ny.astimezone(pytz.UTC)
-            asian_end_utc = asian_end_ny.astimezone(pytz.UTC)
-            
-            asian_data = ohlc_df[(ohlc_df.index >= asian_start_utc) & (ohlc_df.index < asian_end_utc)]
-            
-            if not asian_data.empty:
-                context['last_asian_range'] = {
-                    'start_time_utc': asian_data.index[0],
-                    'end_time_utc': asian_end_utc,
-                    'high': asian_data['high'].max(),
-                    'low': asian_data['low'].min(),
-                    'start_idx': ohlc_df.index.get_loc(asian_data.index[0])
-                }
-                logger.debug(f"Asian Range (7PM-10PM NY): High={context['last_asian_range']['high']:.5f}, Low={context['last_asian_range']['low']:.5f}")
-            else:
-                logger.debug(f"No Asian range data found for {asian_date}")
-            
-            # Check Kill Zones using NY time
             if 2 <= current_ny_hour < 5:
                 context['in_killzone'] = True
                 context['killzone_name'] = 'London'
@@ -321,6 +333,56 @@ class ICTAnalyzer:
         
         return final_bias, bias_details
     
+    def _extract_bias_from_manipulation(self, manipulation: Dict) -> str:
+        """
+        Extract bias indication from manipulation context per ICT methodology.
+        Judas swings and liquidity sweeps indicate where smart money is NOT going.
+        """
+        if not manipulation.get('detected'):
+            return 'neutral'
+        
+        manipulation_type = manipulation.get('type', '')
+        
+        # ICT Logic: Manipulation is typically opposite to intended direction
+        if 'bullish_judas' in manipulation_type or 'bullish_liquidity_sweep' in manipulation_type:
+            # Bullish manipulation usually precedes bearish move
+            return 'bearish'
+        elif 'bearish_judas' in manipulation_type or 'bearish_liquidity_sweep' in manipulation_type:
+            # Bearish manipulation usually precedes bullish move  
+            return 'bullish'
+        elif 'turtle_soup' in manipulation_type:
+            # Turtle soup indicates reversal from the swept direction
+            if 'bullish' in manipulation_type:
+                return 'bullish'
+            elif 'bearish' in manipulation_type:
+                return 'bearish'
+        
+        return 'neutral'
+    
+    def _enhance_bias_with_manipulation_context(self, htf_bias: str, manipulation: Dict) -> Tuple[str, str]:
+        """
+        Enhance bias determination with manipulation context per ICT teachings.
+        Returns (final_bias, bias_strength)
+        """
+        if not manipulation.get('detected'):
+            return htf_bias, 'standard'
+        
+        manipulation_bias = self._extract_bias_from_manipulation(manipulation)
+        
+        if manipulation_bias == 'neutral':
+            return htf_bias, 'standard'
+        
+        # ICT Confluence: When manipulation aligns with HTF order flow
+        if manipulation_bias == htf_bias:
+            logger.info(f"STRONG bias confluence: HTF={htf_bias}, Manipulation supports {manipulation_bias}")
+            return htf_bias, 'strong'
+        elif manipulation_bias != htf_bias and htf_bias != 'neutral':
+            # Conflicting signals - reduce confidence but keep HTF as primary
+            logger.warning(f"WEAK bias: HTF={htf_bias} conflicts with Manipulation={manipulation_bias}")
+            return htf_bias, 'weak'
+        
+        return htf_bias, 'standard'
+    
     def _analyze_session_po3(self, ohlc_df, session_context, symbol, daily_df, swings, ipda_analysis=None):
         """Orchestrates bias analysis and identifies PO3 phase based on session context and manipulation patterns."""
         if ipda_analysis and ipda_analysis.get('ipda_bias'):
@@ -337,6 +399,13 @@ class ICTAnalyzer:
             daily_bias, bias_details = self._determine_daily_bias(ohlc_df, symbol, daily_df)
         
         manipulation_details = self._check_manipulation_patterns(ohlc_df, daily_bias, session_context, swings)
+        
+        # Enhanced: Integrate manipulation context into bias strength
+        if manipulation_details:
+            enhanced_bias, bias_strength = self._enhance_bias_with_manipulation_context(daily_bias, manipulation_details)
+            bias_details['manipulation_confluence'] = bias_strength
+            bias_details['enhanced_reasoning'] = f"Manipulation context: {bias_strength} {enhanced_bias} bias"
+            logger.info(f"{symbol}: Enhanced bias: {enhanced_bias} ({bias_strength}) with {manipulation_details.get('type', 'unknown')} manipulation")
 
         current_utc = ohlc_df.index[-1]
         current_ny = current_utc.astimezone(self.config.NY_TIMEZONE)
@@ -566,8 +635,14 @@ class ICTAnalyzer:
         current_ny_hour = current_ny.hour
         manipulation_hours = [2, 3, 4, 5, 8, 9, 10, 11, 12]
         if current_ny_hour in manipulation_hours:
-            asian_high = session_context['last_asian_range']['high']
-            asian_low = session_context['last_asian_range']['low']
+            # Check if Asian range data is available
+            asian_range = session_context.get('last_asian_range')
+            if not asian_range:
+                logger.debug("No Asian range data available for manipulation pattern detection")
+                return None
+                
+            asian_high = asian_range['high']
+            asian_low = asian_range['low']
             
             if len(ohlc_df) > 1:
                 cutoff_time = ohlc_df.index[-2]  # Second to last timestamp

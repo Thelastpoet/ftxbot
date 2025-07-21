@@ -29,7 +29,7 @@ BREAKEVEN_R_MULTIPLIER = 1.2
 # Kill Zone Times (New York Time)
 ICT_ASIAN_RANGE = {'start': time(20, 0), 'end': time(2, 0)}
 ICT_LONDON_KILLZONE = {'start': time(2, 0), 'end': time(5, 0)}
-ICT_NEW_YORK_KILLZONE = {'start': time(7, 0), 'end': time(10, 0)} 
+ICT_NEW_YORK_KILLZONE = {'start': time(8, 30), 'end': time(11, 0)}  # Corrected: 8:30-11:00 AM NY per ICT 
 ICT_LONDON_CLOSE_KILLZONE = {'start': time(10, 0), 'end': time(12, 0)}
 
 # Timezone settings
