@@ -1191,21 +1191,31 @@ class ICTSignalGenerator:
         
         return None, None, None, None
 
-    def _get_structural_sl_price(self, bias: str, primary_poi: Dict, ohlc_df: pd.DataFrame, analysis: Dict, manipulation_level: Optional[float] = None) -> float:
+    def _get_structural_sl_price(self, bias: str, primary_poi: Dict, ohlc_df: pd.DataFrame, analysis: Dict, spread: float, manipulation_level: Optional[float] = None) -> float:
         """
         Calculates a robust, structurally-sound Stop Loss price.
-        Anchors the SL not just to the POI, but to the lowest/highest point of the POI
-        and any nearby supporting/resisting PD arrays (FVGs, OBs), including the manipulation level.
+        PRIORITY 1: The manipulation level, as it's the ultimate invalidation point.
+        PRIORITY 2: The lowest/highest point of the POI combined with other nearby PD arrays.
         """
         atr_buffer = self._calculate_atr_buffer(ohlc_df)
-        
-        anchor_level = primary_poi['bottom'] if bias == 'bullish' else primary_poi['top']
-        support_levels = [anchor_level]
-        
-        if manipulation_level:
-            support_levels.append(manipulation_level)
 
+        # --- PRIORITY 1: Invalidation based on Manipulation Level ---
+        if manipulation_level:
+            if bias == 'bullish':
+                sl_price = manipulation_level - atr_buffer
+                logger.info(f"Structural SL (Bullish) anchored to MANIPULATION LEVEL at {manipulation_level:.5f}. SL: {sl_price:.5f}")
+                return sl_price
+            else: # bias == 'bearish'
+                sl_price = manipulation_level + atr_buffer
+                logger.info(f"Structural SL (Bearish) anchored to MANIPULATION LEVEL at {manipulation_level:.5f}. SL: {sl_price:.5f}")
+                return sl_price
+
+        # --- PRIORITY 2: Invalidation based on POI and surrounding structure (if no manipulation) ---
+        logger.debug("No manipulation level found, using POI and structural analysis for SL.")
+        anchor_level = primary_poi['bottom'] if bias == 'bullish' else primary_poi['top']
+        
         if bias == 'bullish':
+            support_levels = [anchor_level]
             nearby_fvgs = [f for f in analysis['fair_value_gaps'] if f['type'] == 'bullish' and f['bottom'] < anchor_level]
             nearby_obs = [ob for ob in analysis['order_blocks'] if ob['type'] == 'bullish' and ob['bottom'] < anchor_level]
             
@@ -1220,9 +1230,6 @@ class ICTSignalGenerator:
 
         else: # bias == 'bearish'
             resistance_levels = [anchor_level]
-            if manipulation_level:
-                resistance_levels.append(manipulation_level)
-
             nearby_fvgs = [f for f in analysis['fair_value_gaps'] if f['type'] == 'bearish' and f['top'] > anchor_level]
             nearby_obs = [ob for ob in analysis['order_blocks'] if ob['type'] == 'bearish' and ob['top'] > anchor_level]
 
@@ -1237,40 +1244,41 @@ class ICTSignalGenerator:
         
         return sl_price    
 
-    def _setup_fvg_entry(self, bias, current_price, fvg_entry, manipulation, ohlc_df, analysis):
+    def _setup_fvg_entry(self, bias, current_price, fvg_entry, manipulation, ohlc_df, analysis, spread):
         """Setup entry from a Fair Value Gap, now using structural SL."""
-        manipulation_level = manipulation.get('level')
-        sl_price = self._get_structural_sl_price(bias, fvg_entry, ohlc_df, analysis, manipulation_level=manipulation_level)
+        manipulation_level = manipulation.get('level') if manipulation else None
+        sl_price = self._get_structural_sl_price(bias, fvg_entry, ohlc_df, analysis, manipulation_level=manipulation_level, spread=spread)
         tp_price = self._calculate_target(current_price, sl_price, bias, analysis)
         signal = "BUY" if bias == 'bullish' else "SELL"
         return signal, sl_price, tp_price
 
-    def _setup_breaker_entry(self, bias, current_price, breaker_block, ohlc_df, analysis, manipulation):
+    def _setup_breaker_entry(self, bias, current_price, breaker_block, ohlc_df, analysis, manipulation, spread):
         """Setup entry from a Breaker Block, now using structural SL."""
-        manipulation_level = manipulation.get('level')
-        sl_price = self._get_structural_sl_price(bias, breaker_block, ohlc_df, analysis, manipulation_level=manipulation_level)
+        manipulation_level = manipulation.get('level') if manipulation else None
+        sl_price = self._get_structural_sl_price(bias, breaker_block, ohlc_df, analysis, manipulation_level=manipulation_level, spread=spread)
         tp_price = self._calculate_target(current_price, sl_price, bias, analysis)
         signal = "BUY" if bias == 'bullish' else "SELL"
         return signal, sl_price, tp_price
 
-    def _setup_unicorn_entry(self, bias, current_price, unicorn_setup, ohlc_df, analysis, manipulation):
+    def _setup_unicorn_entry(self, bias, current_price, unicorn_setup, ohlc_df, analysis, manipulation, spread):
         """Setup entry from a Unicorn setup, using the breaker component for structural SL."""
-        manipulation_level = manipulation.get('level')
-        sl_price = self._get_structural_sl_price(bias, unicorn_setup['breaker_block'], ohlc_df, analysis, manipulation_level=manipulation_level)
+        manipulation_level = manipulation.get('level') if manipulation else None
+        sl_price = self._get_structural_sl_price(bias, unicorn_setup['breaker_block'], ohlc_df, analysis, manipulation_level=manipulation_level, spread=spread  )
         tp_price = self._calculate_target(current_price, sl_price, bias, analysis)
         signal = "BUY" if bias == 'bullish' else "SELL"
         return signal, sl_price, tp_price
 
     def _setup_ote_entry(self, bias, current_price, ote_zones, manipulation, ohlc_df, spread, analysis):
-        """Setup entry from OTE zone. SL is already structural."""
+        """Setup entry from OTE zone, now using the standard structural SL function."""
         ote = next((zone for zone in ote_zones if zone['direction'].lower() == bias), None)
         if not ote:
             return None, None, None
-        
-        if bias == 'bullish':
-            sl_price = min(ote['swing_low'], manipulation.get('level', ote['swing_low'])) - self._calculate_atr_buffer(ohlc_df)
-        else:
-            sl_price = max(ote['swing_high'], manipulation.get('level', ote['swing_high'])) + self._calculate_atr_buffer(ohlc_df)
+
+        # For OTE, the POI for SL purposes is the swing that defines the range.
+        ote_poi = {'top': ote['swing_high'], 'bottom': ote['swing_low']}
+        manipulation_level = manipulation.get('level') if manipulation else None
+
+        sl_price = self._get_structural_sl_price(bias, ote_poi, ohlc_df, analysis, spread, manipulation_level=manipulation_level)
         
         tp_price = self._calculate_target(current_price, sl_price, bias, analysis)        
         signal = "BUY" if bias == 'bullish' else "SELL"
@@ -1285,10 +1293,10 @@ class ICTSignalGenerator:
         except (KeyError, TypeError):
             return False
 
-    def _setup_mitigation_entry(self, bias, current_price, mitigation_block, ohlc_df, analysis, manipulation):
+    def _setup_mitigation_entry(self, bias, current_price, mitigation_block, ohlc_df, analysis, manipulation, spread):
         """Setup entry from a Mitigation Block, using structural SL."""
-        manipulation_level = manipulation.get('level')
-        sl_price = self._get_structural_sl_price(bias, mitigation_block, ohlc_df, analysis, manipulation_level=manipulation_level)
+        manipulation_level = manipulation.get('level') if manipulation else None
+        sl_price = self._get_structural_sl_price(bias, mitigation_block, ohlc_df, analysis, manipulation_level=manipulation_level, spread=spread)
         tp_price = self._calculate_target(current_price, sl_price, bias, analysis)
         signal = "BUY" if bias == 'bullish' else "SELL"
         return signal, sl_price, tp_price
@@ -1309,7 +1317,7 @@ class ICTSignalGenerator:
                     logger.info(f"{analysis['symbol']}: Price at UNICORN zone NOW [{unicorn['bottom']:.5f}-{unicorn['top']:.5f}]")
                     if self._detect_rejection_pattern(last_3_candles, daily_bias, unicorn):
                         logger.info(f"{analysis['symbol']}: UNICORN entry confirmed with rejection pattern")
-                        return self._setup_unicorn_entry(daily_bias, current_price, unicorn, ohlc_df, analysis, manipulation)
+                        return self._setup_unicorn_entry(daily_bias, current_price, unicorn, ohlc_df, analysis, manipulation, spread)
 
         # --- BREAKER BLOCK ENTRY ---
         breaker_blocks = analysis.get('breaker_blocks', [])
@@ -1320,7 +1328,7 @@ class ICTSignalGenerator:
                     logger.info(f"{analysis['symbol']}: Price at BREAKER BLOCK NOW [{breaker['bottom']:.5f}-{breaker['top']:.5f}]")
                     if self._detect_rejection_pattern(last_3_candles, daily_bias, breaker):
                         logger.info(f"{analysis['symbol']}: BREAKER BLOCK entry confirmed with rejection")
-                        return self._setup_breaker_entry(daily_bias, current_price, breaker, ohlc_df, analysis, manipulation)
+                        return self._setup_breaker_entry(daily_bias, current_price, breaker, ohlc_df, analysis, manipulation, spread)
 
         # --- MITIGATION BLOCK ENTRY ---
         mitigation_blocks = analysis.get('mitigation_blocks', [])
@@ -1329,7 +1337,7 @@ class ICTSignalGenerator:
                 logger.info(f"{analysis['symbol']}: Price at MITIGATION BLOCK NOW [{mitigation['bottom']:.5f}-{mitigation['top']:.5f}]")
                 if self._detect_rejection_pattern(last_3_candles, daily_bias, mitigation):
                     logger.info(f"{analysis['symbol']}: MITIGATION BLOCK entry confirmed with rejection")
-                    return self._setup_mitigation_entry(daily_bias, current_price, mitigation, ohlc_df, analysis, manipulation)
+                    return self._setup_mitigation_entry(daily_bias, current_price, mitigation, ohlc_df, analysis, manipulation, spread)
 
         # --- FVG ENTRY (FALLBACK) ---
         fair_value_gaps = analysis.get('fair_value_gaps', [])
@@ -1339,13 +1347,13 @@ class ICTSignalGenerator:
                     logger.info(f"{analysis['symbol']}: Price at {fvg['type']} FVG NOW [{fvg['bottom']:.5f}-{fvg['top']:.5f}]")
                     if self._detect_momentum_entry(last_3_candles, daily_bias):
                         logger.info(f"{analysis['symbol']}: FVG entry on directional candle")
-                        return self._setup_fvg_entry(daily_bias, current_price, fvg, manipulation, ohlc_df, analysis)
+                        return self._setup_fvg_entry(daily_bias, current_price, fvg, manipulation, ohlc_df, analysis, spread)
 
         logger.debug(f"{analysis['symbol']}: No reversal entry found at current price")
         return None, None, None
 
     def _find_continuation_entry(self, analysis, daily_bias, current_price, ohlc_df, spread, manipulation):
-        """Finds continuation entries with a priority: FVG > Order Block > OTE."""
+        """Finds continuation entries, explicitly ignoring manipulation for SL calculation."""
         current_high = ohlc_df['high'].iloc[-1]
         current_low = ohlc_df['low'].iloc[-1]
         last_3_candles = ohlc_df.tail(3)
@@ -1359,7 +1367,8 @@ class ICTSignalGenerator:
                 logger.info(f"{analysis['symbol']}: Price at high-probability {fvg_entry['type']} FVG NOW [{fvg_entry['bottom']:.5f}-{fvg_entry['top']:.5f}]")
                 if self._detect_momentum_entry(last_3_candles, daily_bias):
                     logger.info(f"{analysis['symbol']}: High-probability FVG entry on directional candle")
-                    return self._setup_fvg_entry(daily_bias, current_price, fvg_entry, manipulation, ohlc_df, analysis)
+                    # Pass manipulation=None to use POI-based SL for continuation
+                    return self._setup_fvg_entry(daily_bias, current_price, fvg_entry, None, ohlc_df, analysis, spread)
 
         # --- ORDER BLOCK ENTRY ---
         order_blocks = analysis.get('order_blocks', [])
@@ -1369,7 +1378,8 @@ class ICTSignalGenerator:
                     logger.info(f"{analysis['symbol']}: Price at {ob['type']} ORDER BLOCK NOW [{ob['bottom']:.5f}-{ob['top']:.5f}]")
                     if self._detect_rejection_pattern(last_3_candles, daily_bias, ob):
                         logger.info(f"{analysis['symbol']}: ORDER BLOCK entry confirmed with rejection")
-                        return self._setup_order_block_entry(daily_bias, current_price, ob, ohlc_df, analysis, manipulation)
+                        # Pass manipulation=None to use POI-based SL for continuation
+                        return self._setup_order_block_entry(daily_bias, current_price, ob, None, ohlc_df, analysis, spread)
 
         # --- OTE ENTRY ---
         ote_zones = analysis.get('ote_zones', [])
@@ -1379,7 +1389,8 @@ class ICTSignalGenerator:
                     logger.info(f"{analysis['symbol']}: Price in OTE zone [{ote['low']:.5f}-{ote['high']:.5f}]")
                     if self._detect_momentum_entry(last_3_candles, daily_bias):
                         logger.info(f"{analysis['symbol']}: OTE entry on momentum")
-                        return self._setup_ote_entry(daily_bias, current_price, ote_zones, manipulation, ohlc_df, spread, analysis)
+                        # Pass manipulation=None to use POI-based SL for continuation
+                        return self._setup_ote_entry(daily_bias, current_price, ote_zones, None, ohlc_df, spread, analysis)
 
         logger.debug(f"{analysis['symbol']}: No continuation entry found at current price")
         return None, None, None
@@ -1499,10 +1510,10 @@ class ICTSignalGenerator:
         
         return False
     
-    def _setup_order_block_entry(self, bias, current_price, ob, ohlc_df, analysis, manipulation):
+    def _setup_order_block_entry(self, bias, current_price, ob, ohlc_df, analysis, manipulation, spread):
         """Setup entry from Order Block with proper SL/TP."""
         manipulation_level = manipulation.get('level')
-        sl_price = self._get_structural_sl_price(bias, ob, ohlc_df, analysis, manipulation_level=manipulation_level)
+        sl_price = self._get_structural_sl_price(bias, ob, ohlc_df, analysis, manipulation_level=manipulation_level, spread=spread)
         tp_price = self._calculate_target(current_price, sl_price, bias, analysis)
         signal = "BUY" if bias == 'bullish' else "SELL"
         logger.info(f"Order Block Entry Setup: {signal} @ {current_price:.5f}, SL: {sl_price:.5f}, TP: {tp_price:.5f}")
@@ -1694,20 +1705,23 @@ class ICTSignalGenerator:
         return atr.iloc[-1] * self.config.SL_ATR_MULTIPLIER
     
     def _calculate_target(self, entry_price, sl_price, bias, analysis):
-        """Calculate take profit by targeting liquidity using the LiquidityDetector."""
+        """
+        Calculate take profit with a hierarchical approach:
+        1. Liquidity Targeting
+        2. Equilibrium Fallback
+        3. Fibonacci Extension Fallback
+        """
         risk = abs(entry_price - sl_price)
         ohlc_df = analysis.get('ohlc_df')
-        session_context = analysis.get('session', {})
-        daily_df = analysis.get('daily_df')
         
         if ohlc_df is None:
-            logger.warning("No OHLC data available for liquidity analysis, using fallback")
-            return self._calculate_target_fallback(entry_price, sl_price, bias, risk)
-        
+            logger.warning("No OHLC data available for target analysis.")
+            return None
+
+        # 1. Primary: Target Liquidity
         liquidity_levels = self.liquidity_detector.get_liquidity_levels(
-            ohlc_df, session_context, daily_df
+            ohlc_df, analysis.get('session', {}), analysis.get('daily_df')
         )
-        
         min_rr = getattr(self.config, 'MIN_TARGET_RR', 1.0)
         best_target = self.liquidity_detector.get_target_for_bias(
             bias, liquidity_levels, entry_price, min_rr, sl_price
@@ -1717,19 +1731,59 @@ class ICTSignalGenerator:
             target_level = best_target['level']
             logger.info(f"Using {best_target['description']} at {target_level:.5f} for TP (Priority: {best_target['priority']})")
             return target_level
-        
-        logger.debug("No suitable liquidity targets found, using fixed R:R fallback")
-        return self._calculate_target_fallback(entry_price, sl_price, bias, risk)
 
-    def _calculate_target_fallback(self, entry_price, sl_price, bias, risk):
-        """Fallback target calculation using fixed R:R."""
-        tp_rr_ratio = getattr(self.config, 'TP_RR_RATIO', 1.5)
-        logger.debug(f"Using fixed R:R fallback ({tp_rr_ratio}:1)")
+        # 2. Fallback: Target Equilibrium
+        logger.debug("No suitable liquidity targets found, trying equilibrium fallback.")
+        premium_discount = analysis.get('premium_discount')
+        equilibrium_target = self._calculate_target_equilibrium(entry_price, bias, premium_discount)
+        if equilibrium_target:
+            logger.info(f"Using Equilibrium fallback target at {equilibrium_target:.5f}")
+            return equilibrium_target
+
+        # 3. Fallback: Target Fibonacci Extension
+        logger.debug("Equilibrium target not suitable, trying Fibonacci extension fallback.")
+        fib_target = self._calculate_target_fibonacci(entry_price, bias, premium_discount)
+        if fib_target:
+            logger.info(f"Using Fibonacci extension fallback target at {fib_target:.5f}")
+            return fib_target
+            
+        logger.warning("Could not determine any valid TP target (Liquidity, Equilibrium, or Fib Extension).")
+        return None
+
+    def _calculate_target_equilibrium(self, entry_price, bias, premium_discount):
+        """Calculates TP target using the premium/discount equilibrium as a fallback."""
+        if premium_discount and 'equilibrium' in premium_discount:
+            equilibrium = premium_discount['equilibrium']
+            if (bias == 'bullish' and equilibrium > entry_price) or \
+               (bias == 'bearish' and equilibrium < entry_price):
+                return equilibrium
+        return None
+
+    def _calculate_target_fibonacci(self, entry_price, bias, premium_discount):
+        """Calculates TP target using Fibonacci extensions as a second fallback."""
+        if not premium_discount or 'swing_high' not in premium_discount or 'swing_low' not in premium_discount:
+            return None
+
+        swing_high = premium_discount['swing_high']
+        swing_low = premium_discount['swing_low']
+        range_size = swing_high - swing_low
+
+        if range_size <= 0:
+            return None
+
+        # Using the -0.27 extension level as the first target
+        fib_level = -0.27 
         
         if bias == 'bullish':
-            return entry_price + (risk * tp_rr_ratio)
-        else:
-            return entry_price - (risk * tp_rr_ratio)
+            target = swing_high - (range_size * fib_level)
+            if target > entry_price:
+                return target
+        elif bias == 'bearish':
+            target = swing_low + (range_size * fib_level)
+            if target < entry_price:
+                return target
+            
+        return None
     
     def _validate_levels(self, signal, entry, sl, tp):
         """Validate entry, SL, and TP levels."""

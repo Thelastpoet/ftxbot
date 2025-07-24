@@ -5,13 +5,13 @@ from datetime import time
 SYMBOLS = ['AUDUSD', 'CHFJPY', 'EURUSD', 'GBPUSD', 'USDCAD', 'USDCHF', 'USDJPY',
  'EURCAD', 'GBPJPY', 'AUDCHF', 'AUDCAD', 'AUDJPY', 'EURAUD', 'EURJPY',
 'EURCHF', 'EURNZD', 'AUDNZD', 'GBPCHF', 'CADCHF', 'GBPAUD', 'GBPCAD',
-'GBPNZD', 'NZDUSD']
+'GBPNZD', 'NZDUSD', 'GOLD']
 TIMEFRAME_STR = "M15"
 
 # Risk Management
 RISK_PER_TRADE_PERCENT = 1.0
 MAX_TRADES_PER_DAY = 100
-MAX_CORRELATION_EXPOSURE = 2
+MAX_CORRELATION_EXPOSURE = 3
 
 INVALIDATE_ON_CHOCH = True
 
@@ -54,7 +54,7 @@ ICT_SESSIONS = {
     'NewYork': {'start': 7, 'end': 10},
     'LondonClose': {'start': 14, 'end': 17}
 }
-
+"""
 # Maximum Acceptable Spread in Points
 MAX_SPREAD_POINTS = {
     'EURUSD': 15,
@@ -70,6 +70,34 @@ MAX_SPREAD_POINTS = {
     'CHFJPY': 25,
     'EURCAD': 30,
     'EURCHF': 25,
+    'EURAUD': 30,
+    'EURNZD': 35,
+    'GBPAUD': 35,
+    'GBPCAD': 40,
+    'GBPCHF': 30,
+    'GBPNZD': 45,
+    'AUDCAD': 25,
+    'AUDCHF': 25,
+    'AUDNZD': 30,
+    'CADCHF': 25,
+    'DEFAULT': 50
+}
+"""
+# XM spreads
+MAX_SPREAD_POINTS = {
+    'EURUSD': 20,
+    'GBPUSD': 25,
+    'USDJPY': 25,
+    'USDCHF': 25,
+    'AUDUSD': 25,
+    'USDCAD': 30,
+    'NZDUSD': 30,
+    'EURJPY': 30,
+    'GBPJPY': 30,
+    'AUDJPY': 30,
+    'CHFJPY': 30,
+    'EURCAD': 30,
+    'EURCHF': 30,
     'EURAUD': 30,
     'EURNZD': 35,
     'GBPAUD': 35,

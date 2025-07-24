@@ -127,9 +127,10 @@ class ICTTradingBot:
     
     def process_symbol(self, symbol):
         """Process a single symbol following ICT methodology."""
-        logger.debug(f"\nProcessing {symbol}...")
+        logger.debug(f"Processing {symbol}...")
         
         # Check if symbol has position
+        logger.debug(f"{symbol}: Checking position status...")
         self.symbol_manager.update_position_status(symbol)
         symbol_data = self.symbol_manager.get_symbol_data(symbol)
         
@@ -137,47 +138,71 @@ class ICTTradingBot:
             logger.info(f"{symbol}: Position already open ({symbol_data['position_type']})")
             return
         
+        logger.debug(f"{symbol}: No existing position, continuing analysis...")
+        
         # Check spread
+        logger.debug(f"{symbol}: Checking spread...")
         current_spread = self.symbol_manager.check_spread(symbol, config.MAX_SPREAD_POINTS)
-        if current_spread is None: # Check if the spread was too high or failed to get
+        if current_spread is None:  # check_spread now logs a warning with details
             return
         
+        logger.debug(f"{symbol}: Spread OK ({current_spread} points)")
+        
         # Get market data - M15, Daily, AND H4 using unified method
+        logger.debug(f"{symbol}: Fetching M15 data...")
         ohlc_df = self.market_provider.get_data(symbol, config.TIMEFRAME_STR, config.DATA_LOOKBACK)
         if ohlc_df is None or len(ohlc_df) < config.STRUCTURE_LOOKBACK:
             logger.warning(f"{symbol}: Insufficient M15 data")
             return
         
+        logger.debug(f"{symbol}: M15 data OK ({len(ohlc_df)} bars)")
+        
         # Get daily data for proper ICT bias analysis
+        logger.debug(f"{symbol}: Fetching daily data...")
         daily_df = self.market_provider.get_data(symbol, "D1", 50)
         if daily_df is None or len(daily_df) < 20:
             logger.warning(f"{symbol}: Insufficient daily data for bias analysis")
             return
         
+        logger.debug(f"{symbol}: Daily data OK ({len(daily_df)} bars)")
+        
         # Get H4 data for HTF analysis
+        logger.debug(f"{symbol}: Fetching H4 data...")
         h4_df = self.market_provider.get_data(symbol, "H4", 100)
         if h4_df is None or len(h4_df) < 10:
             logger.warning(f"{symbol}: Insufficient H4 data for HTF analysis")
             # Don't return - continue without H4 data
             h4_df = None
+        else:
+            logger.debug(f"{symbol}: H4 data OK ({len(h4_df)} bars)")
         
         # Generate signal following ICT narrative with daily AND H4 data
+        logger.debug(f"{symbol}: Analyzing for ICT signals...")
         signal, sl_price, tp_price, narrative = self.signal_generator.generate_signal(
             ohlc_df, symbol, current_spread, daily_df, h4_df
         )
         
         if signal:
+            logger.info(f"{symbol}: Signal found - {signal} | SL: {sl_price} | TP: {tp_price}")
+            logger.info(f"{symbol}: Entry model: {narrative.entry_model} | Bias: {narrative.daily_bias}")
+            
             # Check correlations
+            logger.debug(f"{symbol}: Checking correlation limits...")
             if not self.check_correlations(symbol, signal):
+                logger.warning(f"{symbol}: Trade rejected due to correlation limits")
                 return
             
             # Calculate position size
+            logger.debug(f"{symbol}: Calculating position size...")
             volume = self.position_sizer.calculate_volume(symbol, sl_price, signal)
             if volume is None:
                 logger.error(f"{symbol}: Failed to calculate position size")
                 return
             
+            logger.debug(f"{symbol}: Position size calculated: {volume} lots")
+            
             # Place the trade
+            logger.info(f"{symbol}: Placing trade order...")
             comment = f"{narrative.entry_model[:10]}_{narrative.daily_bias[:4]}" # e.g. "REVERSAL_BULL"
             result = self.trade_executor.place_market_order(
                 symbol, signal, volume, sl_price, tp_price, comment
@@ -196,6 +221,8 @@ class ICTTradingBot:
                     self.session_trades[narrative.killzone_name] += 1
             else:
                 logger.error(f"{symbol}: Trade execution failed")
+        else:
+            logger.debug(f"{symbol}: No signals found - analysis complete")
     
     def _log_narrative(self, symbol, narrative, signal, sl, tp, result):
         """Log the complete ICT narrative for the trade to the CSV journal."""
@@ -260,12 +287,13 @@ class ICTTradingBot:
             if in_any_killzone:
                 logger.info(f"Active Kill Zone: {active_zone} (NY Time: {current_ny_time.strftime('%H:%M')})")
             else:
-                logger.debug(f"Outside kill zones. NY Time: {current_ny_time.strftime('%H:%M')}. Waiting...")
+                logger.info(f"Outside kill zones. NY Time: {current_ny_time.strftime('%H:%M')}. Waiting...")
                 return
         else:
             logger.debug("Killzone requirement disabled, processing all symbols")
 
-        # If we are active, then process each symbol
+        # If we are active, then process each symbol  
+        logger.debug(f"Processing {len(self.symbol_manager.symbols)} symbols...")
         for symbol in self.symbol_manager.symbols:
             if not self.can_trade():
                 break

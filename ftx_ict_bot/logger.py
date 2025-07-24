@@ -8,7 +8,12 @@ from pathlib import Path
 LOG_DIR = Path(__file__).parent
 OPERATIONS_LOG_FILE = LOG_DIR / "ict_trading_bot.log"
 TRADE_JOURNAL_FILE = LOG_DIR / "trade_journal.csv"
-LOG_LEVEL = "DEBUG"
+
+# Import log level from config
+try:
+    from config import LOG_LEVEL
+except ImportError:
+    LOG_LEVEL = "DEBUG"  # fallback
 MAX_LOG_SIZE_MB = 5
 BACKUP_COUNT = 3
 

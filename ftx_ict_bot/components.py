@@ -360,7 +360,7 @@ class SymbolManager:
         spread_points = round(raw_spread / symbol_data['point'])
         
         if spread_points > max_points:
-            logger.info(f"{symbol}: Spread {spread_points} points > max {max_points}. Skipping.")
+            logger.warning(f"{symbol}: Spread {spread_points} points > max {max_points}. Skipping.")
             return None
-            
+           
         return raw_spread
