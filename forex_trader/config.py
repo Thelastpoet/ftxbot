@@ -1,63 +1,30 @@
-import pytz
-from datetime import time
+import MetaTrader5 as mt5
 
-# Trading Parameters
-SYMBOLS = ['AUDUSD', 'EURUSD', 'GBPUSD', 'USDCAD', 'USDCHF', 'USDJPY', 'NZDUSD', 'XAUUSD']
-TIMEFRAME_STR = "M15"
+# --- TRADING SETTINGS ---
+SYMBOLS = ['AUDUSD', 'EURUSD', 'GBPUSD', 'USDCAD', 'USDCHF', 'EURCAD', 'AUDCHF', 'AUDCAD', 'EURGBP', 'EURAUD', 
+           'EURCHF', 'EURNZD', 'AUDNZD', 'GBPCHF', 'CADCHF', 'GBPAUD', 'GBPCAD', 'GBPNZD', 'NZDCAD', 'NZDCHF', 'NZDUSD']
 
-# Risk Management
-RISK_PER_TRADE_PERCENT = 1.0
-MAX_TRADES_PER_DAY = 100
-MAX_CORRELATION_EXPOSURE = 2
+TIME_FRAMES = (mt5.TIMEFRAME_M15, mt5.TIMEFRAME_H1, mt5.TIMEFRAME_D1)
 
-# Structure Parameters
-SWING_LOOKBACK = 3
-STRUCTURE_LOOKBACK = 50
-DATA_LOOKBACK = 1000
+# --- RISK MANAGEMENT SETTINGS ---
+RISK_PER_TRADE_PERCENT = 1.0  # Risk 1% of account balance per trade
+RISK_REWARD_RATIO = 2.0       # Aim for a 2:1 reward for our risk
 
-# Stop Loss and Take Profit
-SL_ATR_MULTIPLIER = 2.0
-TP_RR_RATIO = 1.5
-MIN_TARGET_RR = 1.0
+# --- STRATEGY PARAMETERS ---
+# Swing Point Detection
+SWING_LOOKBACK_PERIOD = 20
 
-# Kill Zone Times (New York Time)
-ICT_ASIAN_RANGE = {'start': time(19, 0), 'end': time(22, 0)}
-ICT_LONDON_KILLZONE = {'start': time(2, 0), 'end': time(5, 0)}
-ICT_NEW_YORK_KILLZONE = {'start': time(8, 0), 'end': time(11, 0)} 
-ICT_LONDON_CLOSE_KILLZONE = {'start': time(15, 0), 'end': time(17, 0)}
+# H1 Setup Zone Tolerance (as a factor of ATR)
+# A value of 1.0 means the price must be within 1x ATR of the level.
+PULLBACK_ZONE_ATR_FACTOR = 1.0 
 
-# Timezone settings
-NY_TIMEZONE = pytz.timezone('America/New_York')
-BROKER_TIMEZONE = 'Etc/GMT-3'
+# M15 Entry Trigger SL Buffer (in points)
+# How many points below/above the M15 swing to place the stop loss.
+STOP_LOSS_BUFFER_POINTS = 10
 
-# Bot Operation
-LOOP_SLEEP_SECONDS = 60
-LOG_FILE = "ict_trading_bot.log"
-LOG_LEVEL = "INFO"
-MAGIC_NUMBER_PREFIX = 2025
-
-# Entry Configuration
-REQUIRE_KILLZONE = True
-REQUIRE_ENTRY_CONFIRMATION = True
-ALLOW_MANIPULATION_PHASE_ENTRY = True
-
-# Broader Session Times
-ICT_SESSIONS = {
-    'Asian': {'start': 0, 'end': 5},
-    'London': {'start': 3, 'end': 5},
-    'NewYork': {'start': 7, 'end': 10},
-    'LondonClose': {'start': 14, 'end': 17}
-}
-
-# Maximum Acceptable Spread in Points
-MAX_SPREAD_POINTS = {
-    'AUDUSD': 20,
-    'EURUSD': 15,
-    'GBPUSD': 20,
-    'USDCAD': 25,
-    'USDCHF': 20,
-    'USDJPY': 15,
-    'NZDUSD': 25,
-    'XAUUSD': 35, 
-    'DEFAULT': 50
-}
+# --- SYSTEM SETTINGS ---
+MAX_OPEN_POSITIONS_TOTAL = 10
+MAX_OPEN_POSITIONS_PER_SYMBOL = 1
+LOG_FILE_NAME = 'forex_trader_log.csv'
+TRADE_LOG_FILE_NAME = 'trade_log.csv'
+CHECK_INTERVAL_SECONDS = 300  # 5 minutes
