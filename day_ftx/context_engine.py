@@ -5,7 +5,7 @@ import logging
 from dataclasses import dataclass
 from typing import Dict
 
-# Configure a dedicated logger for the engine for clear, filtered logging.
+# logger for the engine.
 engine_logger = logging.getLogger(__name__)
 
 if not engine_logger.handlers:
@@ -60,14 +60,17 @@ class ContextEngine:
             },
         }
 
+        self.asian_high = None
+        self.asian_low = None
+        
         self.current_day: date = date(1970, 1, 1) # Initialize to epoch
-        self.asian_ohlc_data = pd.DataFrame()
         engine_logger.info("ContextEngine initialized with configured parameters.")
 
     def _reset_for_new_day(self):
         """Resets the engine's state for a new trading day."""
         self.narrative = MarketNarrative()
-        self.asian_ohlc_data = pd.DataFrame()
+        self.asian_high = None
+        self.asian_low = None
         engine_logger.info(f"New trading day detected ({self.current_day}). Engine state has been reset.")
 
     def process_data(self, ohlc_df: pd.DataFrame, indicators_df: pd.DataFrame) -> MarketNarrative:
@@ -83,12 +86,13 @@ class ContextEngine:
         profile = self.narrative.session_profile
         
         current_session = self._get_current_session(latest_time)
+        logging.info(f"[Market Data] Time: {latest_time.strftime('%H:%M')} UTC ({(latest_time + pd.Timedelta(hours=3)).strftime('%H:%M')} EAT), Session: {current_session}, Profile: {profile}")
         
         if profile in ["AWAITING_CONSOLIDATION", "ANALYZING_CONSOLIDATION"]:
             self._handle_asian_session(ohlc_df, latest_time)
             if self.narrative.session_profile == "CONSOLIDATION_DEFINED":
                 self._evaluate_asian_range(indicators_df)
-                profile = self.narrative.session_profile
+            profile = self.narrative.session_profile
 
         if profile == "CONSOLIDATION_DEFINED":
             self._handle_london_session(ohlc_df, latest_time)
@@ -100,16 +104,16 @@ class ContextEngine:
         return self.narrative
 
     def _handle_asian_session(self, ohlc_df: pd.DataFrame, latest_time: datetime):
-        today = self.current_day
-        asia_start = datetime.combine(today, self.SESSION_WINDOWS['asia']['start']).replace(tzinfo=pytz.UTC)
-        asia_end = datetime.combine(today, self.SESSION_WINDOWS['asia']['end']).replace(tzinfo=pytz.UTC)
+        asia_start = datetime.combine(self.current_day, self.SESSION_WINDOWS['asia']['start']).replace(tzinfo=pytz.UTC)
+        asia_end = datetime.combine(self.current_day, self.SESSION_WINDOWS['asia']['end']).replace(tzinfo=pytz.UTC)
 
         session_df = ohlc_df[(ohlc_df.index >= asia_start) & (ohlc_df.index <= asia_end)]
 
         if session_df.empty:
             return
 
-        self.asian_ohlc_data = session_df.copy()
+        self.asian_high = session_df['high'].max()
+        self.asian_low = session_df['low'].min()
         self.narrative.session_profile = "ANALYZING_CONSOLIDATION"
         self.narrative.narrative_summary = "Analyzing Asian session consolidation..."
         
@@ -117,23 +121,24 @@ class ContextEngine:
             self.narrative.session_profile = "CONSOLIDATION_DEFINED"
             
     def _get_current_session(self, current_time: datetime) -> str:
-        current_time_utc = current_time.time()
+        current_date = current_time.date()
+        current_datetime = current_time.replace(second=0, microsecond=0)
         
-        asia_start = self.SESSION_WINDOWS['asia']['start']
-        asia_end = self.SESSION_WINDOWS['asia']['end']
-        london_start = self.SESSION_WINDOWS['london']['start']
+        asia_start = datetime.combine(current_date, self.SESSION_WINDOWS['asia']['start']).replace(tzinfo=pytz.UTC)
+        asia_end = datetime.combine(current_date, self.SESSION_WINDOWS['asia']['end']).replace(tzinfo=pytz.UTC)
+        london_start = datetime.combine(current_date, self.SESSION_WINDOWS['london']['start']).replace(tzinfo=pytz.UTC)
         
-        if asia_start <= current_time_utc < asia_end:
+        if asia_start <= current_datetime < asia_end:
             return "Asia"
-        elif asia_end <= current_time_utc < london_start:
+        elif asia_end <= current_datetime < london_start:
             return "Post-Asia / Pre-London"
-        elif london_start <= current_time_utc:
+        elif london_start <= current_datetime:
             return "London / New York"
         
         return "Pre-Asia"
 
     def _evaluate_asian_range(self, indicators_df: pd.DataFrame):
-        if self.asian_ohlc_data.empty:
+        if self.asian_high is None or self.asian_low is None:
             engine_logger.warning("Asian range evaluation called but no data was recorded.")
             return
 
@@ -146,9 +151,9 @@ class ContextEngine:
             self.narrative.narrative_summary = "Could not determine range profile due to invalid Daily ATR."
             return
 
-        final_high = self.asian_ohlc_data['high'].max()
-        final_low = self.asian_ohlc_data['low'].min()
-        
+        final_high = self.asian_high
+        final_low = self.asian_low
+
         self.narrative.consolidation_range_high = final_high
         self.narrative.consolidation_range_low = final_low
         
@@ -201,6 +206,12 @@ class ContextEngine:
             self.narrative.narrative_summary = "London session swept both sides. Market is choppy, no clear institutional intent."
             self.narrative.clarity_score = "Low"
             engine_logger.warning(self.narrative.narrative_summary)
+        else:
+            london_timeout = london_start + pd.Timedelta(hours=4)
+            if latest_time > london_timeout:
+                self.narrative.session_profile = "NO_MANIPULATION_DETECTED"
+                self.narrative.narrative_summary = "London session timeout. No clear manipulation detected."
+                self.narrative.clarity_score = "low"
             
     def _formulate_hypothesis(self, direction: str, sweep_level: float, bias: str, target: float):
         self.narrative.session_profile = f"MANIPULATION_CONFIRMED_{direction.upper()}"
@@ -226,7 +237,7 @@ class ContextEngine:
         if is_invalidated:
             original_bias = self.narrative.daily_bias
             self.narrative.session_profile = "HYPOTHESIS_INVALIDATED"
-            self.narrative.daily_bias = "Bearish" if original_bias == "Bullish" else "Bullish" 
+            self.narrative.daily_bias = "Neutral"
             self.narrative.clarity_score = "Medium"
             self.narrative.narrative_summary = (
                 f"Original {original_bias} hypothesis FAILED. Price broke invalidation. "

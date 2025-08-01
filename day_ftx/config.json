@@ -1,0 +1,40 @@
+{
+  "metatrader_settings": {
+    "magic_number": 234000,
+    "check_interval_seconds": 300
+  },
+  "asset_management": {
+    "symbols_to_trade": [
+      "EURUSD",
+      "GBPUSD",
+      "AUDUSD",
+      "USDCAD",
+      "USDCHF",
+      "USDJPY",
+      "NZDUSD"      
+    ],
+    "max_overall_positions": 20
+  },
+  "risk_management": {
+    "risk_per_trade_percent": 1.0,
+    "minimum_risk_reward_ratio": 1.2
+  },
+  "amd_strategy_parameters": {
+    "session_times_utc": {
+      "asia": {
+        "start": "00:00",
+        "end": "06:00"
+      },
+      "london": {
+        "start": "07:00",
+        "end": "16:00"
+      }
+    },
+    "asian_range_max_atr_ratio": 0.70,
+    "ltf_swing_length": 5,
+    "zones_to_check": 5
+  },
+  "logging": {
+    "trade_log_file": "trade_log.csv"
+  }
+}

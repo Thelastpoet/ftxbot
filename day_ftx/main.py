@@ -10,6 +10,7 @@ import os
 from typing import Tuple, Dict
 import json
 from dataclasses import asdict
+import pytz
 
 from technical_analysis import IndicatorCalculator
 from context_engine import ContextEngine, MarketNarrative
@@ -257,7 +258,7 @@ class TradeManager:
             if not data or not indicators:
                 return
 
-            hypothesis = self.context_engine.process_data(data[self.tf_medium], indicators[self.tf_higher])
+            hypothesis = self.context_engine.process_data(data[self.tf_lower], indicators[self.tf_higher])
 
             if hypothesis.clarity_score != "High" or "MANIPULATION_CONFIRMED" not in hypothesis.session_profile:
                 logging.info(f"[{symbol}] STANDING ASIDE. No high-clarity AMD reversal context. Narrative: {hypothesis.narrative_summary}")
@@ -314,31 +315,55 @@ class TradeManager:
         return trade_setup
 
     def _find_manipulation_extreme(self, ltf_df: pd.DataFrame, direction: str, hypothesis: MarketNarrative) -> pd.Series:
-        """Finds the extreme candle of the manipulation leg."""
+        """Finds the extreme candle of the manipulation leg based on the level identified by the ContextEngine."""
         symbol = self.market_data.symbol
-        london_start = self.context_engine.SESSION_WINDOWS['london']['start']
         
-        manipulation_leg = ltf_df[ltf_df.index.time >= london_start]
-        if manipulation_leg.empty:
-            logging.warning(f"[{symbol}] No data available for the London session to find manipulation.")
+        # Get today's date and the London start time from the context engine
+        current_day = self.context_engine.current_day
+        london_start_time = self.context_engine.SESSION_WINDOWS['london']['start']
+        london_session_start_dt = datetime.combine(current_day, london_start_time).replace(tzinfo=pytz.UTC)
+
+        # Filter the DataFrame to only include candles from today's London session onwards
+        todays_london_leg = ltf_df[ltf_df.index >= london_session_start_dt]
+
+        if todays_london_leg.empty:
+            logging.warning(f"[{symbol}] No data available for today's London session to find manipulation extreme.")
             return None
 
-        if direction == 'bullish':
-            filtered_leg = manipulation_leg[manipulation_leg['low'] < hypothesis.consolidation_range_low]
-            if filtered_leg.empty: 
-                logging.info(f"[{symbol}] No bearish manipulation (sweep of Asian low) found for bullish setup.")
-                return None
-            extreme_candle = filtered_leg.loc[filtered_leg['low'].idxmin()]
-            logging.info(f"[{symbol}] Bearish manipulation extreme (lowest low): {extreme_candle['low']:.5f} at {extreme_candle.name}")
+        extreme_level = hypothesis.invalidation_level
+        extreme_candle = None
+
+        try:
+            if direction == 'bullish':  # Manipulation was a sweep of lows, setting up a BUY
+                # Find the first candle that made this low
+                extreme_candles = todays_london_leg[todays_london_leg['low'] == extreme_level]
+                if not extreme_candles.empty:
+                    extreme_candle = extreme_candles.iloc[0]  # Take the first occurrence
+            else:  # Bearish, manipulation was a sweep of highs, setting up a SELL
+                extreme_candles = todays_london_leg[todays_london_leg['high'] == extreme_level]
+                if not extreme_candles.empty:
+                    extreme_candle = extreme_candles.iloc[0]  # Take the first occurrence
+
+            if extreme_candle is None:
+                # Use a tolerance for floating point comparison
+                tolerance = 0.00001 
+                if direction == 'bullish':
+                    extreme_candles = todays_london_leg[abs(todays_london_leg['low'] - extreme_level) < tolerance]
+                else:
+                    extreme_candles = todays_london_leg[abs(todays_london_leg['high'] - extreme_level) < tolerance]
+                
+                if not extreme_candles.empty:
+                    extreme_candle = extreme_candles.iloc[0]
+                else:
+                    logging.warning(f"[{symbol}] Could not find the extreme manipulation candle for level {extreme_level:.5f} in today's data.")
+                    return None
+            
+            logging.info(f"[{symbol}] Found manipulation extreme candle ({'lowest low' if direction == 'bullish' else 'highest high'}): {extreme_level:.5f} at {extreme_candle.name}")
             return extreme_candle
-        else: # bearish
-            filtered_leg = manipulation_leg[manipulation_leg['high'] > hypothesis.consolidation_range_high]
-            if filtered_leg.empty: 
-                logging.info(f"[{symbol}] No bullish manipulation (sweep of Asian high) found for bearish setup.")
-                return None
-            extreme_candle = filtered_leg.loc[filtered_leg['high'].idxmax()]
-            logging.info(f"[{symbol}] Bullish manipulation extreme (highest high): {extreme_candle['high']:.5f} at {extreme_candle.name}")
-            return extreme_candle
+            
+        except Exception as e:
+            logging.error(f"[{symbol}] Error finding extreme candle: {e}")
+            return None
 
     def _confirm_market_structure_shift(self, ltf_df: pd.DataFrame, direction: str, manipulation_candle: pd.Series, swing_length: int) -> float:
         """Confirms if price has broken the key swing point that preceded the manipulation."""

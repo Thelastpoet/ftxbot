@@ -1222,99 +1222,105 @@ class OrderManager:
         return initial_level
 
     def calculate_sl_tp(self, symbol: str, order_type: str, indicators: dict, 
-                    trade_setup: dict, liquidity_levels: dict, key_levels: list, rr_ratio=1.5) -> tuple:
+                    trade_setup: dict, liquidity_levels: dict, key_levels: list, 
+                    rr_ratio=1.5, atr_tp_multiplier=2.5) -> tuple:
         """
-        FINAL VERSION: Implements a "Look-Through" structural stop loss to defend against stop hunts.
-        This version includes the corrected validation logic.
+        Calculates SL/TP with dedicated logic for different trade setups.
+        - Ranging: SL outside the range, TP at the opposite side of the range.
+        - Other (Breakout/Trend): Structural SL and a dynamic, ATR-based day trading TP.
         """
         try:
             symbol_info = mt5.symbol_info(symbol)
             symbol_tick = mt5.symbol_info_tick(symbol)
-            if not symbol_info or not symbol_tick: return False, None, None, None
+            if not symbol_info or not symbol_tick: 
+                return False, None, None, None
 
             point = symbol_info.point
             stops_level = symbol_info.trade_stops_level
             current_price = symbol_tick.ask if order_type == 'buy' else symbol_tick.bid
             atr_value = indicators[self.market_data.timeframes[1]]['atr'].iloc[-1]
             
-            initial_sl_point = None
             setup_type = trade_setup.get('setup_type', '')
-
-            # --- Stage 1: Determine the INITIAL Structural Invalidation Point ---
-            if 'breakout' in setup_type:
-                initial_sl_point = trade_setup.get('breakout_range_low') if order_type == 'buy' else trade_setup.get('breakout_range_high')
-            elif 'retest' in setup_type:
-                retest_candle = trade_setup.get('retest_candle')
-                if retest_candle is None: 
-                    logging.warning(f"[{symbol}] Retest setup is missing 'retest_candle'. Cannot determine SL.")
-                    return False, None, None, None
-                initial_sl_point = retest_candle['low'] if order_type == 'buy' else retest_candle['high']
-            elif 'ranging' in setup_type:
-                if order_type == 'buy':
-                    support_levels = [lvl['price'] for lvl in key_levels if lvl['type'] == 'support']
-                    if not support_levels: return False, None, None, None
-                    initial_sl_point = min(support_levels)
-                else: # sell
-                    resistance_levels = [lvl['price'] for lvl in key_levels if lvl['type'] == 'resistance']
-                    if not resistance_levels: return False, None, None, None
-                    initial_sl_point = max(resistance_levels)
+            initial_sl_point = None
             
-            if initial_sl_point is None:
-                logging.info(f"[{symbol}] Ignoring non-specialized setup type '{setup_type}'.")
-                return False, None, None, None
+            # --- Dedicated Logic for Ranging Trades ---
+            if 'ranging' in setup_type:
+                support_levels = [lvl['price'] for lvl in key_levels if lvl['type'] == 'support']
+                resistance_levels = [lvl['price'] for lvl in key_levels if lvl['type'] == 'resistance']
+                if not support_levels or not resistance_levels: return False, None, None, None
+                
+                range_high = max(resistance_levels)
+                range_low = min(support_levels)
 
-            # --- Stage 2: The "Look-Through" Logic for Stop Hunt Protection ---
+                if order_type == 'buy':
+                    initial_sl_point = range_low
+                    take_profit = self._normalize_price(symbol, range_high)
+                else: # sell
+                    initial_sl_point = range_high
+                    take_profit = self._normalize_price(symbol, range_low)
+            
+            # --- Logic for All Other Trade Types (Breakout, Retest, Trend) ---
+            else:
+                if 'breakout' in setup_type:
+                    initial_sl_point = trade_setup.get('breakout_range_low') if order_type == 'buy' else trade_setup.get('breakout_range_high')
+                elif 'retest' in setup_type:
+                    retest_candle = trade_setup.get('retest_candle')
+                    if retest_candle is None: return False, None, None, None
+                    initial_sl_point = retest_candle['low'] if order_type == 'buy' else retest_candle['high']
+                
+                if initial_sl_point is None:
+                    logging.info(f"[{symbol}] Ignoring non-specialized setup type '{setup_type}' for SL/TP.")
+                    return False, None, None, None
+                
+                # --- Dynamic Day Trading Take Profit Logic ---
+                atr_tp = current_price + (atr_value * atr_tp_multiplier) if order_type == 'buy' else current_price - (atr_value * atr_tp_multiplier)
+
+                liquidity_tp = None
+                target_liquidity = self.liquidity_detector.get_target_for_bias(
+                    bias=('bullish' if order_type == 'buy' else 'bearish'),
+                    liquidity_levels=liquidity_levels, entry_price=current_price, min_rr=rr_ratio, sl_price=None # SL not needed yet
+                )
+                if target_liquidity:
+                    liquidity_tp = target_liquidity['level']
+
+                final_tp = None
+                if order_type == 'buy':
+                    final_tp = min(atr_tp, liquidity_tp) if liquidity_tp else atr_tp
+                else: # sell
+                    final_tp = max(atr_tp, liquidity_tp) if liquidity_tp else atr_tp
+                
+                take_profit = self._normalize_price(symbol, final_tp)
+
+            # --- Final SL Calculation and Validation (Applies to all setups) ---
             final_sl_level = self._find_next_structural_level(initial_sl_point, order_type, key_levels)
-            sl_buffer = self._normalize_price(symbol, atr_value * 0.1)
+            sl_buffer = self._normalize_price(symbol, atr_value * 0.2) # Increased buffer slightly for safety
             ideal_sl = final_sl_level - sl_buffer if order_type == 'buy' else final_sl_level + sl_buffer
 
-            # --- Stage 3: CORRECTED Validation ---
-            # For a buy, SL must be below price. For a sell, SL must be above price.
-            # The previous logic for 'sell' was incorrect.
-            if (order_type == 'buy' and ideal_sl >= current_price):
-                logging.warning(f"[{symbol}] BUY trade invalidated: SL ({ideal_sl}) is not below current price ({current_price}).")
-                return False, None, None, None
-            if (order_type == 'sell' and ideal_sl <= current_price):
-                logging.warning(f"[{symbol}] SELL trade invalidated: SL ({ideal_sl}) is not above current price ({current_price}).")
-                return False, None, None, None
-
-            stop_distance_points = abs(current_price - ideal_sl) / point
-            if stop_distance_points < stops_level:
-                logging.warning(f"[{symbol}] Trade invalidated: Stop distance ({stop_distance_points}) is less than minimum stops level ({stops_level}).")
-                return False, None, None, None
-
-            max_reasonable_atr = 6.0
-            if abs(current_price - ideal_sl) > (atr_value * max_reasonable_atr):
-                logging.warning(f"[{symbol}] Trade invalidated: Stop distance is more than {max_reasonable_atr}x ATR.")
+            if (order_type == 'buy' and ideal_sl >= current_price) or \
+               (order_type == 'sell' and ideal_sl <= current_price):
+                logging.warning(f"[{symbol}] Trade invalidated: Ideal SL ({ideal_sl}) is on the wrong side of current price ({current_price}).")
                 return False, None, None, None
             
             stop_loss = self._normalize_price(symbol, ideal_sl)
+            risk_distance = abs(current_price - stop_loss)
+            reward_distance = abs(current_price - take_profit)
 
-            # --- Stage 4: Take Profit (No Fallbacks) ---
-            # Attempt liquidity-based TP
-            target_liquidity = self.liquidity_detector.get_target_for_bias(
-                bias=('bullish' if order_type == 'buy' else 'bearish'),
-                liquidity_levels=liquidity_levels,
-                entry_price=current_price,
-                min_rr=rr_ratio,
-                sl_price=stop_loss
-            )
+            if risk_distance == 0 or reward_distance / risk_distance < 1.0:
+                logging.warning(f"[{symbol}] Trade invalidated: Final R:R is less than 1:1 (Risk: {risk_distance:.5f}, Reward: {reward_distance:.5f}).")
+                return False, None, None, None
 
-            if target_liquidity:
-                take_profit = self._normalize_price(symbol, target_liquidity['level'])
-            else:
-                # Fallback: fixed RR target
-                rr_distance = stop_distance_points * rr_ratio * point
-                take_profit = current_price + rr_distance if order_type == 'buy' else current_price - rr_distance
-                take_profit = self._normalize_price(symbol, take_profit)
-                logging.info(f"[{symbol}] Fallback TP at {rr_ratio}xRR: {take_profit}")
+            stop_distance_points = risk_distance / point
+            if stop_distance_points < stops_level:
+                logging.warning(f"[{symbol}] Trade invalidated: Stop distance ({stop_distance_points:.1f}) is less than minimum stops level ({stops_level}).")
+                return False, None, None, None
 
+            logging.info(f"[{symbol}] Validated Order Params for {setup_type}: SL={stop_loss}, TP={take_profit}")
             return True, stop_loss, take_profit, stop_distance_points
-        
+
         except Exception as e:
             logging.error(f"[{symbol}] CRITICAL ERROR in calculate_sl_tp: {e}\n{traceback.format_exc()}")
             return False, None, None, None
-
+        
     def calculate_lot_size(self, symbol, account_balance, risk_percentage, stop_loss_points):
         """
         Public-facing wrapper for the robust lot size calculation.

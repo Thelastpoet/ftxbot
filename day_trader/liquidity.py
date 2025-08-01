@@ -14,9 +14,10 @@ logger = logging.getLogger(__name__)
 class LiquidityDetector:
     """Detects liquidity levels."""
     
-    def __init__(self, swing_lookback=15, eq_range_percent=0.05):
-        self.swing_lookback = swing_lookback
-        self.eq_range_percent = eq_range_percent
+    def __init__(self, settings: Dict):
+        self.settings = settings
+        self.swing_lookback = self.settings['swing_lookback']
+        self.eq_range_percent = self.settings['eq_range_percent']
         
     def get_liquidity_levels(self, ohlc_df: pd.DataFrame, session_context: dict, 
                            daily_df: pd.DataFrame = None) -> Dict[str, List[Dict]]:
@@ -71,8 +72,12 @@ class LiquidityDetector:
             
             # New York Session liquidity (8:30-11:00 AM NY)
             current_ny_time = ohlc_df.index[-1].tz_convert(pytz.timezone("America/New_York"))
-            ny_start = current_ny_time.replace(hour=8, minute=30, second=0, microsecond=0)
-            ny_end = current_ny_time.replace(hour=11, minute=0, second=0, microsecond=0)
+            ny_start = current_ny_time.replace(hour=self.settings['ny_session_start_hour'], 
+                                               minute=self.settings['ny_session_start_minute'], 
+                                               second=0, microsecond=0)
+            ny_end = current_ny_time.replace(hour=self.settings['ny_session_end_hour'], 
+                                             minute=self.settings['ny_session_end_minute'], 
+                                             second=0, microsecond=0)
             
             # Convert times back to UTC for DataFrame filtering
             ny_start_utc = ny_start.tz_convert('UTC')
