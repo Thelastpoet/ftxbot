@@ -1,8 +1,8 @@
-# --- START OF FILE technical_analysis.py (Updated) ---
+
 
 import traceback
 from talib import RSI, ADX, MACD, ATR, MOM, EMA, PLUS_DI, MINUS_DI
-import talib # <-- IMPORT THE MAIN TALIB LIBRARY
+import talib
 import pandas as pd
 import numpy as np
 from numpy import select
@@ -13,82 +13,74 @@ warnings.filterwarnings("ignore", category=FutureWarning)
 warnings.filterwarnings("ignore", category=Warning)
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
-# Initialize logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 class IndicatorCalculator:
-    def __init__(self):
-        pass
+    def __init__(self, config=None):
+        self.config = config or {}
 
-    def calculate_indicators(self, data, rsi_period=14, adx_period=14, atr_period=14,
-                             ichimoku_tenkan_sen=9, ichimoku_kijun_sen=26, ichimoku_senkou_span_b=52,
-                             macd_fastperiod=12, macd_slowperiod=26, macd_signal_period=9,
-                             chandelier_period=14, chandelier_multiplier=3, momentum_period=10,
-                             dmi_period=14, ema_short_period=10, ema_long_period=50):
-        """
-        Calculate technical indicators with NaN handling
-        """
+    def calculate_indicators(self, data, rsi_period=None, adx_period=None, atr_period=None,
+                             ichimoku_tenkan_sen=None, ichimoku_kijun_sen=None, ichimoku_senkou_span_b=None,
+                             macd_fastperiod=None, macd_slowperiod=None, macd_signal_period=None,
+                             chandelier_period=None, chandelier_multiplier=None, momentum_period=None,
+                             dmi_period=None, ema_short_period=None, ema_long_period=None):
         try:
             if data is None or data.empty:
                 logging.error("No data provided for indicator calculation")
                 return None
             
-            # Create a copy to avoid modifying original data
+
             df = data.copy()
+            params = self.config
             
-            # --- Standard Indicators ---
-            df['ema_short'] = EMA(df['close'], timeperiod=ema_short_period)
-            df['ema_long'] = EMA(df['close'], timeperiod=ema_long_period)
+
+            df['ema_short'] = EMA(df['close'], timeperiod=params['ema_short_period'])
+            df['ema_long'] = EMA(df['close'], timeperiod=params['ema_long_period'])
             df['ema_short_slope'] = df['ema_short'].diff()
             df['ema_long_slope'] = df['ema_long'].diff()
-            df['rsi'] = RSI(df['close'], timeperiod=rsi_period)
-            df['adx'] = ADX(df['high'], df['low'], df['close'], timeperiod=adx_period)
-            df['plus_di'] = PLUS_DI(df['high'], df['low'], df['close'], timeperiod=dmi_period)
-            df['minus_di'] = MINUS_DI(df['high'], df['low'], df['close'], timeperiod=dmi_period)        
-            df['atr'] = ATR(df['high'], df['low'], df['close'], timeperiod=atr_period)     
-            df['ichimoku_tenkan_sen'] = (df['high'].rolling(window=ichimoku_tenkan_sen).max() + df['low'].rolling(window=ichimoku_tenkan_sen).min()) / 2
-            df['ichimoku_kijun_sen'] = (df['high'].rolling(window=ichimoku_kijun_sen).max() + df['low'].rolling(window=ichimoku_kijun_sen).min()) / 2
-            df['ichimoku_senkou_span_a'] = ((df['ichimoku_tenkan_sen'] + df['ichimoku_kijun_sen']) / 2).shift(ichimoku_kijun_sen)
-            df['ichimoku_senkou_span_b'] = ((df['high'].rolling(window=ichimoku_senkou_span_b).max() + df['low'].rolling(window=ichimoku_senkou_span_b).min()) / 2).shift(ichimoku_kijun_sen)
-            df['ichimoku_chikou_span'] = df['close'].shift(-ichimoku_kijun_sen)
-            df['macd'], df['macd_signal'], df['macd_hist'] = MACD(df['close'], fastperiod=macd_fastperiod, slowperiod=macd_slowperiod, signalperiod=macd_signal_period)    
-            df['chandelier_exit'] = self.calculate_chandelier_exit(df, period=chandelier_period, multiplier=chandelier_multiplier)        
-            df['momentum'] = MOM(df['close'], timeperiod=momentum_period)
+            df['rsi'] = RSI(df['close'], timeperiod=params['rsi_period'])
+            df['adx'] = ADX(df['high'], df['low'], df['close'], timeperiod=params['adx_period'])
+            df['plus_di'] = PLUS_DI(df['high'], df['low'], df['close'], timeperiod=params['dmi_period'])
+            df['minus_di'] = MINUS_DI(df['high'], df['low'], df['close'], timeperiod=params['dmi_period'])        
+            df['atr'] = ATR(df['high'], df['low'], df['close'], timeperiod=params['atr_period'])     
+            df['ichimoku_tenkan_sen'] = (df['high'].rolling(window=params['ichimoku_tenkan_sen']).max() + df['low'].rolling(window=params['ichimoku_tenkan_sen']).min()) / 2
+            df['ichimoku_kijun_sen'] = (df['high'].rolling(window=params['ichimoku_kijun_sen']).max() + df['low'].rolling(window=params['ichimoku_kijun_sen']).min()) / 2
+            df['ichimoku_senkou_span_a'] = ((df['ichimoku_tenkan_sen'] + df['ichimoku_kijun_sen']) / 2).shift(params['ichimoku_kijun_sen'])
+            df['ichimoku_senkou_span_b'] = ((df['high'].rolling(window=params['ichimoku_senkou_span_b']).max() + df['low'].rolling(window=params['ichimoku_senkou_span_b']).min()) / 2).shift(params['ichimoku_kijun_sen'])
+            df['ichimoku_chikou_span'] = df['close'].shift(-params['ichimoku_kijun_sen'])
+            df['macd'], df['macd_signal'], df['macd_hist'] = MACD(df['close'], fastperiod=params['macd_fastperiod'], slowperiod=params['macd_slowperiod'], signalperiod=params['macd_signal_period'])    
+            df['chandelier_exit'] = self.calculate_chandelier_exit(df)
+            df['momentum'] = MOM(df['close'], timeperiod=params['momentum_period'])
 
-            # --- START: NEW CANDLESTICK PATTERN INDICATORS ---
 
-            # 1. Confirmation Candles (for breakouts)
             df['cdl_marubozu'] = talib.CDLMARUBOZU(df['open'], df['high'], df['low'], df['close'])
             df['cdl_engulfing'] = talib.CDLENGULFING(df['open'], df['high'], df['low'], df['close'])
 
-            # 2. Indecision/Reversal Candles (to AVOID breakouts)
+
             df['cdl_doji'] = talib.CDLDOJI(df['open'], df['high'], df['low'], df['close'])
             df['cdl_spinning_top'] = talib.CDLSPINNINGTOP(df['open'], df['high'], df['low'], df['close'])
             df['cdl_shooting_star'] = talib.CDLSHOOTINGSTAR(df['open'], df['high'], df['low'], df['close'])
             df['cdl_hammer'] = talib.CDLHAMMER(df['open'], df['high'], df['low'], df['close'])
             
-            # --- END: NEW CANDLESTICK PATTERN INDICATORS ---
 
-            # Calculate the maximum required lookback period
             max_period = max(
-                ema_long_period,
-                adx_period + dmi_period,
-                macd_slowperiod + macd_signal_period,
-                ichimoku_senkou_span_b + ichimoku_kijun_sen,
-                chandelier_period,
-                momentum_period
+                params['ema_long_period'],
+                params['adx_period'] + params['dmi_period'],
+                params['macd_slowperiod'] + params['macd_signal_period'],
+                params['ichimoku_senkou_span_b'] + params['ichimoku_kijun_sen'],
+                params['chandelier_period'],
+                params['momentum_period']
             )
 
-            # Drop rows with NaN values but keep enough data for calculations
-            # Candlestick patterns don't require a long lookback, so this is safe
+
             df = df.iloc[max_period:]
             
-            # Verify we still have data after removing NaN values
+
             if df.empty:
                 logging.error("No data remaining after removing NaN values")
                 return None
                 
-            # Final NaN check for critical indicators
+
             critical_indicators = ['ema_short', 'ema_long', 'rsi', 'adx', 'atr']
             if df[critical_indicators].isna().any().any():
                 logging.error("Critical indicators still contain NaN values")
@@ -101,7 +93,9 @@ class IndicatorCalculator:
             logging.error(traceback.format_exc())
             return None
     
-    def calculate_chandelier_exit(self, data, period=22, multiplier=3):
+    def calculate_chandelier_exit(self, data, period=None, multiplier=None):
+        period = period or self.config['chandelier_period']
+        multiplier = multiplier or self.config['chandelier_multiplier']
         atr = ATR(data['high'], data['low'], data['close'], timeperiod=period)
         chandelier_long = data['high'].rolling(window=period).max() - (atr * multiplier)
         chandelier_short = data['low'].rolling(window=period).min() + (atr * multiplier)

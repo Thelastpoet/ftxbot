@@ -1,7 +1,4 @@
-"""
-Liquidity Detection Module
-Implements buy-side/sell-side liquidity concepts
-"""
+
 
 import pandas as pd
 import logging
@@ -12,65 +9,62 @@ import pytz
 logger = logging.getLogger(__name__)
 
 class LiquidityDetector:
-    """Detects liquidity levels."""
     
-    def __init__(self, settings: Dict):
-        self.settings = settings
+    def __init__(self, settings: Dict = None):
+        self.settings = settings or {}
         self.swing_lookback = self.settings['swing_lookback']
         self.eq_range_percent = self.settings['eq_range_percent']
         
     def get_liquidity_levels(self, ohlc_df: pd.DataFrame, session_context: dict, 
                            daily_df: pd.DataFrame = None) -> Dict[str, List[Dict]]:
-        """Get all liquidity levels."""
         current_price = ohlc_df['close'].iloc[-1]
         
         swings = smc.swing_highs_lows(ohlc_df, swing_length=self.swing_lookback)
         
         liquidity_levels = {'buy_side': [], 'sell_side': []}
         
-        # Session-based liquidity (highest priority)
+
         session_liquidity = self._get_session_liquidity(session_context, ohlc_df)
         liquidity_levels['buy_side'].extend(session_liquidity['buy_side'])
         liquidity_levels['sell_side'].extend(session_liquidity['sell_side'])
         
-        # Equal highs/lows (very high priority)
+
         equal_levels = self._get_equal_highs_lows(ohlc_df, swings)
         liquidity_levels['buy_side'].extend(equal_levels['buy_side'])
         liquidity_levels['sell_side'].extend(equal_levels['sell_side'])
         
-        # Recent swing highs/lows
+
         swing_liquidity = self._get_swing_liquidity(swings)
         liquidity_levels['buy_side'].extend(swing_liquidity['buy_side'])
         liquidity_levels['sell_side'].extend(swing_liquidity['sell_side'])
         
-        # Daily/Weekly levels
+
         if daily_df is not None:
             htf_liquidity = self._get_htf_liquidity(daily_df)
             liquidity_levels['buy_side'].extend(htf_liquidity['buy_side'])
             liquidity_levels['sell_side'].extend(htf_liquidity['sell_side'])
         
-        # Remove duplicates and filter by current price
+
         liquidity_levels['buy_side'] = self._finalize_levels(liquidity_levels['buy_side'], current_price, 'above')
         liquidity_levels['sell_side'] = self._finalize_levels(liquidity_levels['sell_side'], current_price, 'below')
 
         return liquidity_levels
 
     def _get_session_liquidity(self, session_context: dict, ohlc_df: pd.DataFrame) -> Dict[str, List[Dict]]:
-        """Get liquidity from session ranges (Asian, London, and NY)."""
         liquidity = {'buy_side': [], 'sell_side': []}
         
         try:
-            # Ensure DataFrame index has timezone
+
             if ohlc_df.index.tzinfo is None:
                 ohlc_df.index = ohlc_df.index.tz_localize('UTC')
             
-            # Asian Range liquidity
+
             if session_context.get('last_asian_range'):
                 asian_range = session_context['last_asian_range']
                 liquidity['buy_side'].append({'level': asian_range['high'], 'type': 'asian_high', 'priority': 'very_high', 'description': 'Asian Session High'})
                 liquidity['sell_side'].append({'level': asian_range['low'], 'type': 'asian_low', 'priority': 'very_high', 'description': 'Asian Session Low'})
             
-            # New York Session liquidity (8:30-11:00 AM NY)
+
             current_ny_time = ohlc_df.index[-1].tz_convert(pytz.timezone("America/New_York"))
             ny_start = current_ny_time.replace(hour=self.settings['ny_session_start_hour'], 
                                                minute=self.settings['ny_session_start_minute'], 
@@ -79,7 +73,7 @@ class LiquidityDetector:
                                              minute=self.settings['ny_session_end_minute'], 
                                              second=0, microsecond=0)
             
-            # Convert times back to UTC for DataFrame filtering
+
             ny_start_utc = ny_start.tz_convert('UTC')
             ny_end_utc = ny_end.tz_convert('UTC')
             
@@ -94,7 +88,6 @@ class LiquidityDetector:
         return liquidity
 
     def _get_equal_highs_lows(self, ohlc_df: pd.DataFrame, swings: pd.DataFrame) -> Dict[str, List[Dict]]:
-        """Detects equal highs/lows using smc.liquidity for consistency."""
         liquidity = {'buy_side': [], 'sell_side': []}
         eq_levels = smc.liquidity(ohlc_df, swings, range_percent=self.eq_range_percent)
         
@@ -108,7 +101,6 @@ class LiquidityDetector:
         return liquidity
 
     def _get_swing_liquidity(self, swings: pd.DataFrame) -> Dict[str, List[Dict]]:
-        """Gets liquidity from swing points provided by the smc library."""
         liquidity = {'buy_side': [], 'sell_side': []}
         recent_swings = swings.dropna().tail(10)
 
@@ -120,7 +112,6 @@ class LiquidityDetector:
         return liquidity
 
     def _get_htf_liquidity(self, daily_df: pd.DataFrame) -> Dict[str, List[Dict]]:
-        """Gets higher timeframe liquidity levels (Previous Day, Previous Week)."""
         liquidity = {'buy_side': [], 'sell_side': []}
         if daily_df is None or len(daily_df) < 5: return liquidity
         
@@ -134,11 +125,10 @@ class LiquidityDetector:
         return liquidity
 
     def _finalize_levels(self, levels: List[Dict], current_price: float, side: str) -> List[Dict]:
-        """(Corrected) Filters, de-duplicates by priority, and sorts."""
         if not levels:
             return []
         
-        # 1. Filter by side (above/below current price)
+
         if side == 'above':
             filtered_by_side = [l for l in levels if l['level'] > current_price]
         else: # 'below'
@@ -147,11 +137,11 @@ class LiquidityDetector:
         if not filtered_by_side:
             return []
 
-        # 2. Sort by priority so the best levels come first.
+
         priority_order = {'very_high': 0, 'high': 1, 'medium': 2, 'low': 3}
         filtered_by_side.sort(key=lambda x: priority_order.get(x['priority'], 99))
         
-        # 3. De-duplicate safely, keeping only the highest-priority entry for each price.
+
         unique_levels = {}
         for level in filtered_by_side:
             price = level['level']
@@ -160,21 +150,20 @@ class LiquidityDetector:
         
         final_list = list(unique_levels.values())
         
-        # 4. Sort the final list by distance for the target selection logic.
+
         final_list.sort(key=lambda x: abs(x['level'] - current_price))
         
         return final_list
 
     def get_target_for_bias(self, bias: str, liquidity_levels: Dict[str, List[Dict]], 
                            entry_price: float, min_rr: float = 1.0, sl_price: Optional[float] = None) -> Optional[Dict]:
-        """Gets the best liquidity target for the given bias."""
         target_side = 'buy_side' if bias == 'bullish' else 'sell_side'
         candidates = liquidity_levels.get(target_side, [])
         if not candidates:
             return None
 
         profitable_candidates = []
-        # If sl_price is provided, filter by R:R ratio
+
         if sl_price is not None:
             risk = abs(entry_price - sl_price)
             if risk > 0:
@@ -184,10 +173,10 @@ class LiquidityDetector:
             if not profitable_candidates:
                 return None
         else:
-            # If no sl_price, all candidates are valid
+
             profitable_candidates = candidates
 
-        # Sort by priority, then by distance
+
         priority_order = {'very_high': 0, 'high': 1, 'medium': 2, 'low': 3}
         profitable_candidates.sort(key=lambda x: (priority_order.get(x['priority'], 99), abs(x['level'] - entry_price)))
         

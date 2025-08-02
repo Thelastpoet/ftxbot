@@ -16,11 +16,21 @@ import json
 from technical_analysis import IndicatorCalculator
 from liquidity import LiquidityDetector
 
-# Initialize logging
+
+with open('config.json', 'r') as f:
+    CONFIG = json.load(f)
+
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 MAX_PERIOD = 1000
-CHECK_INTERVAL = 300  # Main loop
+CHECK_INTERVAL = CONFIG['trading_settings']['main_loop_interval_seconds']
+
+
+TIMEFRAME_MAP = {
+    'M15': mt5.TIMEFRAME_M15,
+    'H1': mt5.TIMEFRAME_H1,
+    'D1': mt5.TIMEFRAME_D1
+}
 
 class DivergenceType(Enum):
     REGULAR_BULLISH = "regular_bullish"
@@ -30,7 +40,6 @@ class DivergenceType(Enum):
 
 class MetaTrader5Client:
     def __init__(self):
-        # Initialize the MetaTrader5 connection
         self.initialized = mt5.initialize()
         if self.initialized:
             logging.info("MetaTrader5 initialized successfully.")
@@ -38,16 +47,13 @@ class MetaTrader5Client:
             logging.error("Failed to initialize MetaTrader5.")
 
     def __del__(self):
-        # Shutdown the MetaTrader5 connection when the object is destroyed
         mt5.shutdown()
         logging.info("MetaTrader5 connection shut down.")
 
     def is_initialized(self):
-        # Check if the MetaTrader5 connection is initialized
         return self.initialized
 
     def get_account_info(self):
-        # Retrieve account information from MetaTrader5
         logging.info("Getting account info.")
         return mt5.account_info()
 
@@ -87,9 +93,6 @@ class SwingPointDetector:
         self.prominence_factor = prominence_factor
 
     def find_swing_points(self, data):
-        """
-        Finds swing high and swing low points in price data.
-        """
         if not isinstance(data, pd.DataFrame) or not {'high', 'low'}.issubset(data.columns) or data.empty:
             logging.error("Invalid input data. Must be a non-empty DataFrame with 'high' and 'low' columns.")
             return None
@@ -149,7 +152,6 @@ class SwingPointDetector:
         return filtered_swing_points
 
     def analyze_price_action(self, data, swing_points, trend_lookback=3):
-        """Analyzes price action for trend and consolidation using multiple swing points."""
         if swing_points is None or data is None or data.empty:
             return None
 
@@ -277,13 +279,15 @@ class DivergenceDetector:
         return regular_divergence, hidden_divergence
 
 class TradeManager:
-    def __init__(self, client, market_data):
+    def __init__(self, client, market_data, config):
         self.client = client
         self.market_data = market_data
-        self.timeframes = market_data.timeframes
-        self.trade_logger = TradeLogger()
-        self.indicator_calc = IndicatorCalculator()
-        self.liquidity_detector = LiquidityDetector()
+        self.config = config
+        self.timeframes = [TIMEFRAME_MAP[tf] for tf in self.config['trading_settings']['timeframes']]
+        
+        self.trade_logger = TradeLogger(filename=self.config['misc']['trade_log_filename'])
+        self.indicator_calc = IndicatorCalculator(self.config['indicator_parameters'])
+        self.liquidity_detector = LiquidityDetector(self.config['liquidity_detector_settings'])
         self.order_manager = OrderManager(client, market_data, self.indicator_calc, self.trade_logger, self.liquidity_detector)
         self.divergence_detector = DivergenceDetector(order=5, k=2)        
         
@@ -291,7 +295,7 @@ class TradeManager:
         self.tf_medium = sorted(self.timeframes)[1]
         self.tf_lower = min(self.timeframes)
         
-        self.max_positions = 20
+        self.max_positions = self.config['trading_settings']['max_total_positions']
         
     def analyze_market_structure(self, symbol, data, timeframe):
         swing_detector = SwingPointDetector(timeframe=timeframe, lookback_period=20)
@@ -357,12 +361,12 @@ class TradeManager:
                 data = data_dict[tf]
                 indicators = indicators_dict[tf]
                 
-                # --- Calculate market structure for BOTH Higher and Medium TFs ---
+        
                 if tf == self.tf_higher or tf == self.tf_medium:
                     structure_analysis = self.analyze_market_structure(symbol, data, tf)
                     if tf == self.tf_higher:
                         alignment[tf] = {'structure': structure_analysis}
-                    else: # Medium Timeframe
+                    else:
                         alignment[tf] = {
                             'structure': structure_analysis,
                             'trend': self.determine_overall_trend(symbol, data, indicators)
@@ -411,7 +415,7 @@ class TradeManager:
             alignment = self.analyze_timeframe_alignment(symbol, data, indicators)
             if not alignment: return
 
-            # Get liquidity levels
+    
             liquidity_levels = self.liquidity_detector.get_liquidity_levels(data[self.tf_medium], {}, daily_df=data[self.tf_higher])
 
             trade_setup = self._evaluate_trade_setup(symbol, data, indicators, alignment)
@@ -567,7 +571,7 @@ class TradeManager:
             
             key_levels = alignment[self.tf_higher]['structure']['key_levels']
             
-            # Call the new, refactored OrderManager function
+    
             is_valid, stop_loss, take_profit, stop_loss_points = self.order_manager.calculate_sl_tp(
                 symbol=symbol,
                 order_type=trade_setup['direction'],
@@ -579,11 +583,11 @@ class TradeManager:
             )
             
             if not is_valid:
-                # The calculate_sl_tp function now provides detailed logs, so a generic message is sufficient here.
+
                 logging.info(f"[{symbol}] Trade setup invalidated by order parameter calculation.")
                 return None
 
-            # Calculate lot size based on the CORRECT stop loss distance in points
+
             lot_size = self.order_manager.calculate_lot_size(
                 symbol=symbol,
                 account_balance=account_info.balance,
@@ -1359,7 +1363,7 @@ class OrderManager:
         
 async def run_main_loop(client, symbols, timeframes):
     market_data_dict = {symbol: MarketData(symbol, timeframes) for symbol in symbols}
-    trade_managers = {symbol: TradeManager(client, market_data_dict[symbol]) for symbol in symbols}
+    trade_managers = {symbol: TradeManager(client, market_data_dict[symbol], CONFIG) for symbol in symbols}
 
     while True:
         start_time = time.time()
