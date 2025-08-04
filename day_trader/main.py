@@ -16,7 +16,6 @@ import json
 from technical_analysis import IndicatorCalculator
 from liquidity import LiquidityDetector
 
-
 with open('config.json', 'r') as f:
     CONFIG = json.load(f)
 
@@ -24,7 +23,6 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 
 MAX_PERIOD = 1000
 CHECK_INTERVAL = CONFIG['trading_settings']['main_loop_interval_seconds']
-
 
 TIMEFRAME_MAP = {
     'M15': mt5.TIMEFRAME_M15,
@@ -297,7 +295,7 @@ class TradeManager:
         
         self.max_positions = self.config['trading_settings']['max_total_positions']
         
-    def analyze_market_structure(self, symbol, data, timeframe):
+    def analyze_market_structure(self, data, timeframe):
         swing_detector = SwingPointDetector(timeframe=timeframe, lookback_period=20)
         try:
             swing_points = swing_detector.find_swing_points(data)
@@ -354,31 +352,30 @@ class TradeManager:
             logging.error(f"Error in divergence analysis: {str(e)}")
             return None
                         
-    def analyze_timeframe_alignment(self, symbol, data_dict, indicators_dict):
+    def analyze_timeframe_alignment(self, data_dict, indicators_dict):
         try:
             alignment = {}
             for tf in [self.tf_higher, self.tf_medium, self.tf_lower]:
                 data = data_dict[tf]
-                indicators = indicators_dict[tf]
-                
+                indicators = indicators_dict[tf]                
         
                 if tf == self.tf_higher or tf == self.tf_medium:
-                    structure_analysis = self.analyze_market_structure(symbol, data, tf)
+                    structure_analysis = self.analyze_market_structure(data, tf)
                     if tf == self.tf_higher:
                         alignment[tf] = {'structure': structure_analysis}
                     else:
                         alignment[tf] = {
                             'structure': structure_analysis,
-                            'trend': self.determine_overall_trend(symbol, data, indicators)
+                            'trend': self.determine_overall_trend(data, indicators)
                         }
                 elif tf == self.tf_lower:
-                    alignment[tf] = {'momentum': self._analyze_momentum(symbol, data, indicators)}
+                    alignment[tf] = {'momentum': self._analyze_momentum(indicators)}
             return alignment
         except Exception as e:
             logging.error(f"Error in timeframe alignment analysis: {str(e)}")
             return None
             
-    def _analyze_momentum(self, symbol, data, indicators):
+    def _analyze_momentum(self, indicators):
         try:
             rsi = indicators['rsi'].iloc[-1]
             rsi_trend = 'bullish' if rsi > 50 else 'bearish'
@@ -389,7 +386,7 @@ class TradeManager:
             logging.error(f"Error analyzing momentum: {str(e)}")
             return None
         
-    def determine_overall_trend(self, symbol, data, indicators):        
+    def determine_overall_trend(self, data, indicators):        
         bullish_conditions = (
             data['close'].iloc[-1] > indicators['ichimoku_senkou_span_a'].iloc[-1] and
             data['close'].iloc[-1] > indicators['ichimoku_senkou_span_b'].iloc[-1] and
@@ -412,9 +409,8 @@ class TradeManager:
             data, indicators = self._prepare_data(symbol)
             if not data or not indicators: return
 
-            alignment = self.analyze_timeframe_alignment(symbol, data, indicators)
+            alignment = self.analyze_timeframe_alignment(data, indicators)
             if not alignment: return
-
     
             liquidity_levels = self.liquidity_detector.get_liquidity_levels(data[self.tf_medium], {}, daily_df=data[self.tf_higher])
 
@@ -464,7 +460,6 @@ class TradeManager:
                 
                 # Convert non-serializable DataFrames in swing_points to a list of dicts
                 try:
-                    # Iterate over both higher and medium timeframes as both can have structure analysis
                     for tf_to_process in [self.tf_higher, self.tf_medium]:
                         if tf_to_process in market_context['alignment'] and 'structure' in market_context['alignment'][tf_to_process]:
                             structure = market_context['alignment'][tf_to_process].get('structure')
@@ -516,7 +511,6 @@ class TradeManager:
             # Get currently open positions from MT5
             positions = mt5.positions_get(symbol=symbol)
             if positions is None:
-                # This could mean no positions or an error; assume no positions for this symbol
                 open_mt5_tickets = set()
             else:
                 open_mt5_tickets = {pos.ticket for pos in positions}
@@ -525,20 +519,17 @@ class TradeManager:
             for index, trade in open_logged_trades.iterrows():
                 ticket_id = trade['ticket_id']
                 if ticket_id not in open_mt5_tickets:
-                    # This trade has been closed, get history
                     deals = mt5.history_deals_get(position=ticket_id)
                     if deals:
-                        # The last deal on a position is usually the closing one
                         closing_deal = deals[-1]
                         close_price = closing_deal.price
                         close_time = pd.to_datetime(closing_deal.time, unit='s')
                         pnl = closing_deal.profit
                         
-                        # Determine reason for closing (very basic)
                         status = "closed_manual"
-                        if abs(close_price - trade['take_profit']) < 0.0001: # Check for TP hit
+                        if abs(close_price - trade['take_profit']) < 0.0001:
                            status = "closed_tp"
-                        elif abs(close_price - trade['stop_loss']) < 0.0001: # Check for SL hit
+                        elif abs(close_price - trade['stop_loss']) < 0.0001:
                            status = "closed_sl"
 
                         self.trade_logger.log_close_trade(
@@ -552,7 +543,6 @@ class TradeManager:
 
         except Exception as e:
             logging.error(f"Error managing open positions for {symbol}: {str(e)}\n{traceback.format_exc()}")
-
 
     def _has_opposing_position(self, symbol, direction):
         symbol_positions = mt5.positions_get(symbol=symbol)
@@ -569,8 +559,7 @@ class TradeManager:
                 logging.error(f"[{symbol}] Could not retrieve account info.")
                 return None
             
-            key_levels = alignment[self.tf_higher]['structure']['key_levels']
-            
+            key_levels = alignment[self.tf_higher]['structure']['key_levels']            
     
             is_valid, stop_loss, take_profit, stop_loss_points = self.order_manager.calculate_sl_tp(
                 symbol=symbol,
@@ -586,7 +575,6 @@ class TradeManager:
 
                 logging.info(f"[{symbol}] Trade setup invalidated by order parameter calculation.")
                 return None
-
 
             lot_size = self.order_manager.calculate_lot_size(
                 symbol=symbol,
@@ -621,9 +609,6 @@ class TradeManager:
             return 'unknown'
         
     def _evaluate_immediate_breakout_setup(self, symbol, data, indicators, alignment):
-        """
-        Final, flexible version using a simplified and consistent Confluence Scoring System.
-        """
         try:
             med_tf_data = data[self.tf_medium]
             if len(med_tf_data) < 21: return None
@@ -652,39 +637,32 @@ class TradeManager:
             else:
                 return None
 
-            # --- Simplified Confluence Scoring ---
             score = 0
             factors = {}
             required_score = 4.0
 
-            # Factor 1: Candle Quality (Weight: 1.5)
             factors['strong_candle'] = self._is_strong_breakout_candle(direction, last_candle, atr, med_indicators)
             if factors['strong_candle']: score += 1.5
 
-            # Factor 2: Volume (Weight: 1.5)
             avg_volume = med_tf_data['tick_volume'].rolling(window=20).mean().iloc[-2]
             factors['volume_confirmed'] = last_candle['tick_volume'] > (avg_volume * 1.75)
             if factors['volume_confirmed']: score += 1.5
 
-            # Factor 3: Decisive Close (Weight: 1.0)
             if direction == 'buy':
                 factors['decisive_close'] = last_close > (range_high + atr * 0.2)
             else: # sell
                 factors['decisive_close'] = last_close < (range_low - atr * 0.2)
             if factors['decisive_close']: score += 1.0
 
-            # Factor 4: RSI Momentum (Weight: 1.0)
             if direction == 'buy':
                 factors['rsi_momentum'] = med_indicators['rsi'].iloc[-1] > 55
             else: # sell
                 factors['rsi_momentum'] = med_indicators['rsi'].iloc[-1] < 45
             if factors['rsi_momentum']: score += 1.0
 
-            # Factor 5: ADX Trend Strength (Weight: 0.5)
             factors['adx_trending'] = med_indicators['adx'].iloc[-1] > 20
             if factors['adx_trending']: score += 0.5
             
-            # --- Final Decision ---
             if score >= required_score:
                 logging.info(f"[{symbol}] VALID {direction.upper()} BREAKOUT (Score: {score}/{required_score}). Factors: {factors}")
                 return {'valid': True, 'symbol': symbol, 'direction': direction,
@@ -701,21 +679,7 @@ class TradeManager:
             return None
         
     def _is_strong_breakout_candle(self, direction: str, candle: pd.Series, atr: float, indicators: pd.DataFrame) -> bool:
-        """
-        Determines if a candle is a high-quality breakout candle using a hybrid TA-Lib and manual approach.
-        It checks for strong confirmation patterns and explicitly filters out indecision/rejection patterns.
-
-        Args:
-            direction: 'buy' or 'sell'.
-            candle: The current (breakout) candle Series.
-            atr: The current ATR value for context.
-            indicators: The full indicators DataFrame containing the TA-Lib patterns.
-
-        Returns:
-            True if the candle is a high-quality breakout signal, False otherwise.
-        """
         try:
-            # --- 1. Filter out MAJOR RED FLAGS first (Indecision/Rejection) ---
             is_doji = indicators['cdl_doji'].iloc[-1] != 0
             is_spinning_top = indicators['cdl_spinning_top'].iloc[-1] != 0
             if is_doji or is_spinning_top:
@@ -723,40 +687,31 @@ class TradeManager:
                 return False
 
             if direction == 'buy':
-                # A Shooting Star during a bullish breakout is a critical rejection signal.
                 is_rejection = indicators['cdl_shooting_star'].iloc[-1] != 0
                 if is_rejection:
                     logging.info(f"[{self.market_data.symbol}] Breakout candle rejected: Is a Shooting Star on a buy attempt.")
                     return False
             else: # sell
-                # A Hammer during a bearish breakout is a critical rejection signal.
                 is_rejection = indicators['cdl_hammer'].iloc[-1] != 0
                 if is_rejection:
                     logging.info(f"[{self.market_data.symbol}] Breakout candle rejected: Is a Hammer on a sell attempt.")
                     return False
 
-            # --- 2. Look for STRONG CONFIRMATION patterns ---
             is_marubozu = indicators['cdl_marubozu'].iloc[-1]
             is_engulfing = indicators['cdl_engulfing'].iloc[-1]
             
             is_pattern_bullish = (is_marubozu == 100) or (is_engulfing == 100)
             is_pattern_bearish = (is_marubozu == -100) or (is_engulfing == -100)
 
-            # --- 3. Contextual Size Check ---
-            # The breakout candle's body must be significant relative to recent volatility (ATR).
             body = abs(candle['close'] - candle['open'])
             is_size_significant = body > (atr * 0.7)
 
-            # --- 4. Final Decision ---
             if direction == 'buy':
                 if is_pattern_bullish and is_size_significant:
                     return True
             elif direction == 'sell':
                 if is_pattern_bearish and is_size_significant:
                     return True
-                    
-            # If no textbook pattern is found, we don't proceed.
-            # This makes the filter stricter and more reliable.
             return False
             
         except Exception as e:
@@ -764,24 +719,16 @@ class TradeManager:
         return False
         
     def _evaluate_retest_setup(self, symbol, data, indicators, alignment):
-        """
-        This function evaluates a high-probability break-and-retest
-        setup by validating the HTF trend, the breakout quality, the pullback character,
-        and confirming the rejection with specific, reliable patterns.
-
-        """
         try:
             med_tf_data = data[self.tf_medium]
             med_indicators = indicators[self.tf_medium]
             if len(med_tf_data) < 50:
                 return None
 
-            # STAGE 1: HIGHER TIMEFRAME CONFLUENCE
             higher_trend = alignment.get(self.tf_higher, {}).get('structure', {}).get('trend')
             if higher_trend not in ['bullish', 'bearish']:
                 return None
 
-            # STAGE 2: IDENTIFY CONSOLIDATION & BREAKOUT LEVEL
             end_of_range_search = med_tf_data.index[-15]
             range_high, range_low = self._identify_consolidation_range(
                 med_tf_data.loc[:end_of_range_search], med_tf_data.index[-1], hours=12
@@ -789,7 +736,6 @@ class TradeManager:
             if range_high is None or range_high == range_low:
                 return None
 
-            # STAGE 3: PINPOINT THE BREAKOUT CANDLE
             breakout_candle = None
             breakout_index = -1
             search_window = med_tf_data.tail(30)
@@ -808,7 +754,6 @@ class TradeManager:
             if breakout_candle is None:
                 return None
 
-            # STAGE 4: VALIDATE THE BREAKOUT QUALITY
             avg_volume_before_breakout = med_tf_data['tick_volume'].iloc[:breakout_index].tail(20).mean()
             breakout_atr = med_indicators['atr'].iloc[breakout_index]
             breakout_body_size = abs(breakout_candle['close'] - breakout_candle['open'])
@@ -817,17 +762,15 @@ class TradeManager:
             if not (is_strong_volume and is_impulsive_candle):
                 return None
 
-            # STAGE 5: ANALYZE THE PULLBACK CHARACTER
             pullback_candles = med_tf_data.iloc[breakout_index + 1 : -1]
 
             if len(pullback_candles) < 2:
-                return None # Ensure the pullback wasn't a 1-candle V-reversal
+                return None
 
             for candle in pullback_candles:
                 if abs(candle['close'] - candle['open']) > breakout_atr:
-                    return None # Invalidate if pullback contains candles as strong as the breakout
-
-            # STAGE 6: VALIDATE THE REJECTION CANDLE
+                    return None
+                
             rejection_candle = med_tf_data.iloc[-1]
             rejection_indicators = med_indicators.iloc[-1]
             direction = None
@@ -893,14 +836,13 @@ class TradeManager:
         
     def _identify_consolidation_range(self, data: pd.DataFrame, end_time: pd.Timestamp, hours=6) -> tuple:
         """
-        Identifies the high and low of a recent consolidation period (e.g., the late Asian session).
+        Identifies the high and low of a recent consolidation period
         """
         try:
             start_time = end_time - pd.Timedelta(hours=hours)
-            # Select data within the time window, excluding the current (breakout) candle
             consolidation_data = data.loc[start_time:end_time].iloc[:-1] 
 
-            if len(consolidation_data) < (hours / 2): # Ensure there's enough data
+            if len(consolidation_data) < (hours / 2):
                 return None, None
 
             range_high = consolidation_data['high'].max()
@@ -909,11 +851,9 @@ class TradeManager:
             atr = self.indicator_calc.calculate_indicators(data)['atr'].iloc[-1]
             range_size = range_high - range_low
             
-            # Accept ranges up to 6x ATR (was 4x ATR - too restrictive)
             if range_size > (atr * 6.0):
                 return None, None
                 
-            # Reject ranges that are too small (less than 1x ATR)
             if range_size < atr:
                 return None, None
 
@@ -924,17 +864,14 @@ class TradeManager:
 
     def _evaluate_trade_setup(self, symbol, data, indicators, alignment):
         try:
-            # --- PRIORITY 1: Check for a high-probability CONSERVATIVE RETEST setup ---
             retest_setup = self._evaluate_retest_setup(symbol, data, indicators, alignment)
             if retest_setup and retest_setup.get('valid'):
                 return retest_setup
 
-            # --- PRIORITY 2: Check for a high-momentum AGGRESSIVE BREAKOUT setup ---
             immediate_breakout_setup = self._evaluate_immediate_breakout_setup(symbol, data, indicators, alignment)
             if immediate_breakout_setup and immediate_breakout_setup.get('valid'):
                 return immediate_breakout_setup
 
-            # --- PRIORITY 3: If no breakout, fall back to TRENDING or RANGING logic ---
             market_regime = self._get_market_regime(symbol, indicators)
             
             if market_regime == 'trending':
@@ -1044,18 +981,7 @@ class TradeManager:
             return False
     
     def check_position_limit(self, symbol: str) -> Tuple[bool, str]:
-        """Check if we can open new positions based on maximum allowed positions per symbol
-        
-        Args:
-            symbol: The trading symbol to check positions for
-            
-        Returns:
-            Tuple[bool, str]: (can_trade, reason)
-                - can_trade: True if we can open new position, False otherwise
-                - reason: Explanation string
-        """
         try:
-            # Get all current positions
             positions = mt5.positions_get()
             
             if positions is None:
@@ -1063,15 +989,12 @@ class TradeManager:
                 
             total_positions = len(positions)
             
-            # Check overall position limit first
             if total_positions >= self.max_positions:
                 return False, f"Max overall positions limit reached ({self.max_positions})"
                 
-            # Count positions for the specific symbol
             symbol_positions = [pos for pos in positions if pos.symbol == symbol]
             symbol_position_count = len(symbol_positions)
             
-            # Maximum 2 positions per symbol
             if symbol_position_count >= 2:
                 return False, f"Max positions limit reached for {symbol} ({symbol_position_count}/2)"
                 
@@ -1185,7 +1108,6 @@ class OrderManager:
         self.indicator_calc = indicator_calc
         self.trade_logger = trade_logger
         self.liquidity_detector = liquidity_detector
-        # No more arbitrary buffers. All logic is now structural.
 
     def _normalize_price(self, symbol: str, price: float) -> float:
         symbol_info = mt5.symbol_info(symbol)
@@ -1212,27 +1134,20 @@ class OrderManager:
         """
         Finds the next key support/resistance level beyond the initial one to hide the SL behind.
         """
-        if direction == 'buy': # We are buying, so we need the next SUPPORT level BELOW the initial SL
-            # Filter for support levels that are lower than the initial level
+        if direction == 'buy':
             potential_levels = [lvl['price'] for lvl in key_levels if lvl['type'] == 'support' and lvl['price'] < initial_level]
             if potential_levels:
-                return max(potential_levels) # Return the closest one
-        else: # We are selling, so we need the next RESISTANCE level ABOVE the initial SL
+                return max(potential_levels)
+        else:
             potential_levels = [lvl['price'] for lvl in key_levels if lvl['type'] == 'resistance' and lvl['price'] > initial_level]
             if potential_levels:
-                return min(potential_levels) # Return the closest one
+                return min(potential_levels)
         
-        # If no deeper level is found, return the initial level as a fallback
         return initial_level
 
     def calculate_sl_tp(self, symbol: str, order_type: str, indicators: dict, 
                     trade_setup: dict, liquidity_levels: dict, key_levels: list, 
                     rr_ratio=1.5, atr_tp_multiplier=2.5) -> tuple:
-        """
-        Calculates SL/TP with dedicated logic for different trade setups.
-        - Ranging: SL outside the range, TP at the opposite side of the range.
-        - Other (Breakout/Trend): Structural SL and a dynamic, ATR-based day trading TP.
-        """
         try:
             symbol_info = mt5.symbol_info(symbol)
             symbol_tick = mt5.symbol_info_tick(symbol)
@@ -1247,7 +1162,6 @@ class OrderManager:
             setup_type = trade_setup.get('setup_type', '')
             initial_sl_point = None
             
-            # --- Dedicated Logic for Ranging Trades ---
             if 'ranging' in setup_type:
                 support_levels = [lvl['price'] for lvl in key_levels if lvl['type'] == 'support']
                 resistance_levels = [lvl['price'] for lvl in key_levels if lvl['type'] == 'resistance']
@@ -1263,7 +1177,6 @@ class OrderManager:
                     initial_sl_point = range_high
                     take_profit = self._normalize_price(symbol, range_low)
             
-            # --- Logic for All Other Trade Types (Breakout, Retest, Trend) ---
             else:
                 if 'breakout' in setup_type:
                     initial_sl_point = trade_setup.get('breakout_range_low') if order_type == 'buy' else trade_setup.get('breakout_range_high')
@@ -1276,7 +1189,6 @@ class OrderManager:
                     logging.info(f"[{symbol}] Ignoring non-specialized setup type '{setup_type}' for SL/TP.")
                     return False, None, None, None
                 
-                # --- Dynamic Day Trading Take Profit Logic ---
                 atr_tp = current_price + (atr_value * atr_tp_multiplier) if order_type == 'buy' else current_price - (atr_value * atr_tp_multiplier)
 
                 liquidity_tp = None
@@ -1295,9 +1207,8 @@ class OrderManager:
                 
                 take_profit = self._normalize_price(symbol, final_tp)
 
-            # --- Final SL Calculation and Validation (Applies to all setups) ---
             final_sl_level = self._find_next_structural_level(initial_sl_point, order_type, key_levels)
-            sl_buffer = self._normalize_price(symbol, atr_value * 0.2) # Increased buffer slightly for safety
+            sl_buffer = self._normalize_price(symbol, atr_value * 0.2)
             ideal_sl = final_sl_level - sl_buffer if order_type == 'buy' else final_sl_level + sl_buffer
 
             if (order_type == 'buy' and ideal_sl >= current_price) or \
@@ -1326,9 +1237,6 @@ class OrderManager:
             return False, None, None, None
         
     def calculate_lot_size(self, symbol, account_balance, risk_percentage, stop_loss_points):
-        """
-        Public-facing wrapper for the robust lot size calculation.
-        """
         if stop_loss_points is None or stop_loss_points <= 0:
             logging.error(f"[{symbol}] Invalid stop loss points ({stop_loss_points}) for lot size calculation.")
             return None
@@ -1369,7 +1277,6 @@ async def run_main_loop(client, symbols, timeframes):
         start_time = time.time()
         tasks = []
         for symbol in symbols:
-            # Schedule signal checking and position management to run concurrently for each symbol
             tasks.append(trade_managers[symbol].check_for_signals(symbol))
             tasks.append(trade_managers[symbol].manage_open_positions(symbol))
         
@@ -1383,7 +1290,6 @@ async def run_main_loop(client, symbols, timeframes):
         sleep_time = max(0, CHECK_INTERVAL - cycle_duration)
         logging.info(f"Next main loop cycle in {sleep_time:.2f} seconds.")
         await asyncio.sleep(sleep_time)
-
 
 async def main():
     client = MetaTrader5Client()
