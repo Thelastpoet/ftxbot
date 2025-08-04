@@ -17,6 +17,24 @@
     "atr_take_profit_multiplier": 2.5,
     "sl_buffer_atr_factor": 0.2
   },
+  "news_filter_settings": {
+    "minutes_before_news": 30,
+    "minutes_after_news": 30,
+    "news_refresh_interval_hours": 24
+  },
+   "breakout_strategy_settings": {
+    "order_distance_atr_factor": 0.2,
+    "risk_reward_ratio": 2.0
+  },
+  "breakout_risk_filter_settings": {
+    "bollinger_band_period": 20,
+    "bollinger_band_std_dev": 2,
+    "keltner_channel_period": 20,
+    "keltner_channel_atr_period": 10,
+    "keltner_channel_multiplier": 1.5,
+    "volume_period": 20,
+    "volume_increase_factor": 1.5
+  },
   "indicator_parameters": {
     "ema_short_period": 10,
     "ema_long_period": 50,
@@ -50,53 +68,13 @@
       "trend_lookback": 3,
       "consolidation_threshold": 1.0
   },
-  "divergence_detector_settings": {
-      "order": 5,
-      "proximity": 5
-  },
-  "market_regime_settings": {
-      "adx_threshold": 25,
-      "atr_short_period": 10,
-      "atr_long_period": 50,
-      "volatile_atr_multiplier": 1.5
-  },
-  "consolidation_range_settings": {
-      "max_atr_multiplier": 6.0,
-      "min_atr_multiplier": 1.0
-  },
-  "breakout_strategy_settings": {
-    "required_score": 4.0,
-    "consolidation_hours": 5,
-    "volume_confirmation_multiplier": 1.75,
-    "decisive_close_atr_multiplier": 0.2,
-    "rsi_buy_threshold": 55,
-    "rsi_sell_threshold": 45,
-    "adx_strength_threshold": 20,
-    "strong_breakout_candle_atr_factor": 0.7,
-    "london_open_hour": 7,
-    "london_close_hour": 10,
-    "ny_open_hour": 13,
-    "ny_close_hour": 16
-  },
-  "retest_strategy_settings": {
-    "consolidation_hours": 12,
-    "breakout_volume_multiplier": 1.3,
-    "breakout_impulse_atr_multiplier": 0.7,
-    "search_window_end": 15,
-    "breakout_search_window": 30,
-    "pinbar_wick_ratio": 1.5,
-    "rsi_bullish_threshold": 40,
-    "rsi_bearish_threshold": 60
-  },
-  "trending_strategy_settings": {
-      "pullback_atr_factor": 1.5
-  },
   "ranging_strategy_settings": {
       "level_proximity_factor": 0.1,
       "rsi_threshold": 50
   },
   "misc": {
     "trade_log_filename": "trade_log.csv",
+    "news_calendar_filename": "news_calendar.csv",
     "mt5_magic_number": 234000,
     "trade_comment": "TradeManager market order"
   }

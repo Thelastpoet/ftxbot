@@ -15,6 +15,7 @@ import json
 
 from technical_analysis import IndicatorCalculator
 from liquidity import LiquidityDetector
+from news_analyzer import NewsAnalyzer
 
 with open('config.json', 'r') as f:
     CONFIG = json.load(f)
@@ -29,12 +30,6 @@ TIMEFRAME_MAP = {
     'H1': mt5.TIMEFRAME_H1,
     'D1': mt5.TIMEFRAME_D1
 }
-
-class DivergenceType(Enum):
-    REGULAR_BULLISH = "regular_bullish"
-    REGULAR_BEARISH = "regular_bearish"
-    HIDDEN_BULLISH = "hidden_bullish"
-    HIDDEN_BEARISH = "hidden_bearish"
 
 class MetaTrader5Client:
     def __init__(self):
@@ -52,7 +47,6 @@ class MetaTrader5Client:
         return self.initialized
 
     def get_account_info(self):
-        logging.info("Getting account info.")
         return mt5.account_info()
 
 class MarketData:
@@ -184,97 +178,6 @@ class SwingPointDetector:
                 price_action_info['consolidation'] = True
 
         return price_action_info
-    
-class DivergenceDetector:
-    def __init__(self, config):
-        self.order = config['order']
-        self.proximity = config['proximity']
-
-    def to_numpy(self, data):
-        return data.values if hasattr(data, 'values') else np.array(data)
-
-    def find_higher_highs(self, data):
-        data = self.to_numpy(data)
-        extrema_indices = argrelextrema(data, np.greater, order=self.order)[0]
-        result = []
-        for i in range(len(extrema_indices)):
-            for j in range(i + 1, len(extrema_indices)):
-                idx1, idx2 = extrema_indices[i], extrema_indices[j]
-                if data[idx2] > data[idx1]:
-                    result.append([idx1, idx2])
-        return result
-
-    def find_lower_lows(self, data):
-        data = self.to_numpy(data)
-        extrema_indices = argrelextrema(data, np.less, order=self.order)[0]
-        result = []
-        for i in range(len(extrema_indices)):
-            for j in range(i + 1, len(extrema_indices)):
-                idx1, idx2 = extrema_indices[i], extrema_indices[j]
-                if data[idx2] < data[idx1]:
-                    result.append([idx1, idx2])
-        return result
-
-    def find_lower_highs(self, data):
-        data = self.to_numpy(data)
-        extrema_indices = argrelextrema(data, np.greater, order=self.order)[0]
-        result = []
-        for i in range(len(extrema_indices)):
-            for j in range(i + 1, len(extrema_indices)):
-                idx1, idx2 = extrema_indices[i], extrema_indices[j]
-                if data[idx2] < data[idx1]:
-                    result.append([idx1, idx2])
-        return result
-
-    def find_higher_lows(self, data):
-        data = self.to_numpy(data)
-        extrema_indices = argrelextrema(data, np.less, order=self.order)[0]
-        result = []
-        for i in range(len(extrema_indices)):
-            for j in range(i + 1, len(extrema_indices)):
-                idx1, idx2 = extrema_indices[i], extrema_indices[j]
-                if data[idx2] > data[idx1]:
-                    result.append([idx1, idx2])
-        return result
-
-    def check_divergence(self, price_data, rsi_data):
-        price_higher_highs = self.find_higher_highs(price_data)
-        price_lower_lows = self.find_lower_lows(price_data)
-        price_lower_highs = self.find_lower_highs(price_data)
-        price_higher_lows = self.find_higher_lows(price_data)
-
-        rsi_higher_highs = self.find_higher_highs(rsi_data)
-        rsi_lower_lows = self.find_lower_lows(rsi_data)
-        rsi_lower_highs = self.find_lower_highs(rsi_data)
-        rsi_higher_lows = self.find_higher_lows(rsi_data)
-
-        regular_bullish = any(
-            abs(p_lows[0] - r_lows[0]) < self.proximity and abs(p_lows[1] - r_lows[1]) < self.proximity
-            for p_lows in price_lower_lows
-            for r_lows in rsi_higher_lows
-        )
-        regular_bearish = any(
-            abs(p_highs[0] - r_highs[0]) < self.proximity and abs(p_highs[1] - r_highs[1]) < self.proximity
-            for p_highs in price_higher_highs
-            for r_highs in rsi_lower_highs
-        )
-        hidden_bullish = any(
-            abs(p_lows[0] - r_lows[0]) < self.proximity and abs(p_lows[1] - r_lows[1]) < self.proximity
-            for p_lows in price_higher_lows
-            for r_lows in rsi_lower_lows
-        )
-        hidden_bearish = any(
-            abs(p_highs[0] - r_highs[0]) < self.proximity and abs(p_highs[1] - r_highs[1]) < self.proximity
-            for p_highs in price_lower_highs
-            for r_highs in rsi_higher_highs
-        )
-
-        regular_divergence = DivergenceType.REGULAR_BULLISH if regular_bullish else \
-                            DivergenceType.REGULAR_BEARISH if regular_bearish else None
-        hidden_divergence = DivergenceType.HIDDEN_BULLISH if hidden_bullish else \
-                            DivergenceType.HIDDEN_BEARISH if hidden_bearish else None
-
-        return regular_divergence, hidden_divergence
 
 class TradeManager:
     def __init__(self, client, market_data, config):
@@ -286,8 +189,8 @@ class TradeManager:
         self.trade_logger = TradeLogger(filename=self.config['misc']['trade_log_filename'])
         self.indicator_calc = IndicatorCalculator(self.config['indicator_parameters'])
         self.liquidity_detector = LiquidityDetector(self.config['liquidity_detector_settings'])
+        self.news_analyzer = NewsAnalyzer(csv_filepath=self.config['misc']['news_calendar_filename'], config=self.config)
         self.order_manager = OrderManager(client, market_data, self.indicator_calc, self.trade_logger, self.liquidity_detector, self.config)
-        self.divergence_detector = DivergenceDetector(self.config['divergence_detector_settings'])        
         
         self.tf_higher = max(self.timeframes)
         self.tf_medium = sorted(self.timeframes)[1]
@@ -326,31 +229,6 @@ class TradeManager:
         except Exception as e:
             logging.error(f"Error in market structure analysis: {str(e)}")
             return None
-        
-    def _analyze_divergence(self, data_dict, indicators_dict, direction):
-        try:
-            higher_tf_data = data_dict[self.tf_higher]
-            higher_tf_indicators = indicators_dict[self.tf_higher]
-            
-            price_data = higher_tf_data['close'].tail(100)
-            rsi_data = higher_tf_indicators['rsi'].tail(100)
-            
-            regular_div, hidden_div = self.divergence_detector.check_divergence(price_data, rsi_data)
-            
-            if direction == 'buy':
-                if hidden_div == DivergenceType.HIDDEN_BULLISH:
-                    return True
-                if regular_div == DivergenceType.REGULAR_BEARISH:
-                    return False
-            elif direction == 'sell':
-                if hidden_div == DivergenceType.HIDDEN_BEARISH:
-                    return True
-                if regular_div == DivergenceType.REGULAR_BULLISH:
-                    return False
-            return None
-        except Exception as e:
-            logging.error(f"Error in divergence analysis: {str(e)}")
-            return None
                         
     def analyze_timeframe_alignment(self, data_dict, indicators_dict):
         try:
@@ -380,7 +258,7 @@ class TradeManager:
             rsi = indicators['rsi'].iloc[-1]
             rsi_trend = 'bullish' if rsi > 50 else 'bearish'
             adx = indicators['adx'].iloc[-1]
-            trend_strength = 'strong' if adx > self.config['market_regime_settings']['adx_threshold'] else 'weak'
+            trend_strength = 'strong' if adx > 20 else 'weak' 
             return {'rsi_trend': rsi_trend, 'trend_strength': trend_strength}
         except Exception as e:
             logging.error(f"Error analyzing momentum: {str(e)}")
@@ -403,9 +281,51 @@ class TradeManager:
             return "bearish"
         else:
             return "neutral"
+        
+    def _is_breakout_risk_high(self, symbol: str, data: dict, indicators: dict, direction: str) -> bool:
+        """
+        Analyzes market conditions to determine if there is a high risk of a breakout,
+        which would invalidate a ranging trade.
+        Returns True if risk is high, False otherwise.
+        """
+        try:
+            h1_indicators = indicators[self.tf_medium] # H1 data
+            m15_data = data[self.tf_lower] # M15 data
+
+            if h1_indicators['bb_upper'].iloc[-1] < h1_indicators['kc_upper'].iloc[-1] and \
+               h1_indicators['bb_lower'].iloc[-1] > h1_indicators['kc_lower'].iloc[-1]:
+                logging.warning(f"[{symbol}] Ranging trade vetoed: High-risk volatility squeeze detected on H1 chart.")
+                return True
+
+            volume_period = self.config['breakout_risk_filter_settings']['volume_period']
+            volume_factor = self.config['breakout_risk_filter_settings']['volume_increase_factor']
+            
+            avg_volume = m15_data['tick_volume'].rolling(window=volume_period).mean().iloc[-2]
+            last_volume = m15_data['tick_volume'].iloc[-1]
+
+            if last_volume > (avg_volume * volume_factor):
+                logging.warning(f"[{symbol}] Ranging trade vetoed: Significant volume spike ({last_volume} vs avg {avg_volume:.0f}) detected on M15.")
+                return True
+
+            last_3_candles = data[self.tf_medium].iloc[-3:]
+            tight_range_threshold = h1_indicators['atr'].iloc[-1] * 0.5
+            
+            if (last_3_candles['high'].max() - last_3_candles['low'].min()) < tight_range_threshold:
+                logging.warning(f"[{symbol}] Ranging trade vetoed: Price is consolidating too tightly at the level (H1).")
+                return True
+
+            return False
+
+        except Exception as e:
+            logging.error(f"Error in breakout risk filter for {symbol}: {e}")
+            return True
 
     async def check_for_signals(self, symbol):
         try:
+            if self.news_analyzer.check_for_high_impact_news(symbol):
+                logging.info(f"[{symbol}] Halting new trade checks due to nearby high-impact news.")
+                return 
+        
             data, indicators = self._prepare_data(symbol)
             if not data or not indicators: return
 
@@ -414,7 +334,8 @@ class TradeManager:
     
             liquidity_levels = self.liquidity_detector.get_liquidity_levels(data[self.tf_medium], {}, daily_df=data[self.tf_higher])
 
-            trade_setup = self._evaluate_trade_setup(symbol, data, indicators, alignment)
+            # Directly call the ranging setup, as it's the only strategy
+            trade_setup = self._evaluate_ranging_setup(symbol, data, indicators, alignment)
             if not trade_setup or not trade_setup.get('valid'): return
 
             await self._execute_trade(symbol, trade_setup, indicators, alignment, liquidity_levels)
@@ -458,7 +379,6 @@ class TradeManager:
                     'indicators': {tf: ind.iloc[-1].to_dict() for tf, ind in indicators.items()}
                 }
                 
-                # Convert non-serializable DataFrames in swing_points to a list of dicts
                 try:
                     for tf_to_process in [self.tf_higher, self.tf_medium]:
                         if tf_to_process in market_context['alignment'] and 'structure' in market_context['alignment'][tf_to_process]:
@@ -496,53 +416,59 @@ class TradeManager:
                     reason=trade_setup['setup_type'],
                     market_context=json.dumps(market_context, default=convert_numpy, indent=2)
                 )
-                logging.info(f"[{symbol}] Successfully opened trade {trade_result.order}.")
+                logging.info(f"[{symbol}] Successfully opened {trade_setup['direction']} trade {trade_result.order}.")
 
         except Exception as e:
             logging.error(f"Error executing trade for {symbol}: {str(e)}\n{traceback.format_exc()}")
-            
+    
     async def manage_open_positions(self, symbol: str):
-        """Checks for closed positions and updates the log."""
+        """
+        Manages all open positions for a symbol. It checks for trades that have been closed 
+        (e.g., by SL/TP) and also proactively closes profitable trades before high-impact news.
+        """
         try:
             open_logged_trades = self.trade_logger.get_open_trades(symbol)
-            if open_logged_trades.empty:
-                return
+            if not open_logged_trades.empty:
+                positions = mt5.positions_get(symbol=symbol)
+                open_mt5_tickets = {pos.ticket for pos in positions} if positions else set()
 
-            # Get currently open positions from MT5
-            positions = mt5.positions_get(symbol=symbol)
-            if positions is None:
-                open_mt5_tickets = set()
-            else:
-                open_mt5_tickets = {pos.ticket for pos in positions}
+                for _, trade in open_logged_trades.iterrows():
+                    ticket_id = int(trade['ticket_id'])
+                    if ticket_id not in open_mt5_tickets:
+                        deals = mt5.history_deals_get(position=ticket_id)
+                        if deals:
+                            closing_deal = deals[-1]
+                            close_price = closing_deal.price
+                            close_time = pd.to_datetime(closing_deal.time, unit='s')
+                            pnl = closing_deal.profit
+                            
+                            status = "closed_manual"
+                            if abs(close_price - trade['take_profit']) < 1e-5:
+                               status = "closed_tp"
+                            elif abs(close_price - trade['stop_loss']) < 1e-5:
+                               status = "closed_sl"
 
-            # Find trades that are in our log as 'open' but not in MT5 anymore
-            for index, trade in open_logged_trades.iterrows():
-                ticket_id = trade['ticket_id']
-                if ticket_id not in open_mt5_tickets:
-                    deals = mt5.history_deals_get(position=ticket_id)
-                    if deals:
-                        closing_deal = deals[-1]
-                        close_price = closing_deal.price
-                        close_time = pd.to_datetime(closing_deal.time, unit='s')
-                        pnl = closing_deal.profit
-                        
-                        status = "closed_manual"
-                        if abs(close_price - trade['take_profit']) < 0.0001:
-                           status = "closed_tp"
-                        elif abs(close_price - trade['stop_loss']) < 0.0001:
-                           status = "closed_sl"
-
-                        self.trade_logger.log_close_trade(
-                            ticket_id=ticket_id,
-                            close_price=close_price,
-                            close_time=close_time,
-                            pnl=pnl,
-                            status=status
-                        )
-                        logging.info(f"[{symbol}] Logged closure for trade {ticket_id}. PnL: {pnl:.2f}")
+                            self.trade_logger.log_close_trade(ticket_id, close_price, close_time, pnl, status)
+                            logging.info(f"[{symbol}] Logged closure for trade {ticket_id}. PnL: {pnl:.2f}")
 
         except Exception as e:
-            logging.error(f"Error managing open positions for {symbol}: {str(e)}\n{traceback.format_exc()}")
+            logging.error(f"Error checking for closed trades for {symbol}: {e}\n{traceback.format_exc()}")
+
+        try:
+            if not self.news_analyzer.check_for_high_impact_news(symbol):
+                return
+
+            open_positions = mt5.positions_get(symbol=symbol)
+            if not open_positions:
+                return
+
+            for position in open_positions:
+                if position.profit > 0:
+                    logging.warning(f"Attempting to close profitable trade {position.ticket} for {symbol} due to upcoming high-impact news.")
+                    self.order_manager.close_position(position, "Closed before news")
+        
+        except Exception as e:
+            logging.error(f"Error managing trades before news for {symbol}: {e}\n{traceback.format_exc()}")
 
     def _has_opposing_position(self, symbol, direction):
         symbol_positions = mt5.positions_get(symbol=symbol)
@@ -571,7 +497,6 @@ class TradeManager:
             )
             
             if not is_valid:
-
                 logging.info(f"[{symbol}] Trade setup invalidated by order parameter calculation.")
                 return None
 
@@ -591,337 +516,6 @@ class TradeManager:
         except Exception as e:
             logging.error(f"Error calculating order parameters for {symbol}: {str(e)}\n{traceback.format_exc()}")
             return None
-            
-    def _get_market_regime(self, symbol, indicators):
-        try:
-            data = indicators[self.tf_higher]
-            if data is None: return 'unknown'
-            adx = data['adx'].iloc[-1]
-            if adx > self.config['market_regime_settings']['adx_threshold']: return 'trending'
-            atr_short = data['atr'].rolling(window=self.config['market_regime_settings']['atr_short_period']).mean().iloc[-1]
-            atr_long = data['atr'].rolling(window=self.config['market_regime_settings']['atr_long_period']).mean().iloc[-1]
-            if atr_short > atr_long * self.config['market_regime_settings']['volatile_atr_multiplier']: return 'volatile'
-            return 'ranging'
-        except Exception as e:
-            logging.error(f"Error getting market regime for {symbol}: {str(e)}")
-            return 'unknown'
-        
-    def _evaluate_immediate_breakout_setup(self, symbol, data, indicators, alignment):
-        try:
-            med_tf_data = data[self.tf_medium]
-            if len(med_tf_data) < 21: return None
-
-            last_candle_time = med_tf_data.index[-1]
-            hour = last_candle_time.hour
-            is_london_open = (self.config['breakout_strategy_settings']['london_open_hour'] <= hour < self.config['breakout_strategy_settings']['london_close_hour'])
-            is_ny_open = (self.config['breakout_strategy_settings']['ny_open_hour'] <= hour < self.config['breakout_strategy_settings']['ny_close_hour'])
-            if not (is_london_open or is_ny_open):
-                return None
-
-            med_indicators = indicators[self.tf_medium]
-            range_high, range_low = self._identify_consolidation_range(med_tf_data, last_candle_time, hours=self.config['breakout_strategy_settings']['consolidation_hours'])
-            if range_high is None or range_high == range_low:
-                return None
-
-            last_candle = med_tf_data.iloc[-1]
-            last_close = last_candle['close']
-            atr = med_indicators['atr'].iloc[-1]
-            
-            direction = None
-            if last_close > range_high:
-                direction = 'buy'
-            elif last_close < range_low:
-                direction = 'sell'
-            else:
-                return None
-
-            score = 0
-            factors = {}
-            required_score = self.config['breakout_strategy_settings']['required_score']
-
-            factors['strong_candle'] = self._is_strong_breakout_candle(direction, last_candle, atr, med_indicators)
-            if factors['strong_candle']: score += 1.5
-
-            avg_volume = med_tf_data['tick_volume'].rolling(window=20).mean().iloc[-2]
-            factors['volume_confirmed'] = last_candle['tick_volume'] > (avg_volume * self.config['breakout_strategy_settings']['volume_confirmation_multiplier'])
-            if factors['volume_confirmed']: score += 1.5
-
-            if direction == 'buy':
-                factors['decisive_close'] = last_close > (range_high + atr * self.config['breakout_strategy_settings']['decisive_close_atr_multiplier'])
-            else: # sell
-                factors['decisive_close'] = last_close < (range_low - atr * self.config['breakout_strategy_settings']['decisive_close_atr_multiplier'])
-            if factors['decisive_close']: score += 1.0
-
-            if direction == 'buy':
-                factors['rsi_momentum'] = med_indicators['rsi'].iloc[-1] > self.config['breakout_strategy_settings']['rsi_buy_threshold']
-            else: # sell
-                factors['rsi_momentum'] = med_indicators['rsi'].iloc[-1] < self.config['breakout_strategy_settings']['rsi_sell_threshold']
-            if factors['rsi_momentum']: score += 1.0
-
-            factors['adx_trending'] = med_indicators['adx'].iloc[-1] > self.config['breakout_strategy_settings']['adx_strength_threshold']
-            if factors['adx_trending']: score += 0.5
-            
-            if score >= required_score:
-                logging.info(f"[{symbol}] VALID {direction.upper()} BREAKOUT (Score: {score}/{required_score}). Factors: {factors}")
-                return {'valid': True, 'symbol': symbol, 'direction': direction,
-                        'setup_type': f'daytrade_breakout_{direction}_score_{score}',
-                        'breakout_level': range_high if direction == 'buy' else range_low, 
-                        'breakout_candle': last_candle.copy(),
-                        'breakout_range_high': range_high,
-                        'breakout_range_low': range_low
-                    }
-
-            return None
-        except Exception as e:
-            logging.error(f"Error evaluating immediate breakout for {symbol}: {str(e)}\n{traceback.format_exc()}")
-            return None
-        
-    def _is_strong_breakout_candle(self, direction: str, candle: pd.Series, atr: float, indicators: pd.DataFrame) -> bool:
-        try:
-            is_doji = indicators['cdl_doji'].iloc[-1] != 0
-            is_spinning_top = indicators['cdl_spinning_top'].iloc[-1] != 0
-            if is_doji or is_spinning_top:
-                logging.info(f"[{self.market_data.symbol}] Breakout candle rejected: Is a Doji or Spinning Top.")
-                return False
-
-            if direction == 'buy':
-                is_rejection = indicators['cdl_shooting_star'].iloc[-1] != 0
-                if is_rejection:
-                    logging.info(f"[{self.market_data.symbol}] Breakout candle rejected: Is a Shooting Star on a buy attempt.")
-                    return False
-            else: # sell
-                is_rejection = indicators['cdl_hammer'].iloc[-1] != 0
-                if is_rejection:
-                    logging.info(f"[{self.market_data.symbol}] Breakout candle rejected: Is a Hammer on a sell attempt.")
-                    return False
-
-            is_marubozu = indicators['cdl_marubozu'].iloc[-1]
-            is_engulfing = indicators['cdl_engulfing'].iloc[-1]
-            
-            is_pattern_bullish = (is_marubozu == 100) or (is_engulfing == 100)
-            is_pattern_bearish = (is_marubozu == -100) or (is_engulfing == -100)
-
-            body = abs(candle['close'] - candle['open'])
-            is_size_significant = body > (atr * self.config['breakout_strategy_settings']['strong_breakout_candle_atr_factor'])
-
-            if direction == 'buy':
-                if is_pattern_bullish and is_size_significant:
-                    return True
-            elif direction == 'sell':
-                if is_pattern_bearish and is_size_significant:
-                    return True
-            return False
-            
-        except Exception as e:
-            logging.error(f"Error in _is_strong_breakout_candle: {e}")
-        return False
-        
-    def _evaluate_retest_setup(self, symbol, data, indicators, alignment):
-        try:
-            med_tf_data = data[self.tf_medium]
-            med_indicators = indicators[self.tf_medium]
-            if len(med_tf_data) < 50:
-                return None
-
-            higher_trend = alignment.get(self.tf_higher, {}).get('structure', {}).get('trend')
-            if higher_trend not in ['bullish', 'bearish']:
-                return None
-
-            end_of_range_search = med_tf_data.index[-self.config['retest_strategy_settings']['search_window_end']]
-            range_high, range_low = self._identify_consolidation_range(
-                med_tf_data.loc[:end_of_range_search], med_tf_data.index[-1], hours=self.config['retest_strategy_settings']['consolidation_hours']
-            )
-            if range_high is None or range_high == range_low:
-                return None
-
-            breakout_candle = None
-            breakout_index = -1
-            search_window = med_tf_data.tail(self.config['retest_strategy_settings']['breakout_search_window'])
-            
-            for i in range(len(search_window) - 5):
-                candle = search_window.iloc[i]
-                prev_candle = search_window.iloc[i-1] if i > 0 else None
-                if prev_candle is None: continue
-                    
-                if (higher_trend == 'bullish' and candle['close'] > range_high and prev_candle['close'] <= range_high) or \
-                (higher_trend == 'bearish' and candle['close'] < range_low and prev_candle['close'] >= range_low):
-                    breakout_candle = candle
-                    breakout_index = -30 + i
-                    break
-
-            if breakout_candle is None:
-                return None
-
-            avg_volume_before_breakout = med_tf_data['tick_volume'].iloc[:breakout_index].tail(20).mean()
-            breakout_atr = med_indicators['atr'].iloc[breakout_index]
-            breakout_body_size = abs(breakout_candle['close'] - breakout_candle['open'])
-            is_strong_volume = breakout_candle['tick_volume'] > avg_volume_before_breakout * self.config['retest_strategy_settings']['breakout_volume_multiplier']
-            is_impulsive_candle = breakout_body_size > breakout_atr * self.config['retest_strategy_settings']['breakout_impulse_atr_multiplier']
-            if not (is_strong_volume and is_impulsive_candle):
-                return None
-
-            pullback_candles = med_tf_data.iloc[breakout_index + 1 : -1]
-
-            if len(pullback_candles) < 2:
-                return None
-
-            for candle in pullback_candles:
-                if abs(candle['close'] - candle['open']) > breakout_atr:
-                    return None
-                
-            rejection_candle = med_tf_data.iloc[-1]
-            rejection_indicators = med_indicators.iloc[-1]
-            direction = None
-            retest_level = None
-            is_confirmed_rejection = False
-            confirmation_signals = []
-
-            if higher_trend == 'bullish':
-                retest_level = range_high
-                if not (rejection_candle['low'] <= retest_level and rejection_candle['close'] > retest_level):
-                    return None
-                
-                if rejection_indicators['cdl_engulfing'] == 100:
-                    confirmation_signals.append('bullish_engulfing')
-                    
-                rejection_body = abs(rejection_candle['close'] - rejection_candle['open'])
-                rejection_lower_wick = rejection_candle['open'] - rejection_candle['low'] if rejection_candle['close'] > rejection_candle['open'] else rejection_candle['close'] - rejection_candle['low']
-                if rejection_lower_wick > rejection_body * self.config['retest_strategy_settings']['pinbar_wick_ratio'] and rejection_body > 0.00001:
-                    confirmation_signals.append('pin_bar')
-                    
-                if rejection_indicators['rsi'] < self.config['retest_strategy_settings']['rsi_bullish_threshold']:
-                    confirmation_signals.append('rsi_oversold_bounce')
-
-                if len(confirmation_signals) >= 1:
-                    is_confirmed_rejection = True
-                    direction = 'buy'
-
-            elif higher_trend == 'bearish':
-                retest_level = range_low
-                if not (rejection_candle['high'] >= retest_level and rejection_candle['close'] < retest_level):
-                    return None
-
-                if rejection_indicators['cdl_engulfing'] == -100:
-                    confirmation_signals.append('bearish_engulfing')
-                    
-                rejection_body = abs(rejection_candle['close'] - rejection_candle['open'])
-                rejection_upper_wick = rejection_candle['high'] - rejection_candle['open'] if rejection_candle['close'] < rejection_candle['open'] else rejection_candle['high'] - rejection_candle['close']
-                if rejection_upper_wick > rejection_body * self.config['retest_strategy_settings']['pinbar_wick_ratio'] and rejection_body > 0.00001:
-                    confirmation_signals.append('pin_bar')
-                    
-                if rejection_indicators['rsi'] > self.config['retest_strategy_settings']['rsi_bearish_threshold']:
-                    confirmation_signals.append('rsi_overbought_rejection')
-
-                if len(confirmation_signals) >= 1:
-                    is_confirmed_rejection = True
-                    direction = 'sell'
-
-            if is_confirmed_rejection:
-                logging.info(f"[{symbol}] VALID {direction.upper()} RETEST. Level: {retest_level:.5f}, Signals: {confirmation_signals}")
-                return {
-                    'valid': True, 'symbol': symbol, 'direction': direction,
-                    'setup_type': f'retest_{direction}_{len(confirmation_signals)}_signals',
-                    'retest_level': retest_level,
-                    'retest_candle': rejection_candle.copy(),
-                    'confirmation_signals': confirmation_signals
-                }
-
-            return None
-            
-        except Exception as e:
-            logging.error(f"Error evaluating retest setup for {symbol}: {str(e)}\n{traceback.format_exc()}")
-            return None
-        
-    def _identify_consolidation_range(self, data: pd.DataFrame, end_time: pd.Timestamp, hours=6) -> tuple:
-        """
-        Identifies the high and low of a recent consolidation period
-        """
-        try:
-            start_time = end_time - pd.Timedelta(hours=hours)
-            consolidation_data = data.loc[start_time:end_time].iloc[:-1] 
-
-            if len(consolidation_data) < (hours / 2):
-                return None, None
-
-            range_high = consolidation_data['high'].max()
-            range_low = consolidation_data['low'].min()
-            
-            atr = self.indicator_calc.calculate_indicators(data)['atr'].iloc[-1]
-            range_size = range_high - range_low
-            
-            if range_size > (atr * self.config['consolidation_range_settings']['max_atr_multiplier']):
-                return None, None
-                
-            if range_size < atr * self.config['consolidation_range_settings']['min_atr_multiplier']:
-                return None, None
-
-            return range_high, range_low
-        except Exception as e:
-            logging.error(f"Error identifying consolidation range: {e}")
-            return None, None
-
-    def _evaluate_trade_setup(self, symbol, data, indicators, alignment):
-        try:
-            retest_setup = self._evaluate_retest_setup(symbol, data, indicators, alignment)
-            if retest_setup and retest_setup.get('valid'):
-                return retest_setup
-
-            immediate_breakout_setup = self._evaluate_immediate_breakout_setup(symbol, data, indicators, alignment)
-            if immediate_breakout_setup and immediate_breakout_setup.get('valid'):
-                return immediate_breakout_setup
-
-            market_regime = self._get_market_regime(symbol, indicators)
-            
-            if market_regime == 'trending':
-                return self._evaluate_trending_setup(symbol, data, indicators, alignment)
-            elif market_regime == 'ranging':
-                return self._evaluate_ranging_setup(symbol, data, indicators, alignment)
-            
-            return None
-        except Exception as e:
-            logging.error(f"Error in master trade evaluation for {symbol}: {str(e)}\n{traceback.format_exc()}")
-            return None
-
-    def _evaluate_trending_setup(self, symbol, data, indicators, alignment):
-        try:
-            higher_trend = alignment[self.tf_higher]['structure']['trend']
-            medium_trend = alignment[self.tf_medium]['trend']
-
-            if higher_trend not in ['bullish', 'bearish']:
-                return None
-            if (higher_trend == 'bullish' and medium_trend == 'bearish') or \
-               (higher_trend == 'bearish' and medium_trend == 'bullish'):
-                return None
-            if alignment[self.tf_higher]['structure']['consolidation']:
-                return None
-
-            trade_direction = 'buy' if higher_trend == 'bullish' else 'sell'
-
-            med_indicators = indicators[self.tf_medium]
-            current_price = data[self.tf_medium]['close'].iloc[-1]
-            long_ema = med_indicators['ema_long'].iloc[-1]
-            atr = med_indicators['atr'].iloc[-1]
-            if not abs(current_price - long_ema) < (atr * self.config['trending_strategy_settings']['pullback_atr_factor']):
-                return None
-            
-            lower_momentum = alignment[self.tf_lower]['momentum']
-            if lower_momentum['rsi_trend'] != trade_direction:
-                return None            
-
-            divergence_signal = self._analyze_divergence(data, indicators, trade_direction)
-            if divergence_signal is False:
-                return None
-                
-            confluence_note = "A+ (Hidden Divergence Confirmed)" if divergence_signal is True else "Standard"
-            
-            return {
-                'valid': True, 'symbol': symbol, 'direction': trade_direction,
-                'higher_tf_trend': higher_trend, 'setup_type': f'quality_trend_pullback_{confluence_note}',
-                'swing_points': alignment[self.tf_medium]['structure']['swing_points'],
-            }
-        except Exception as e:
-            logging.error(f"An exception occurred during trade evaluation for {symbol}: {str(e)}\n{traceback.format_exc()}")
-            return None
 
     def _evaluate_ranging_setup(self, symbol, data, indicators, alignment):
         try:
@@ -940,15 +534,28 @@ class TradeManager:
                 'valid': True, 'symbol': symbol, 'higher_tf_trend': 'ranging', 'setup_type': 'ranging',
                 'swing_points': alignment[self.tf_medium]['structure']['swing_points']
             }
-
+            
+            # Check for a potential sell signal
             if abs(current_price - resistance_levels[-1]) < price_range * self.config['ranging_strategy_settings']['level_proximity_factor']:
                 if self._validate_sell(symbol, indicators[self.tf_lower]):
+                    
+                    if self._is_breakout_risk_high(symbol, data, indicators, 'sell'):
+                        logging.warning(f"[{symbol}] Ranging sell signal ignored due to high breakout risk.")
+                        return None # Veto the trade
+                    
                     ranging_setup_base['direction'] = 'sell'
                     return ranging_setup_base
+            
             elif abs(current_price - support_levels[0]) < price_range * self.config['ranging_strategy_settings']['level_proximity_factor']:
                 if self._validate_buy(symbol, indicators[self.tf_lower]):
+                    
+                    if self._is_breakout_risk_high(symbol, data, indicators, 'buy'):
+                        logging.warning(f"[{symbol}] Ranging buy signal ignored due to high breakout risk.")
+                        return None # Veto the trade
+                        
                     ranging_setup_base['direction'] = 'buy'
                     return ranging_setup_base
+                    
             return None
         except Exception as e:
             logging.error(f"Error evaluating ranging setup for {symbol}: {str(e)}")
@@ -957,11 +564,7 @@ class TradeManager:
     def _validate_buy(self, symbol: str, data: pd.DataFrame) -> bool:
         try:
             rsi = data['rsi'].iloc[-1]
-            if rsi > self.config['ranging_strategy_settings']['rsi_threshold']:
-                logging.info(f"[{symbol}] Ranging Buy Validation Passed.")
-                return True
-            logging.info(f"[{symbol}] Ranging Buy Validation Failed: RSI is {rsi:.2f}.")
-            return False
+            return rsi > self.config['ranging_strategy_settings']['rsi_threshold']
         except Exception as e:
             logging.error(f"Error validating buy entry for {symbol}: {str(e)}")
             return False
@@ -969,11 +572,7 @@ class TradeManager:
     def _validate_sell(self, symbol: str, data: pd.DataFrame) -> bool:
         try:
             rsi = data['rsi'].iloc[-1]
-            if rsi < self.config['ranging_strategy_settings']['rsi_threshold']:
-                logging.info(f"[{symbol}] Ranging Sell Validation Passed.")
-                return True
-            logging.info(f"[{symbol}] Ranging Sell Validation Failed: RSI is {rsi:.2f}.")
-            return False
+            return rsi < self.config['ranging_strategy_settings']['rsi_threshold']
         except Exception as e:
             logging.error(f"Error validating sell entry for {symbol}: {str(e)}")
             return False
@@ -1014,7 +613,6 @@ class TradeLogger:
         self._initialize_file()
 
     def _initialize_file(self):
-        """Create the log file with a header if it doesn't exist."""
         try:
             if not os.path.exists(self.filename):
                 df = pd.DataFrame(columns=self.columns)
@@ -1023,7 +621,6 @@ class TradeLogger:
             logging.error(f"Error initializing trade log: {str(e)}")
 
     def _load_log(self) -> pd.DataFrame:
-        """Load the CSV log file into a pandas DataFrame."""
         try:
             return pd.read_csv(self.filename)
         except (FileNotFoundError, pd.errors.EmptyDataError):
@@ -1033,14 +630,12 @@ class TradeLogger:
             return pd.DataFrame(columns=self.columns)
 
     def _save_log(self, df: pd.DataFrame):
-        """Save the DataFrame back to the CSV log file."""
         try:
             df.to_csv(self.filename, index=False)
         except Exception as e:
             logging.error(f"Error saving trade log: {e}")
             
     def get_open_trades(self, symbol: str) -> pd.DataFrame:
-        """Gets all trades logged as 'open' for a given symbol."""
         log_df = self._load_log()
         if log_df.empty:
             return pd.DataFrame()
@@ -1048,11 +643,9 @@ class TradeLogger:
 
     def log_open_trade(self, ticket_id: int, symbol: str, direction: str, open_price: float, 
                        stop_loss: float, take_profit: float, lot_size: float, reason: str, market_context: str):
-        """Logs a new trade when it is opened."""
         try:
             log_df = self._load_log()
             
-            # Check if trade with this ticket ID is already logged
             if not log_df[log_df['ticket_id'] == ticket_id].empty:
                 logging.warning(f"Trade with ticket_id {ticket_id} already exists in log. Ignoring.")
                 return
@@ -1076,12 +669,10 @@ class TradeLogger:
             
             log_df = pd.concat([log_df, new_trade], ignore_index=True)
             self._save_log(log_df)
-            logging.info(f"Logged new open trade {ticket_id} for {symbol}.")
         except Exception as e:
             logging.error(f"Error logging open trade: {str(e)}")
 
     def log_close_trade(self, ticket_id: int, close_price: float, close_time: datetime, pnl: float, status: str):
-        """Updates a trade record with closing information."""
         try:
             log_df = self._load_log()
             trade_index = log_df.index[log_df['ticket_id'] == ticket_id].tolist()
@@ -1118,10 +709,16 @@ class OrderManager:
             risk_amount = account_balance * (risk_percentage / 100)
             symbol_info = mt5.symbol_info(symbol)
             if not symbol_info: return None
-            value_per_point = symbol_info.trade_tick_value / symbol_info.trade_tick_size * symbol_info.point
+            tick_value = mt5.symbol_info(symbol).trade_tick_value
+            tick_size = mt5.symbol_info(symbol).trade_tick_size
+            point = mt5.symbol_info(symbol).point
+            
+            value_per_point = tick_value / tick_size * point
             if value_per_point <= 0: return None
+            
             loss_for_one_lot = stop_loss_points * value_per_point
             if loss_for_one_lot <= 0: return None
+
             lot_size = risk_amount / loss_for_one_lot
             lot_step = symbol_info.volume_step
             lot_size = math.floor(lot_size / lot_step) * lot_step
@@ -1131,9 +728,6 @@ class OrderManager:
             return None
 
     def _find_next_structural_level(self, initial_level: float, direction: str, key_levels: list) -> float:
-        """
-        Finds the next key support/resistance level beyond the initial one to hide the SL behind.
-        """
         if direction == 'buy':
             potential_levels = [lvl['price'] for lvl in key_levels if lvl['type'] == 'support' and lvl['price'] < initial_level]
             if potential_levels:
@@ -1146,93 +740,63 @@ class OrderManager:
         return initial_level
 
     def calculate_sl_tp(self, symbol: str, order_type: str, indicators: dict, 
-                    trade_setup: dict, liquidity_levels: dict, key_levels: list) -> tuple:
+                        trade_setup: dict, liquidity_levels: dict, key_levels: list) -> tuple:
         try:
             rr_ratio = self.config['risk_management']['min_risk_reward_ratio']
-            atr_tp_multiplier = self.config['risk_management']['atr_take_profit_multiplier']
             sl_buffer_atr_factor = self.config['risk_management']['sl_buffer_atr_factor']
 
             symbol_info = mt5.symbol_info(symbol)
             symbol_tick = mt5.symbol_info_tick(symbol)
             if not symbol_info or not symbol_tick: 
+                logging.error(f"[{symbol}] Could not get symbol info or tick.")
                 return False, None, None, None
 
             point = symbol_info.point
             stops_level = symbol_info.trade_stops_level
             current_price = symbol_tick.ask if order_type == 'buy' else symbol_tick.bid
-            atr_value = indicators[self.market_data.timeframes[1]]['atr'].iloc[-1]
             
-            setup_type = trade_setup.get('setup_type', '')
-            initial_sl_point = None
-            
-            if 'ranging' in setup_type:
-                support_levels = [lvl['price'] for lvl in key_levels if lvl['type'] == 'support']
-                resistance_levels = [lvl['price'] for lvl in key_levels if lvl['type'] == 'resistance']
-                if not support_levels or not resistance_levels: return False, None, None, None
-                
-                range_high = max(resistance_levels)
-                range_low = min(support_levels)
+            h1_indicators = indicators[self.market_data.timeframes[1]]
+            h1_swing_points = trade_setup['swing_points']
+            h1_atr = h1_indicators['atr'].iloc[-1]
 
-                if order_type == 'buy':
-                    initial_sl_point = range_low
-                    take_profit = self._normalize_price(symbol, range_high)
-                else: # sell
-                    initial_sl_point = range_high
-                    take_profit = self._normalize_price(symbol, range_low)
-            
-            else:
-                if 'breakout' in setup_type:
-                    initial_sl_point = trade_setup.get('breakout_range_low') if order_type == 'buy' else trade_setup.get('breakout_range_high')
-                elif 'retest' in setup_type:
-                    retest_candle = trade_setup.get('retest_candle')
-                    if retest_candle is None: return False, None, None, None
-                    initial_sl_point = retest_candle['low'] if order_type == 'buy' else retest_candle['high']
-                
-                if initial_sl_point is None:
-                    logging.info(f"[{symbol}] Ignoring non-specialized setup type '{setup_type}' for SL/TP.")
-                    return False, None, None, None
-                
-                atr_tp = current_price + (atr_value * atr_tp_multiplier) if order_type == 'buy' else current_price - (atr_value * atr_tp_multiplier)
+            ideal_sl = 0.0
+            if order_type == 'buy':
+                last_swing_low = h1_swing_points['lows']['low'].iloc[-1]
+                ideal_sl = last_swing_low - (h1_atr * sl_buffer_atr_factor)
+            else: # sell
+                last_swing_high = h1_swing_points['highs']['high'].iloc[-1]
+                ideal_sl = last_swing_high + (h1_atr * sl_buffer_atr_factor)
 
-                liquidity_tp = None
-                target_liquidity = self.liquidity_detector.get_target_for_bias(
-                    bias=('bullish' if order_type == 'buy' else 'bearish'),
-                    liquidity_levels=liquidity_levels, entry_price=current_price, min_rr=rr_ratio, sl_price=None # SL not needed yet
-                )
-                if target_liquidity:
-                    liquidity_tp = target_liquidity['level']
-
-                final_tp = None
-                if order_type == 'buy':
-                    final_tp = min(atr_tp, liquidity_tp) if liquidity_tp else atr_tp
-                else: # sell
-                    final_tp = max(atr_tp, liquidity_tp) if liquidity_tp else atr_tp
-                
-                take_profit = self._normalize_price(symbol, final_tp)
-
-            final_sl_level = self._find_next_structural_level(initial_sl_point, order_type, key_levels)
-            sl_buffer = self._normalize_price(symbol, atr_value * sl_buffer_atr_factor)
-            ideal_sl = final_sl_level - sl_buffer if order_type == 'buy' else final_sl_level + sl_buffer
-
-            if (order_type == 'buy' and ideal_sl >= current_price) or \
-               (order_type == 'sell' and ideal_sl <= current_price):
-                logging.warning(f"[{symbol}] Trade invalidated: Ideal SL ({ideal_sl}) is on the wrong side of current price ({current_price}).")
-                return False, None, None, None
-            
             stop_loss = self._normalize_price(symbol, ideal_sl)
-            risk_distance = abs(current_price - stop_loss)
-            reward_distance = abs(current_price - take_profit)
 
-            if risk_distance == 0 or reward_distance / risk_distance < rr_ratio:
-                logging.warning(f"[{symbol}] Trade invalidated: Final R:R is less than {rr_ratio}:1 (Risk: {risk_distance:.5f}, Reward: {reward_distance:.5f}).")
+            ideal_tp = 0.0
+            if order_type == 'buy':
+                last_swing_high = h1_swing_points['highs']['high'].iloc[-1]
+                ideal_tp = last_swing_high
+            else: # sell
+                last_swing_low = h1_swing_points['lows']['low'].iloc[-1]
+                ideal_tp = last_swing_low
+
+            take_profit = self._normalize_price(symbol, ideal_tp)
+            
+            if (order_type == 'buy' and stop_loss >= current_price) or \
+               (order_type == 'sell' and stop_loss <= current_price):
+                logging.warning(f"[{symbol}] Trade invalidated: Ideal SL ({stop_loss}) is on the wrong side of current price ({current_price}).")
+                return False, None, None, None
+
+            risk_distance = abs(current_price - stop_loss)
+            reward_distance = abs(take_profit - current_price)
+            
+            if risk_distance == 0 or (reward_distance / risk_distance) < rr_ratio:
+                logging.warning(f"[{symbol}] Trade invalidated: Final R:R ({reward_distance/risk_distance:.2f}) is less than required {rr_ratio}:1.")
                 return False, None, None, None
 
             stop_distance_points = risk_distance / point
             if stop_distance_points < stops_level:
-                logging.warning(f"[{symbol}] Trade invalidated: Stop distance ({stop_distance_points:.1f}) is less than minimum stops level ({stops_level}).")
+                logging.warning(f"[{symbol}] Trade invalidated: Stop distance ({stop_distance_points:.1f} pts) is less than minimum stops level ({stops_level} pts).")
                 return False, None, None, None
 
-            logging.info(f"[{symbol}] Validated Order Params for {setup_type}: SL={stop_loss}, TP={take_profit}")
+            logging.info(f"[{symbol}] Validated Order Params for {trade_setup.get('setup_type', '')}: SL={stop_loss}, TP={take_profit}")
             return True, stop_loss, take_profit, stop_distance_points
 
         except Exception as e:
@@ -1270,8 +834,40 @@ class OrderManager:
                     
         result = mt5.order_send(request)  
         if result.retcode != mt5.TRADE_RETCODE_DONE:
-            logging.error(f"Failed to place {order_type} order: {result.comment} Lot size: {lots_size}")
+            logging.error(f"Failed to place {order_type} order for {symbol}: {result.comment} (Code: {result.retcode})")
         return result
+    
+    def close_position(self, position, comment: str):
+        """Creates and sends a request to close a specific position."""
+        symbol = position.symbol
+        
+        # Determine the correct order type for closing
+        close_type = mt5.ORDER_TYPE_BUY if position.type == mt5.POSITION_TYPE_SELL else mt5.ORDER_TYPE_SELL
+        
+        # Determine the correct closing price
+        price = mt5.symbol_info_tick(symbol).ask if position.type == mt5.POSITION_TYPE_SELL else mt5.symbol_info_tick(symbol).bid
+
+        request = {
+            "action": mt5.TRADE_ACTION_DEAL,
+            "position": position.ticket,
+            "symbol": symbol,
+            "volume": position.volume,
+            "type": close_type,
+            "price": price,
+            "deviation": 20,
+            "magic": self.config['misc']['mt5_magic_number'],
+            "comment": comment,
+            "type_time": mt5.ORDER_TIME_GTC,
+            "type_filling": mt5.ORDER_FILLING_IOC,
+        }
+        
+        result = mt5.order_send(request)
+        if result.retcode == mt5.TRADE_RETCODE_DONE:
+            logging.info(f"Successfully sent close order for position {position.ticket}. Comment: {comment}")
+            return True
+        else:
+            logging.error(f"Failed to close position {position.ticket}: {result.comment}")
+            return False
         
 async def run_main_loop(client, symbols, timeframes):
     market_data_dict = {symbol: MarketData(symbol, timeframes) for symbol in symbols}
@@ -1289,10 +885,10 @@ async def run_main_loop(client, symbols, timeframes):
         end_time = time.time()
         
         cycle_duration = end_time - start_time
-        logging.info(f"Main loop cycle complete. Took {cycle_duration:.2f} seconds.")
+        logging.info(f"Main loop cycle complete. Duration: {cycle_duration:.2f} seconds.")
         
         sleep_time = max(0, CHECK_INTERVAL - cycle_duration)
-        logging.info(f"Next main loop cycle in {sleep_time:.2f} seconds.")
+        logging.info(f"Sleeping for {sleep_time:.2f} seconds.")
         await asyncio.sleep(sleep_time)
 
 async def main():
@@ -1313,7 +909,7 @@ async def main():
         logging.error(f"An error occurred in main: {str(e)}\n{traceback.format_exc()}")
     finally:
         if client.is_initialized(): mt5.shutdown()
-        logging.info("Trading script terminated")
+        logging.info("Trading script terminated.")
 
 if __name__ == "__main__":
     try:

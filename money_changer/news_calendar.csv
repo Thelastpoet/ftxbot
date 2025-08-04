@@ -1,0 +1,88 @@
+datetime_utc,currency,impact,event_name,actual,forecast,previous
+2025-08-04 06:50,JPY,Low,Monetary Base y/y,-3.9%,-2.8%,-3.5%
+2025-08-04 08:00,AUD,Low,MI Inflation Gauge m/m,0.9%,,0.1%
+2025-08-04 12:00,USD,Low,Loan Officer Survey,,,
+2025-08-04 13:30,CHF,High,CPI m/m,0.0%,-0.2%,0.2%
+2025-08-04 14:00,EUR,Low,Spanish Unemployment Change,-1.4K,-21.3K,-48.9K
+2025-08-04 14:30,CHF,Low,Manufacturing PMI,48.8,49.8,49.6
+2025-08-04 15:30,EUR,Low,Sentix Investor Confidence,4:03,6.2,4.5
+2025-08-04 21:00,USD,Low,Factory Orders m/m,,-4.9%,8.2%
+2025-08-05 03:59,AUD,Holiday,Bank Holiday,,,
+2025-08-05 03:59,CAD,Holiday,Bank Holiday,,,
+2025-08-05 06:50,JPY,Low,Monetary Policy Meeting Minutes,,,
+2025-08-05 08:00,NZD,Low,ANZ Commodity Prices m/m,,,-2.3%
+2025-08-05 08:30,AUD,Low,ANZ Job Advertisements m/m,,,1.8%
+2025-08-05 08:45,CNY,Low,Caixin Services PMI,,50.4,50.6
+2025-08-05 10:35,JPY,Low,10-y Bond Auction,,,1.44|3.5
+2025-08-05 12:00,GBP,Low,10-y Bond Auction,,,4.64|2.9
+2025-08-05 12:00,USD,Low,RCM/TIPP Economic Optimism,,49.2,48.6
+2025-08-05 12:00,NZD,Low,GDT Price Index,,,1.1%
+2025-08-05 13:45,EUR,Low,French Gov Budget Balance,,,-94.0B
+2025-08-05 13:45,EUR,Low,French Industrial Production m/m,,0.8%,-0.5%
+2025-08-05 14:15,EUR,Low,Spanish Services PMI,,52.6,51.9
+2025-08-05 14:45,EUR,Low,Italian Services PMI,,52.5,52.1
+2025-08-05 14:50,EUR,Low,French Final Services PMI,,49.7,49.7
+2025-08-05 14:55,EUR,Low,German Final Services PMI,,50.1,50.1
+2025-08-05 15:00,EUR,Low,Final Services PMI,,51.2,51.2
+2025-08-05 15:30,GBP,Low,Final Services PMI,,51.2,51.2
+2025-08-05 16:00,EUR,Low,PPI m/m,,0.9%,-0.6%
+2025-08-05 19:30,CAD,Low,Trade Balance,,-5.8B,-5.9B
+2025-08-05 19:30,USD,Low,Trade Balance,,-62.6B,-71.5B
+2025-08-05 20:45,USD,Low,Final Services PMI,,55.2,55.2
+2025-08-05 21:00,USD,High,ISM Services PMI,,51.5,50.8
+2025-08-06 03:30,USD,Low,API Weekly Statistical Bulletin,,,
+2025-08-06 05:45,NZD,High,Employment Change q/q,,-0.1%,0.1%
+2025-08-06 05:45,NZD,High,Unemployment Rate,,5.3%,5.1%
+2025-08-06 05:45,NZD,Low,Labor Cost Index q/q,,0.5%,0.4%
+2025-08-06 06:30,JPY,Low,Average Cash Earnings y/y,,3.2%,1.4%
+2025-08-06 13:00,EUR,Low,German Factory Orders m/m,,1.0%,-1.4%
+2025-08-06 13:45,EUR,Low,French Prelim Private Payrolls q/q,,,-0.1%
+2025-08-06 15:00,EUR,Low,Italian Industrial Production m/m,,-0.1%,-0.7%
+2025-08-06 15:30,GBP,Low,Construction PMI,,49.2,48.8
+2025-08-06 16:00,EUR,Low,Retail Sales m/m,,0.4%,-0.7%
+2025-08-06 21:30,USD,Low,Crude Oil Inventories,,,7.7M
+2025-08-07 00:01,USD,Low,10-y Bond Auction,,,4.36|2.6
+2025-08-07 01:00,USD,Low,FOMC Member Collins Speaks,,,
+2025-08-07 01:00,USD,Low,FOMC Member Cook Speaks,,,
+2025-08-07 03:10,USD,Low,FOMC Member Daly Speaks,,,
+2025-08-07 08:30,AUD,Low,Goods Trade Balance,,3.25B,2.24B
+2025-08-07 10:00,NZD,Medium,Inflation Expectations q/q,,,2.29%
+2025-08-07 10:35,JPY,Low,30-y Bond Auction,,,2.81|3.6
+2025-08-07 12:00,CNY,Low,Trade Balance,,,826B
+2025-08-07 12:00,CNY,Low,USD-Denominated Trade Balance,,107.9B,114.8B
+2025-08-07 12:00,JPY,Low,Leading Indicators,,106.2%,104.8%
+2025-08-07 12:00,EUR,Low,Spanish 10-y Bond Auction,,,
+2025-08-07 12:00,EUR,Low,French 10-y Bond Auction,,,3.27|2.3
+2025-08-07 13:00,EUR,Low,German Industrial Production m/m,,-0.6%,1.2%
+2025-08-07 13:00,EUR,Low,German Trade Balance,,18.3B,18.4B
+2025-08-07 13:00,GBP,Low,Halifax HPI m/m,,0.1%,0.0%
+2025-08-07 13:45,EUR,Low,French Trade Balance,,-7.5B,-7.8B
+2025-08-07 14:00,CHF,Low,Foreign Currency Reserves,,,713B
+2025-08-07 14:00,CHF,Low,Unemployment Rate,,2.9%,2.9%
+2025-08-07 15:00,EUR,Low,ECB Economic Bulletin,,,
+2025-08-07 18:00,GBP,High,BOE Monetary Policy Report,,,
+2025-08-07 18:00,GBP,High,Monetary Policy Summary,,,
+2025-08-07 18:00,GBP,High,MPC Official Bank Rate Votes,,0-8-1,0-3-6
+2025-08-07 18:00,GBP,High,Official Bank Rate,,4.00%,4.25%
+2025-08-07 19:30,USD,High,Unemployment Claims,,221K,218K
+2025-08-07 19:30,USD,Low,Prelim Nonfarm Productivity q/q,,1.9%,-1.5%
+2025-08-07 19:30,USD,Low,Prelim Unit Labor Costs q/q,,1.4%,6.6%
+2025-08-07 21:00,CAD,Medium,Ivey PMI,,55.2,53.3
+2025-08-07 21:00,USD,Low,Final Wholesale Inventories m/m,,0.2%,0.2%
+2025-08-07 21:00,USD,Low,FOMC Member Bostic Speaks,,,
+2025-08-07 21:30,USD,Low,Natural Gas Storage,,,48B
+2025-08-08 00:01,USD,Low,30-y Bond Auction,,,4.89|2.4
+2025-08-08 02:00,USD,Low,Consumer Credit m/m,,7.2B,5.1B
+2025-08-08 06:30,JPY,Low,Household Spending y/y,,2.8%,4.7%
+2025-08-08 06:50,JPY,Low,Bank Lending y/y,,2.7%,2.8%
+2025-08-08 06:50,JPY,Low,BOJ Summary of Opinions,,,
+2025-08-08 06:50,JPY,Low,Current Account,,2.76T,2.82T
+2025-08-08 12:00,JPY,Low,Economy Watchers Sentiment,,45.5,45.0
+2025-08-08 14:00,CHF,Low,SECO Consumer Climate,,-30,-32
+2025-08-08 18:15,GBP,Low,MPC Member Pill Speaks,,,
+2025-08-08 19:30,CAD,High,Employment Change,,15.3K,83.1K
+2025-08-08 19:30,CAD,High,Unemployment Rate,,7.0%,6.9%
+2025-08-08 21:20,USD,Low,FOMC Member Musalem Speaks,,,
+2025-08-09 08:30,CNY,Medium,CPI y/y,,-0.1%,0.1%
+2025-08-09 08:30,CNY,Medium,PPI y/y,,-3.2%,-3.6%
+2025-08-09 23:15,USD,Low,FOMC Member Bowman Speaks,,,

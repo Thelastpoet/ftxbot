@@ -7701,3 +7701,909 @@ ticket_id,symbol,direction,open_time,open_price,stop_loss,take_profit,lot_size,r
     }
   }
 }",,,,open
+169716306,USDCAD,buy,2025-08-04 09:02:22.774632,1.37798,1.37494,1.44118,0.01,ranging,"{
+  ""alignment"": {
+    ""16408"": {
+      ""structure"": {
+        ""trend"": ""sideways"",
+        ""consolidation"": false,
+        ""swing_points"": {
+          ""highs"": [
+            {
+              ""time"": ""2024-04-16T00:00:00"",
+              ""open"": 1.37839,
+              ""high"": 1.38461,
+              ""low"": 1.3773900000000001,
+              ""close"": 1.38288,
+              ""tick_volume"": 110251,
+              ""spread"": 0,
+              ""real_volume"": 0
+            },
+            {
+              ""time"": ""2024-06-11T00:00:00"",
+              ""open"": 1.37575,
+              ""high"": 1.37917,
+              ""low"": 1.3748,
+              ""close"": 1.37578,
+              ""tick_volume"": 109973,
+              ""spread"": 1,
+              ""real_volume"": 0
+            },
+            {
+              ""time"": ""2024-08-05T00:00:00"",
+              ""open"": 1.38552,
+              ""high"": 1.39467,
+              ""low"": 1.38095,
+              ""close"": 1.38262,
+              ""tick_volume"": 124598,
+              ""spread"": 1,
+              ""real_volume"": 0
+            },
+            {
+              ""time"": ""2025-02-03T00:00:00"",
+              ""open"": 1.47355,
+              ""high"": 1.47932,
+              ""low"": 1.43892,
+              ""close"": 1.44285,
+              ""tick_volume"": 245278,
+              ""spread"": 1,
+              ""real_volume"": 0
+            },
+            {
+              ""time"": ""2025-08-01T00:00:00"",
+              ""open"": 1.38428,
+              ""high"": 1.38794,
+              ""low"": 1.37631,
+              ""close"": 1.37779,
+              ""tick_volume"": 144705,
+              ""spread"": 1,
+              ""real_volume"": 0
+            }
+          ],
+          ""lows"": [
+            {
+              ""time"": ""2023-12-27T00:00:00"",
+              ""open"": 1.31956,
+              ""high"": 1.32193,
+              ""low"": 1.31772,
+              ""close"": 1.3207900000000001,
+              ""tick_volume"": 70154,
+              ""spread"": 1,
+              ""real_volume"": 0
+            },
+            {
+              ""time"": ""2024-07-11T00:00:00"",
+              ""open"": 1.3616,
+              ""high"": 1.36481,
+              ""low"": 1.35877,
+              ""close"": 1.36323,
+              ""tick_volume"": 120907,
+              ""spread"": 1,
+              ""real_volume"": 0
+            },
+            {
+              ""time"": ""2024-09-25T00:00:00"",
+              ""open"": 1.34308,
+              ""high"": 1.34869,
+              ""low"": 1.34192,
+              ""close"": 1.34848,
+              ""tick_volume"": 109036,
+              ""spread"": 1,
+              ""real_volume"": 0
+            },
+            {
+              ""time"": ""2025-02-14T00:00:00"",
+              ""open"": 1.41886,
+              ""high"": 1.42014,
+              ""low"": 1.41507,
+              ""close"": 1.41768,
+              ""tick_volume"": 99871,
+              ""spread"": 1,
+              ""real_volume"": 0
+            },
+            {
+              ""time"": ""2025-06-16T00:00:00"",
+              ""open"": 1.35795,
+              ""high"": 1.3607,
+              ""low"": 1.35396,
+              ""close"": 1.35709,
+              ""tick_volume"": 104418,
+              ""spread"": 1,
+              ""real_volume"": 0
+            }
+          ]
+        },
+        ""key_levels"": [
+          {
+            ""price"": 1.3752466666666667,
+            ""type"": ""support""
+          },
+          {
+            ""price"": 1.3763200866666667,
+            ""type"": ""support""
+          },
+          {
+            ""price"": 1.3769832466666667,
+            ""type"": ""support""
+          },
+          {
+            ""price"": 1.3780566666666667,
+            ""type"": ""resistance""
+          },
+          {
+            ""price"": 1.3791300866666667,
+            ""type"": ""resistance""
+          },
+          {
+            ""price"": 1.3794512,
+            ""type"": ""resistance""
+          },
+          {
+            ""price"": 1.3797932466666667,
+            ""type"": ""resistance""
+          },
+          {
+            ""price"": 1.3808666666666667,
+            ""type"": ""resistance""
+          },
+          {
+            ""price"": 1.39852,
+            ""type"": ""resistance""
+          },
+          {
+            ""price"": 1.4175887999999999,
+            ""type"": ""resistance""
+          },
+          {
+            ""price"": 1.4411824,
+            ""type"": ""resistance""
+          }
+        ],
+        ""timeframe"": 16408
+      }
+    },
+    ""16385"": {
+      ""structure"": {
+        ""trend"": ""sideways"",
+        ""consolidation"": false,
+        ""swing_points"": {
+          ""highs"": [
+            {
+              ""time"": ""2025-07-09T15:00:00"",
+              ""open"": 1.37084,
+              ""high"": 1.37099,
+              ""low"": 1.36879,
+              ""close"": 1.3689200000000001,
+              ""tick_volume"": 4529,
+              ""spread"": 1,
+              ""real_volume"": 0
+            },
+            {
+              ""time"": ""2025-07-11T03:00:00"",
+              ""open"": 1.3656,
+              ""high"": 1.37304,
+              ""low"": 1.36541,
+              ""close"": 1.3691499999999999,
+              ""tick_volume"": 10206,
+              ""spread"": 1,
+              ""real_volume"": 0
+            },
+            {
+              ""time"": ""2025-07-15T19:00:00"",
+              ""open"": 1.37142,
+              ""high"": 1.37301,
+              ""low"": 1.37104,
+              ""close"": 1.37245,
+              ""tick_volume"": 4362,
+              ""spread"": 1,
+              ""real_volume"": 0
+            },
+            {
+              ""time"": ""2025-07-17T15:00:00"",
+              ""open"": 1.37634,
+              ""high"": 1.3774199999999999,
+              ""low"": 1.37564,
+              ""close"": 1.37591,
+              ""tick_volume"": 6385,
+              ""spread"": 1,
+              ""real_volume"": 0
+            },
+            {
+              ""time"": ""2025-07-23T17:00:00"",
+              ""open"": 1.3615300000000001,
+              ""high"": 1.3629,
+              ""low"": 1.36125,
+              ""close"": 1.36155,
+              ""tick_volume"": 4856,
+              ""spread"": 1,
+              ""real_volume"": 0
+            }
+          ],
+          ""lows"": [
+            {
+              ""time"": ""2025-07-09T09:00:00"",
+              ""open"": 1.3674,
+              ""high"": 1.36809,
+              ""low"": 1.36656,
+              ""close"": 1.36676,
+              ""tick_volume"": 3420,
+              ""spread"": 1,
+              ""real_volume"": 0
+            },
+            {
+              ""time"": ""2025-07-11T00:00:00"",
+              ""open"": 1.36498,
+              ""high"": 1.36647,
+              ""low"": 1.36498,
+              ""close"": 1.36564,
+              ""tick_volume"": 259,
+              ""spread"": 26,
+              ""real_volume"": 0
+            },
+            {
+              ""time"": ""2025-07-15T15:00:00"",
+              ""open"": 1.36884,
+              ""high"": 1.36943,
+              ""low"": 1.36715,
+              ""close"": 1.36746,
+              ""tick_volume"": 5771,
+              ""spread"": 1,
+              ""real_volume"": 0
+            },
+            {
+              ""time"": ""2025-07-17T00:00:00"",
+              ""open"": 1.36753,
+              ""high"": 1.36867,
+              ""low"": 1.36753,
+              ""close"": 1.36843,
+              ""tick_volume"": 553,
+              ""spread"": 22,
+              ""real_volume"": 0
+            },
+            {
+              ""time"": ""2025-07-18T16:00:00"",
+              ""open"": 1.37038,
+              ""high"": 1.37151,
+              ""low"": 1.3695599999999999,
+              ""close"": 1.37036,
+              ""tick_volume"": 4757,
+              ""spread"": 1,
+              ""real_volume"": 0
+            },
+            {
+              ""time"": ""2025-07-23T14:00:00"",
+              ""open"": 1.35857,
+              ""high"": 1.35873,
+              ""low"": 1.35755,
+              ""close"": 1.35784,
+              ""tick_volume"": 2883,
+              ""spread"": 1,
+              ""real_volume"": 0
+            },
+            {
+              ""time"": ""2025-08-01T16:00:00"",
+              ""open"": 1.37967,
+              ""high"": 1.37967,
+              ""low"": 1.37631,
+              ""close"": 1.37797,
+              ""tick_volume"": 17221,
+              ""spread"": 1,
+              ""real_volume"": 0
+            }
+          ]
+        },
+        ""key_levels"": [
+          {
+            ""price"": 1.36915898,
+            ""type"": ""support""
+          },
+          {
+            ""price"": 1.372745,
+            ""type"": ""support""
+          },
+          {
+            ""price"": 1.37633102,
+            ""type"": ""support""
+          },
+          {
+            ""price"": 1.3775466666666667,
+            ""type"": ""support""
+          },
+          {
+            ""price"": 1.3776803666666666,
+            ""type"": ""support""
+          },
+          {
+            ""price"": 1.3777629666666666,
+            ""type"": ""support""
+          },
+          {
+            ""price"": 1.3778966666666665,
+            ""type"": ""support""
+          },
+          {
+            ""price"": 1.3780303666666665,
+            ""type"": ""resistance""
+          },
+          {
+            ""price"": 1.3781129666666665,
+            ""type"": ""resistance""
+          },
+          {
+            ""price"": 1.3782466666666664,
+            ""type"": ""resistance""
+          },
+          {
+            ""price"": 1.38076796,
+            ""type"": ""resistance""
+          }
+        ],
+        ""timeframe"": 16385
+      },
+      ""trend"": ""bearish""
+    },
+    ""15"": {
+      ""momentum"": {
+        ""rsi_trend"": ""bullish"",
+        ""trend_strength"": ""weak""
+      }
+    }
+  },
+  ""indicators"": {
+    ""15"": {
+      ""open"": 1.3778000000000001,
+      ""high"": 1.37804,
+      ""low"": 1.37769,
+      ""close"": 1.37796,
+      ""tick_volume"": 375.0,
+      ""spread"": 1.0,
+      ""real_volume"": 0.0,
+      ""ema_short"": 1.3775764130709274,
+      ""ema_long"": 1.378570579883431,
+      ""ema_short_slope"": 8.524153979383442e-05,
+      ""ema_long_slope"": -2.4921627895135856e-05,
+      ""rsi"": 51.50921497659285,
+      ""adx"": 24.860792604860645,
+      ""plus_di"": 15.458052607659562,
+      ""minus_di"": 21.698937596294638,
+      ""atr"": 0.0005468259898381141,
+      ""ichimoku_tenkan_sen"": 1.37737,
+      ""ichimoku_kijun_sen"": 1.3781050000000001,
+      ""ichimoku_senkou_span_a"": 1.3786575,
+      ""ichimoku_senkou_span_b"": 1.381965,
+      ""ichimoku_chikou_span"": NaN,
+      ""macd"": -0.0002534060062500121,
+      ""macd_signal"": -0.00034248517207721544,
+      ""macd_hist"": 8.907916582720336e-05,
+      ""chandelier_exit"": 1.3763995220304857,
+      ""momentum"": 0.00041000000000002146,
+      ""cdl_marubozu"": 0.0,
+      ""cdl_engulfing"": 0.0,
+      ""cdl_doji"": 0.0,
+      ""cdl_spinning_top"": 0.0,
+      ""cdl_shooting_star"": 0.0,
+      ""cdl_hammer"": 0.0
+    },
+    ""16385"": {
+      ""open"": 1.3778000000000001,
+      ""high"": 1.37804,
+      ""low"": 1.37769,
+      ""close"": 1.37796,
+      ""tick_volume"": 375.0,
+      ""spread"": 1.0,
+      ""real_volume"": 0.0,
+      ""ema_short"": 1.3782137495059077,
+      ""ema_long"": 1.3808344204993326,
+      ""ema_short_slope"": -5.638877909053264e-05,
+      ""ema_long_slope"": -0.0001173232856870321,
+      ""rsi"": 39.86784979301563,
+      ""adx"": 34.82266325055447,
+      ""plus_di"": 13.088970938145259,
+      ""minus_di"": 25.739758112516853,
+      ""atr"": 0.0015484561355537335,
+      ""ichimoku_tenkan_sen"": 1.3781050000000001,
+      ""ichimoku_kijun_sen"": 1.3821249999999998,
+      ""ichimoku_senkou_span_a"": 1.384825,
+      ""ichimoku_senkou_span_b"": 1.381475,
+      ""ichimoku_chikou_span"": NaN,
+      ""macd"": -0.001537417822980336,
+      ""macd_signal"": -0.001541094707605355,
+      ""macd_hist"": 3.676884625019054e-06,
+      ""chandelier_exit"": 1.3771046315933388,
+      ""momentum"": 0.00017000000000000348,
+      ""cdl_marubozu"": 0.0,
+      ""cdl_engulfing"": 0.0,
+      ""cdl_doji"": 0.0,
+      ""cdl_spinning_top"": 0.0,
+      ""cdl_shooting_star"": 0.0,
+      ""cdl_hammer"": 0.0
+    },
+    ""16408"": {
+      ""open"": 1.37713,
+      ""high"": 1.37951,
+      ""low"": 1.3767,
+      ""close"": 1.37796,
+      ""tick_volume"": 36336.0,
+      ""spread"": 1.0,
+      ""real_volume"": 0.0,
+      ""ema_short"": 1.375658492048581,
+      ""ema_long"": 1.3741414702873285,
+      ""ema_short_slope"": 0.0005114462114264029,
+      ""ema_long_slope"": 0.00015585835561915395,
+      ""rsi"": 55.805456135122576,
+      ""adx"": 18.678710367950707,
+      ""plus_di"": 25.68088568091658,
+      ""minus_di"": 16.751147225185374,
+      ""atr"": 0.006955701502299924,
+      ""ichimoku_tenkan_sen"": 1.372745,
+      ""ichimoku_kijun_sen"": 1.3717899999999998,
+      ""ichimoku_senkou_span_a"": 1.368915,
+      ""ichimoku_senkou_span_b"": 1.3777949999999999,
+      ""ichimoku_chikou_span"": NaN,
+      ""macd"": 0.0027007160886858284,
+      ""macd_signal"": 0.0011057520608522427,
+      ""macd_hist"": 0.0015949640278335856,
+      ""chandelier_exit"": 1.3670728954931002,
+      ""momentum"": 0.009750000000000147,
+      ""cdl_marubozu"": 0.0,
+      ""cdl_engulfing"": 0.0,
+      ""cdl_doji"": 0.0,
+      ""cdl_spinning_top"": 0.0,
+      ""cdl_shooting_star"": 0.0,
+      ""cdl_hammer"": 0.0
+    }
+  }
+}",,,,open
+169720868,USDCAD,buy,2025-08-04 09:27:22.808900,1.3782,1.375,1.44118,0.01,ranging,"{
+  ""alignment"": {
+    ""16408"": {
+      ""structure"": {
+        ""trend"": ""sideways"",
+        ""consolidation"": false,
+        ""swing_points"": {
+          ""highs"": [
+            {
+              ""time"": ""2024-04-16T00:00:00"",
+              ""open"": 1.37839,
+              ""high"": 1.38461,
+              ""low"": 1.3773900000000001,
+              ""close"": 1.38288,
+              ""tick_volume"": 110251,
+              ""spread"": 0,
+              ""real_volume"": 0
+            },
+            {
+              ""time"": ""2024-06-11T00:00:00"",
+              ""open"": 1.37575,
+              ""high"": 1.37917,
+              ""low"": 1.3748,
+              ""close"": 1.37578,
+              ""tick_volume"": 109973,
+              ""spread"": 1,
+              ""real_volume"": 0
+            },
+            {
+              ""time"": ""2024-08-05T00:00:00"",
+              ""open"": 1.38552,
+              ""high"": 1.39467,
+              ""low"": 1.38095,
+              ""close"": 1.38262,
+              ""tick_volume"": 124598,
+              ""spread"": 1,
+              ""real_volume"": 0
+            },
+            {
+              ""time"": ""2025-02-03T00:00:00"",
+              ""open"": 1.47355,
+              ""high"": 1.47932,
+              ""low"": 1.43892,
+              ""close"": 1.44285,
+              ""tick_volume"": 245278,
+              ""spread"": 1,
+              ""real_volume"": 0
+            },
+            {
+              ""time"": ""2025-08-01T00:00:00"",
+              ""open"": 1.38428,
+              ""high"": 1.38794,
+              ""low"": 1.37631,
+              ""close"": 1.37779,
+              ""tick_volume"": 144705,
+              ""spread"": 1,
+              ""real_volume"": 0
+            }
+          ],
+          ""lows"": [
+            {
+              ""time"": ""2023-12-27T00:00:00"",
+              ""open"": 1.31956,
+              ""high"": 1.32193,
+              ""low"": 1.31772,
+              ""close"": 1.3207900000000001,
+              ""tick_volume"": 70154,
+              ""spread"": 1,
+              ""real_volume"": 0
+            },
+            {
+              ""time"": ""2024-07-11T00:00:00"",
+              ""open"": 1.3616,
+              ""high"": 1.36481,
+              ""low"": 1.35877,
+              ""close"": 1.36323,
+              ""tick_volume"": 120907,
+              ""spread"": 1,
+              ""real_volume"": 0
+            },
+            {
+              ""time"": ""2024-09-25T00:00:00"",
+              ""open"": 1.34308,
+              ""high"": 1.34869,
+              ""low"": 1.34192,
+              ""close"": 1.34848,
+              ""tick_volume"": 109036,
+              ""spread"": 1,
+              ""real_volume"": 0
+            },
+            {
+              ""time"": ""2025-02-14T00:00:00"",
+              ""open"": 1.41886,
+              ""high"": 1.42014,
+              ""low"": 1.41507,
+              ""close"": 1.41768,
+              ""tick_volume"": 99871,
+              ""spread"": 1,
+              ""real_volume"": 0
+            },
+            {
+              ""time"": ""2025-06-16T00:00:00"",
+              ""open"": 1.35795,
+              ""high"": 1.3607,
+              ""low"": 1.35396,
+              ""close"": 1.35709,
+              ""tick_volume"": 104418,
+              ""spread"": 1,
+              ""real_volume"": 0
+            }
+          ]
+        },
+        ""key_levels"": [
+          {
+            ""price"": 1.3753199999999999,
+            ""type"": ""support""
+          },
+          {
+            ""price"": 1.3763934199999999,
+            ""type"": ""support""
+          },
+          {
+            ""price"": 1.3770565799999999,
+            ""type"": ""support""
+          },
+          {
+            ""price"": 1.3781299999999999,
+            ""type"": ""support""
+          },
+          {
+            ""price"": 1.3792034199999998,
+            ""type"": ""resistance""
+          },
+          {
+            ""price"": 1.3794512,
+            ""type"": ""resistance""
+          },
+          {
+            ""price"": 1.3798665799999998,
+            ""type"": ""resistance""
+          },
+          {
+            ""price"": 1.3809399999999998,
+            ""type"": ""resistance""
+          },
+          {
+            ""price"": 1.39852,
+            ""type"": ""resistance""
+          },
+          {
+            ""price"": 1.4175887999999999,
+            ""type"": ""resistance""
+          },
+          {
+            ""price"": 1.4411824,
+            ""type"": ""resistance""
+          }
+        ],
+        ""timeframe"": 16408
+      }
+    },
+    ""16385"": {
+      ""structure"": {
+        ""trend"": ""sideways"",
+        ""consolidation"": false,
+        ""swing_points"": {
+          ""highs"": [
+            {
+              ""time"": ""2025-07-09T15:00:00"",
+              ""open"": 1.37084,
+              ""high"": 1.37099,
+              ""low"": 1.36879,
+              ""close"": 1.3689200000000001,
+              ""tick_volume"": 4529,
+              ""spread"": 1,
+              ""real_volume"": 0
+            },
+            {
+              ""time"": ""2025-07-11T03:00:00"",
+              ""open"": 1.3656,
+              ""high"": 1.37304,
+              ""low"": 1.36541,
+              ""close"": 1.3691499999999999,
+              ""tick_volume"": 10206,
+              ""spread"": 1,
+              ""real_volume"": 0
+            },
+            {
+              ""time"": ""2025-07-15T19:00:00"",
+              ""open"": 1.37142,
+              ""high"": 1.37301,
+              ""low"": 1.37104,
+              ""close"": 1.37245,
+              ""tick_volume"": 4362,
+              ""spread"": 1,
+              ""real_volume"": 0
+            },
+            {
+              ""time"": ""2025-07-17T15:00:00"",
+              ""open"": 1.37634,
+              ""high"": 1.3774199999999999,
+              ""low"": 1.37564,
+              ""close"": 1.37591,
+              ""tick_volume"": 6385,
+              ""spread"": 1,
+              ""real_volume"": 0
+            },
+            {
+              ""time"": ""2025-07-23T17:00:00"",
+              ""open"": 1.3615300000000001,
+              ""high"": 1.3629,
+              ""low"": 1.36125,
+              ""close"": 1.36155,
+              ""tick_volume"": 4856,
+              ""spread"": 1,
+              ""real_volume"": 0
+            }
+          ],
+          ""lows"": [
+            {
+              ""time"": ""2025-07-09T09:00:00"",
+              ""open"": 1.3674,
+              ""high"": 1.36809,
+              ""low"": 1.36656,
+              ""close"": 1.36676,
+              ""tick_volume"": 3420,
+              ""spread"": 1,
+              ""real_volume"": 0
+            },
+            {
+              ""time"": ""2025-07-11T00:00:00"",
+              ""open"": 1.36498,
+              ""high"": 1.36647,
+              ""low"": 1.36498,
+              ""close"": 1.36564,
+              ""tick_volume"": 259,
+              ""spread"": 26,
+              ""real_volume"": 0
+            },
+            {
+              ""time"": ""2025-07-15T15:00:00"",
+              ""open"": 1.36884,
+              ""high"": 1.36943,
+              ""low"": 1.36715,
+              ""close"": 1.36746,
+              ""tick_volume"": 5771,
+              ""spread"": 1,
+              ""real_volume"": 0
+            },
+            {
+              ""time"": ""2025-07-17T00:00:00"",
+              ""open"": 1.36753,
+              ""high"": 1.36867,
+              ""low"": 1.36753,
+              ""close"": 1.36843,
+              ""tick_volume"": 553,
+              ""spread"": 22,
+              ""real_volume"": 0
+            },
+            {
+              ""time"": ""2025-07-18T16:00:00"",
+              ""open"": 1.37038,
+              ""high"": 1.37151,
+              ""low"": 1.3695599999999999,
+              ""close"": 1.37036,
+              ""tick_volume"": 4757,
+              ""spread"": 1,
+              ""real_volume"": 0
+            },
+            {
+              ""time"": ""2025-07-23T14:00:00"",
+              ""open"": 1.35857,
+              ""high"": 1.35873,
+              ""low"": 1.35755,
+              ""close"": 1.35784,
+              ""tick_volume"": 2883,
+              ""spread"": 1,
+              ""real_volume"": 0
+            },
+            {
+              ""time"": ""2025-08-01T16:00:00"",
+              ""open"": 1.37967,
+              ""high"": 1.37967,
+              ""low"": 1.37631,
+              ""close"": 1.37797,
+              ""tick_volume"": 17221,
+              ""spread"": 1,
+              ""real_volume"": 0
+            }
+          ]
+        },
+        ""key_levels"": [
+          {
+            ""price"": 1.36915898,
+            ""type"": ""support""
+          },
+          {
+            ""price"": 1.372745,
+            ""type"": ""support""
+          },
+          {
+            ""price"": 1.37633102,
+            ""type"": ""support""
+          },
+          {
+            ""price"": 1.3765466666666666,
+            ""type"": ""support""
+          },
+          {
+            ""price"": 1.3770318066666667,
+            ""type"": ""support""
+          },
+          {
+            ""price"": 1.3773315266666666,
+            ""type"": ""support""
+          },
+          {
+            ""price"": 1.3778166666666667,
+            ""type"": ""support""
+          },
+          {
+            ""price"": 1.3783018066666668,
+            ""type"": ""resistance""
+          },
+          {
+            ""price"": 1.3786015266666667,
+            ""type"": ""resistance""
+          },
+          {
+            ""price"": 1.3790866666666668,
+            ""type"": ""resistance""
+          },
+          {
+            ""price"": 1.38076796,
+            ""type"": ""resistance""
+          }
+        ],
+        ""timeframe"": 16385
+      },
+      ""trend"": ""bearish""
+    },
+    ""15"": {
+      ""momentum"": {
+        ""rsi_trend"": ""bullish"",
+        ""trend_strength"": ""weak""
+      }
+    }
+  },
+  ""indicators"": {
+    ""15"": {
+      ""open"": 1.37724,
+      ""high"": 1.37827,
+      ""low"": 1.377,
+      ""close"": 1.37818,
+      ""tick_volume"": 1336.0,
+      ""spread"": 1.0,
+      ""real_volume"": 0.0,
+      ""ema_short"": 1.3775745859010067,
+      ""ema_long"": 1.3785270046630886,
+      ""ema_short_slope"": 0.00013453646644290274,
+      ""ema_long_slope"": -1.4163455636317934e-05,
+      ""rsi"": 54.101462856092155,
+      ""adx"": 23.400539724969125,
+      ""plus_di"": 14.184717013139464,
+      ""minus_di"": 18.006944968533848,
+      ""atr"": 0.0006515425007680611,
+      ""ichimoku_tenkan_sen"": 1.377485,
+      ""ichimoku_kijun_sen"": 1.3781050000000001,
+      ""ichimoku_senkou_span_a"": 1.3786775,
+      ""ichimoku_senkou_span_b"": 1.381965,
+      ""ichimoku_chikou_span"": NaN,
+      ""macd"": -0.00023372138223409777,
+      ""macd_signal"": -0.00033030506368127415,
+      ""macd_hist"": 9.658368144717638e-05,
+      ""chandelier_exit"": 1.376315372497696,
+      ""momentum"": 0.0006099999999999994,
+      ""cdl_marubozu"": 0.0,
+      ""cdl_engulfing"": 0.0,
+      ""cdl_doji"": 0.0,
+      ""cdl_spinning_top"": 0.0,
+      ""cdl_shooting_star"": 0.0,
+      ""cdl_hammer"": 0.0
+    },
+    ""16385"": {
+      ""open"": 1.3778000000000001,
+      ""high"": 1.37827,
+      ""low"": 1.377,
+      ""close"": 1.37818,
+      ""tick_volume"": 3019.0,
+      ""spread"": 1.0,
+      ""real_volume"": 0.0,
+      ""ema_short"": 1.3782537495059077,
+      ""ema_long"": 1.3808430479503129,
+      ""ema_short_slope"": -1.6388779090492633e-05,
+      ""ema_long_slope"": -0.00010869583470674016,
+      ""rsi"": 41.031578990835996,
+      ""adx"": 34.57078339354091,
+      ""plus_di"": 13.57387931994302,
+      ""minus_di"": 24.691870109777806,
+      ""atr"": 0.0016141704212680374,
+      ""ichimoku_tenkan_sen"": 1.3781050000000001,
+      ""ichimoku_kijun_sen"": 1.3821249999999998,
+      ""ichimoku_senkou_span_a"": 1.384825,
+      ""ichimoku_senkou_span_b"": 1.381475,
+      ""ichimoku_chikou_span"": NaN,
+      ""macd"": -0.0015198679654304659,
+      ""macd_signal"": -0.001537584736095381,
+      ""macd_hist"": 1.7716770664915216e-05,
+      ""chandelier_exit"": 1.3769074887361958,
+      ""momentum"": 0.00038999999999989043,
+      ""cdl_marubozu"": 0.0,
+      ""cdl_engulfing"": 0.0,
+      ""cdl_doji"": 0.0,
+      ""cdl_spinning_top"": 0.0,
+      ""cdl_shooting_star"": 0.0,
+      ""cdl_hammer"": 0.0
+    },
+    ""16408"": {
+      ""open"": 1.37713,
+      ""high"": 1.37951,
+      ""low"": 1.3767,
+      ""close"": 1.37818,
+      ""tick_volume"": 38980.0,
+      ""spread"": 1.0,
+      ""real_volume"": 0.0,
+      ""ema_short"": 1.375698492048581,
+      ""ema_long"": 1.374150097738309,
+      ""ema_short_slope"": 0.0005514462114264429,
+      ""ema_long_slope"": 0.00016448580659966794,
+      ""rsi"": 55.98316683539814,
+      ""adx"": 18.678710367950707,
+      ""plus_di"": 25.68088568091658,
+      ""minus_di"": 16.751147225185374,
+      ""atr"": 0.006955701502299924,
+      ""ichimoku_tenkan_sen"": 1.372745,
+      ""ichimoku_kijun_sen"": 1.3717899999999998,
+      ""ichimoku_senkou_span_a"": 1.368915,
+      ""ichimoku_senkou_span_b"": 1.3777949999999999,
+      ""ichimoku_chikou_span"": NaN,
+      ""macd"": 0.0027182659462356984,
+      ""macd_signal"": 0.0011092620323622168,
+      ""macd_hist"": 0.0016090039138734816,
+      ""chandelier_exit"": 1.3670728954931002,
+      ""momentum"": 0.009970000000000034,
+      ""cdl_marubozu"": 0.0,
+      ""cdl_engulfing"": 0.0,
+      ""cdl_doji"": 0.0,
+      ""cdl_spinning_top"": 0.0,
+      ""cdl_shooting_star"": 0.0,
+      ""cdl_hammer"": 0.0
+    }
+  }
+}",,,,open
