@@ -334,7 +334,6 @@ class TradeManager:
     
             liquidity_levels = self.liquidity_detector.get_liquidity_levels(data[self.tf_medium], {}, daily_df=data[self.tf_higher])
 
-            # Directly call the ranging setup, as it's the only strategy
             trade_setup = self._evaluate_ranging_setup(symbol, data, indicators, alignment)
             if not trade_setup or not trade_setup.get('valid'): return
 
@@ -537,23 +536,15 @@ class TradeManager:
             
             # Check for a potential sell signal
             if abs(current_price - resistance_levels[-1]) < price_range * self.config['ranging_strategy_settings']['level_proximity_factor']:
-                if self._validate_sell(symbol, indicators[self.tf_lower]):
-                    
-                    if self._is_breakout_risk_high(symbol, data, indicators, 'sell'):
-                        logging.warning(f"[{symbol}] Ranging sell signal ignored due to high breakout risk.")
-                        return None # Veto the trade
-                    
+                if self._validate_sell(symbol, indicators[self.tf_lower]):                   
                     ranging_setup_base['direction'] = 'sell'
+                    ranging_setup_base['key_level_price'] = resistance_levels[-1]
                     return ranging_setup_base
             
             elif abs(current_price - support_levels[0]) < price_range * self.config['ranging_strategy_settings']['level_proximity_factor']:
                 if self._validate_buy(symbol, indicators[self.tf_lower]):
-                    
-                    if self._is_breakout_risk_high(symbol, data, indicators, 'buy'):
-                        logging.warning(f"[{symbol}] Ranging buy signal ignored due to high breakout risk.")
-                        return None # Veto the trade
-                        
                     ranging_setup_base['direction'] = 'buy'
+                    ranging_setup_base['key_level_price'] = support_levels[0]
                     return ranging_setup_base
                     
             return None
@@ -561,18 +552,77 @@ class TradeManager:
             logging.error(f"Error evaluating ranging setup for {symbol}: {str(e)}")
             return None
     
+    def _has_reversal_pattern(self, direction: str, data: pd.DataFrame, symbol: str) -> bool:
+        """
+        Checks the last candle for a suite of high-probability REVERSAL signals
+        using precise directional checks. Returns True only if volume is also above average.
+        """
+        try:
+            if len(data) < 2:
+                return False
+            
+            last = data.iloc[-2]
+            avg_vol = data['tick_volume'].rolling(window=20).mean().iloc[-2]
+            if last['tick_volume'] < avg_vol:
+                return False 
+
+            if direction == 'buy':
+                patterns = [
+                    last['cdl_engulfing'] == 100,
+                    last['cdl_hammer'] == 100,
+                    last['cdl_piercing'] == 100,
+                    last['cdl_morningstar'] == 100,
+                    last['cdl_morningdojistar'] == 100,
+                    last['cdl_invertedhammer'] == 100,
+                ]
+            else:  # sell
+                patterns = [
+                    last['cdl_engulfing'] == -100,
+                    last['cdl_hangingman'] == -100,
+                    last['cdl_darkcloudcover'] == -100,
+                    last['cdl_shootingstar'] == -100,
+                    last['cdl_eveningstar'] == -100,
+                    last['cdl_eveningdojistar'] == -100,
+                ]
+                
+
+            return any(patterns)
+        except Exception as e:
+            logging.error(f"Error checking for reversal pattern: {e}")
+            return False
+        
     def _validate_buy(self, symbol: str, data: pd.DataFrame) -> bool:
         try:
-            rsi = data['rsi'].iloc[-1]
-            return rsi > self.config['ranging_strategy_settings']['rsi_threshold']
+            has_pattern = self._has_reversal_pattern('buy', data, symbol)
+            if not has_pattern:
+                return False 
+            
+            rsi = data['rsi'].iloc[-2]
+            is_good_rsi = rsi < (100 - self.config['ranging_strategy_settings']['rsi_threshold'])
+        
+            if has_pattern and is_good_rsi:
+                logging.info(f"Buy entry validated for {symbol} with RSI: {rsi}")
+                return True
+            
+            return False
         except Exception as e:
             logging.error(f"Error validating buy entry for {symbol}: {str(e)}")
             return False
 
     def _validate_sell(self, symbol: str, data: pd.DataFrame) -> bool:
         try:
-            rsi = data['rsi'].iloc[-1]
-            return rsi < self.config['ranging_strategy_settings']['rsi_threshold']
+            has_pattern = self._has_reversal_pattern('sell', data, symbol)
+            if not has_pattern:
+                return False
+            
+            rsi = data['rsi'].iloc[-2]
+            is_good_rsi = rsi > self.config['ranging_strategy_settings']['rsi_threshold']
+            
+            if has_pattern and is_good_rsi:
+                logging.info(f"Sell entry validated for {symbol} with RSI: {rsi}")
+                return True
+            
+            return False
         except Exception as e:
             logging.error(f"Error validating sell entry for {symbol}: {str(e)}")
             return False
@@ -739,56 +789,68 @@ class OrderManager:
         
         return initial_level
 
-    def calculate_sl_tp(self, symbol: str, order_type: str, indicators: dict, 
-                        trade_setup: dict, liquidity_levels: dict, key_levels: list) -> tuple:
+    def calculate_sl_tp(self, symbol: str, order_type: str, indicators: dict,
+                    trade_setup: dict, liquidity_levels: dict, key_levels: list) -> tuple:
         try:
             rr_ratio = self.config['risk_management']['min_risk_reward_ratio']
             sl_buffer_atr_factor = self.config['risk_management']['sl_buffer_atr_factor']
 
             symbol_info = mt5.symbol_info(symbol)
             symbol_tick = mt5.symbol_info_tick(symbol)
-            if not symbol_info or not symbol_tick: 
+            if not symbol_info or not symbol_tick:
                 logging.error(f"[{symbol}] Could not get symbol info or tick.")
                 return False, None, None, None
 
             point = symbol_info.point
             stops_level = symbol_info.trade_stops_level
             current_price = symbol_tick.ask if order_type == 'buy' else symbol_tick.bid
-            
+
+            # --- Get Data from the Correct Timeframes ---
             h1_indicators = indicators[self.market_data.timeframes[1]]
             h1_swing_points = trade_setup['swing_points']
             h1_atr = h1_indicators['atr'].iloc[-1]
 
+            # D1 for the strategic reason for the trade
+            signal_level = trade_setup.get('key_level_price')
+            if not signal_level:
+                logging.error(f"[{symbol}] Trade setup is missing the strategic 'key_level_price'.")
+                return False, None, None, None
+
             ideal_sl = 0.0
-            if order_type == 'buy':
-                last_swing_low = h1_swing_points['lows']['low'].iloc[-1]
-                ideal_sl = last_swing_low - (h1_atr * sl_buffer_atr_factor)
-            else: # sell
-                last_swing_high = h1_swing_points['highs']['high'].iloc[-1]
-                ideal_sl = last_swing_high + (h1_atr * sl_buffer_atr_factor)
-
-            stop_loss = self._normalize_price(symbol, ideal_sl)
-
             ideal_tp = 0.0
+
             if order_type == 'buy':
+                # REASON: Buying at a D1 Support Level ('signal_level')
+                # SL: Place it just below that D1 support, using H1 ATR for the buffer.
+                ideal_sl = signal_level - (h1_atr * sl_buffer_atr_factor)
+
+                # TP: Target the next logical obstacle, which is the last H1 swing high.
                 last_swing_high = h1_swing_points['highs']['high'].iloc[-1]
                 ideal_tp = last_swing_high
+
             else: # sell
+                # REASON: Selling at a D1 Resistance Level ('signal_level')
+                # SL: Place it just above that D1 resistance, using H1 ATR for the buffer.
+                ideal_sl = signal_level + (h1_atr * sl_buffer_atr_factor)
+
+                # TP: Target the next logical obstacle, which is the last H1 swing low.
                 last_swing_low = h1_swing_points['lows']['low'].iloc[-1]
                 ideal_tp = last_swing_low
 
+            stop_loss = self._normalize_price(symbol, ideal_sl)
             take_profit = self._normalize_price(symbol, ideal_tp)
-            
+
+            # --- Final Validation Logic (This part remains the same) ---
             if (order_type == 'buy' and stop_loss >= current_price) or \
-               (order_type == 'sell' and stop_loss <= current_price):
-                logging.warning(f"[{symbol}] Trade invalidated: Ideal SL ({stop_loss}) is on the wrong side of current price ({current_price}).")
+            (order_type == 'sell' and stop_loss <= current_price):
+                logging.warning(f"[{symbol}] Trade invalidated: Calculated SL ({stop_loss}) is on the wrong side of current price ({current_price}). This can happen in fast markets.")
                 return False, None, None, None
 
             risk_distance = abs(current_price - stop_loss)
             reward_distance = abs(take_profit - current_price)
-            
+
             if risk_distance == 0 or (reward_distance / risk_distance) < rr_ratio:
-                logging.warning(f"[{symbol}] Trade invalidated: Final R:R ({reward_distance/risk_distance:.2f}) is less than required {rr_ratio}:1.")
+                logging.warning(f"[{symbol}] Trade invalidated: Final R:R ({(reward_distance / risk_distance):.2f}) is less than required {rr_ratio}:1.")
                 return False, None, None, None
 
             stop_distance_points = risk_distance / point

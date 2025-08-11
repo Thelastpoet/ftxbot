@@ -43,6 +43,7 @@ class ContextEngine:
         Args:
             strategy_config (Dict): A dictionary containing strategy parameters from the config file.
         """
+        self.strategy_config = strategy_config
         self.narrative = MarketNarrative()
 
         self.expansion_threshold = strategy_config['asian_range_max_atr_ratio']
@@ -58,6 +59,10 @@ class ContextEngine:
                 'start': time.fromisoformat(strategy_config['session_times_utc']['london']['start']),
                 'end': time.fromisoformat(strategy_config['session_times_utc']['london']['end'])
             },
+            'ny': {
+                'start': time.fromisoformat(strategy_config['session_times_utc']['ny']['start']),
+                'end': time.fromisoformat(strategy_config['session_times_utc']['ny']['end'])
+            }
         }
 
         self.asian_high = None
@@ -121,21 +126,39 @@ class ContextEngine:
             self.narrative.session_profile = "CONSOLIDATION_DEFINED"
             
     def _get_current_session(self, current_time: datetime) -> str:
-        current_date = current_time.date()
-        current_datetime = current_time.replace(second=0, microsecond=0)
+        """
+        Determines the precise current trading session, accounting for overlaps.
+        """
+        # We only need the time component for comparison
+        t = current_time.time()
+
+        # Get session start/end times from our config
+        asia_start = self.SESSION_WINDOWS['asia']['start']
+        asia_end = self.SESSION_WINDOWS['asia']['end']
+        london_start = self.SESSION_WINDOWS['london']['start']
+        london_end = self.SESSION_WINDOWS['london']['end']
+        ny_start = self.SESSION_WINDOWS['ny']['start']
+        ny_end = self.SESSION_WINDOWS['ny']['end']
+
+        # Check for the specific overlap period first
+        if t >= ny_start and t < london_end:
+            return "London/NY Overlap"
         
-        asia_start = datetime.combine(current_date, self.SESSION_WINDOWS['asia']['start']).replace(tzinfo=pytz.UTC)
-        asia_end = datetime.combine(current_date, self.SESSION_WINDOWS['asia']['end']).replace(tzinfo=pytz.UTC)
-        london_start = datetime.combine(current_date, self.SESSION_WINDOWS['london']['start']).replace(tzinfo=pytz.UTC)
+        # Check for solo sessions
+        if t >= london_start and t < london_end:
+            return "London"
         
-        if asia_start <= current_datetime < asia_end:
+        if t >= ny_start and t < ny_end:
+            return "New York"
+            
+        if t >= asia_start and t < asia_end:
             return "Asia"
-        elif asia_end <= current_datetime < london_start:
-            return "Post-Asia / Pre-London"
-        elif london_start <= current_datetime:
-            return "London / New York"
         
-        return "Pre-Asia"
+        # Check for the gaps between sessions
+        if t >= asia_end and t < london_start:
+            return "Post-Asia / Pre-London"
+            
+        return "Out of Session"
 
     def _evaluate_asian_range(self, indicators_df: pd.DataFrame):
         if self.asian_high is None or self.asian_low is None:

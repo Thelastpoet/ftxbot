@@ -13,8 +13,8 @@
   },
   "risk_management": {
     "risk_per_trade_percent": 1.0,
-    "min_risk_reward_ratio": 1.5,
-    "atr_take_profit_multiplier": 2.5,
+    "min_risk_reward_ratio": 1.2,
+    "atr_take_profit_multiplier": 1.5,
     "sl_buffer_atr_factor": 0.2
   },
   "indicator_parameters": {

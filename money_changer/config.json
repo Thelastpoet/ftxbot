@@ -70,7 +70,9 @@
   },
   "ranging_strategy_settings": {
       "level_proximity_factor": 0.1,
-      "rsi_threshold": 50
+      "rsi_threshold": 50,
+      "rsi_oversold": 30,
+      "rsi_overbought": 70
   },
   "misc": {
     "trade_log_filename": "trade_log.csv",

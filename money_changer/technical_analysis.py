@@ -61,14 +61,30 @@ class IndicatorCalculator:
             df['kc_upper'] = kc_ema + (kc_atr * kc_multiplier)
             df['kc_lower'] = kc_ema - (kc_atr * kc_multiplier)
             # --- END OF NEW INDICATORS ---
+            
+            df['volume_avg'] = df['tick_volume'].rolling(window=self.params.get('volume_period', 20)).mean()
 
             # Candlestick Patterns
             df['cdl_marubozu'] = talib.CDLMARUBOZU(df['open'], df['high'], df['low'], df['close'])
             df['cdl_engulfing'] = talib.CDLENGULFING(df['open'], df['high'], df['low'], df['close'])
             df['cdl_doji'] = talib.CDLDOJI(df['open'], df['high'], df['low'], df['close'])
             df['cdl_spinning_top'] = talib.CDLSPINNINGTOP(df['open'], df['high'], df['low'], df['close'])
-            df['cdl_shooting_star'] = talib.CDLSHOOTINGSTAR(df['open'], df['high'], df['low'], df['close'])
+            df['cdl_shootingstar'] = talib.CDLSHOOTINGSTAR(df['open'], df['high'], df['low'], df['close'])
             df['cdl_hammer'] = talib.CDLHAMMER(df['open'], df['high'], df['low'], df['close'])
+            df['cdl_hangingman'] = talib.CDLHANGINGMAN(df['open'], df['high'], df['low'], df['close'])
+            df['cdl_morningstar'] = talib.CDLMORNINGSTAR(df['open'], df['high'], df['low'], df['close'])
+            df['cdl_eveningstar'] = talib.CDLEVENINGSTAR(df['open'], df['high'], df['low'], df['close'])
+            df['cdl_morningdojistar'] = talib.CDLMORNINGDOJISTAR(df['open'], df['high'], df['low'], df['close'])
+            df['cdl_eveningdojistar'] = talib.CDLEVENINGDOJISTAR(df['open'], df['high'], df['low'], df['close'])
+            df['cdl_piercing'] = talib.CDLPIERCING(df['open'], df['high'], df['low'], df['close'])
+            df['cdl_darkcloudcover'] = talib.CDLDARKCLOUDCOVER(df['open'], df['high'], df['low'], df['close'])
+            df['cdl_3whitesoldiers'] = talib.CDL3WHITESOLDIERS(df['open'], df['high'], df['low'], df['close'])
+            df['cdl_3blackcrows'] = talib.CDL3BLACKCROWS(df['open'], df['high'], df['low'], df['close'])
+            df['cdl_dragonflydoji'] = talib.CDLDRAGONFLYDOJI(df['open'], df['high'], df['low'], df['close'])
+            df['cdl_gravestone'] = talib.CDLGRAVESTONEDOJI(df['open'], df['high'], df['low'], df['close'])
+            df['cdl_invertedhammer'] = talib.CDLINVERTEDHAMMER(df['open'], df['high'], df['low'], df['close'])
+            df['cdl_kicking'] = talib.CDLKICKING(df['open'], df['high'], df['low'], df['close'])
+            df['cdl_longleggeddoji'] = talib.CDLLONGLEGGEDDOJI(df['open'], df['high'], df['low'], df['close'])
             
             df.dropna(inplace=True)
 

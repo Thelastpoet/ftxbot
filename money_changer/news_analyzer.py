@@ -1,41 +1,29 @@
 import pandas as pd
 from datetime import datetime, timedelta, timezone
 import logging
+import os
 
 class NewsAnalyzer:
     def __init__(self, csv_filepath='news_calendar.csv', config=None):
         self.csv_filepath = csv_filepath
-        self.news_data = pd.DataFrame() # Initialize as empty DataFrame
+        self.news_data = pd.DataFrame() # Start with an empty DataFrame
         self.last_load_time = None
-        
-        # Safely get config settings
-        self.config = config.get('news_filter_settings', {}) if config else {}
-        self.minutes_before = timedelta(minutes=self.config.get('minutes_before_news', 30))
-        self.minutes_after = timedelta(minutes=self.config.get('minutes_after_news', 30))
-        refresh_hours = self.config.get('news_refresh_interval_hours', 24) # Default to 24 hours
-        self.refresh_interval = timedelta(hours=refresh_hours)
-
-        # Perform the initial load
-        self.load_news_data()
-
-    def _is_refresh_needed(self) -> bool:
-        """Checks if the time since the last data load exceeds the refresh interval."""
-        if not self.last_load_time:
-            return True
-        if (datetime.now(timezone.utc) - self.last_load_time) > self.refresh_interval:
-            return True
-        return False
+        self.file_exists = False
+        self.config = config['news_filter_settings'] if config else {}
+        self.load_news_data() # Initial attempt to load
 
     def load_news_data(self):
-        """Loads or reloads news data from the CSV file if needed."""
+        """Loads or reloads news data from the CSV file."""
         try:
             self.news_data = pd.read_csv(self.csv_filepath, parse_dates=['datetime_utc'])
-            # Ensure the datetime column is timezone-aware (UTC)
             self.news_data['datetime_utc'] = self.news_data['datetime_utc'].dt.tz_localize('UTC')
             self.last_load_time = datetime.now(timezone.utc)
-            logging.info(f"Successfully loaded {len(self.news_data)} news events. Next refresh in {self.refresh_interval}.")
+            self.file_exists = True
+            logging.info(f"Successfully loaded {len(self.news_data)} news events from {self.csv_filepath}")
         except FileNotFoundError:
-            logging.warning(f"News calendar file not found at '{self.csv_filepath}'. Trading will proceed without a news filter.")
+            # This is expected on first run before the scraper finishes
+            if not self.file_exists: # Log this only once
+                 logging.warning(f"News calendar not found at '{self.csv_filepath}'. Awaiting background scraper. Trading continues without news filter.")
             self.news_data = pd.DataFrame()
         except Exception as e:
             logging.error(f"Error loading news calendar: {e}")
@@ -43,22 +31,27 @@ class NewsAnalyzer:
 
     def check_for_high_impact_news(self, symbol: str) -> bool:
         """
-        Checks for high-impact news. It will automatically reload the news file
-        from disk if the refresh interval has been exceeded.
+        Checks if there is a high-impact news event for the given symbol within the configured time window.
+        Returns True if there is a conflicting event, False otherwise.
         """
-        if self._is_refresh_needed():
-            logging.info("News data refresh interval reached. Reloading news calendar...")
+        # --- NEW: INTELLIGENT RELOADING ---
+        # If the file didn't exist, but now it does, load it for the first time.
+        if not self.file_exists and os.path.exists(self.csv_filepath):
+            logging.info("News calendar has been created by the background scraper. Loading data now.")
             self.load_news_data()
 
         if self.news_data.empty:
             return False
 
-        base_currency = symbol[:3].upper()
-        quote_currency = symbol[3:].upper()
+        base_currency = symbol[:3]
+        quote_currency = symbol[3:]
+        
+        minutes_before = timedelta(minutes=self.config.get('minutes_before_news', 30))
+        minutes_after = timedelta(minutes=self.config.get('minutes_after_news', 30))
         
         now_utc = datetime.now(timezone.utc)
-        start_of_zone = now_utc - self.minutes_after
-        end_of_zone = now_utc + self.minutes_before
+        start_of_zone = now_utc - minutes_after
+        end_of_zone = now_utc + minutes_before
 
         relevant_news = self.news_data[
             (self.news_data['currency'].isin([base_currency, quote_currency])) &
@@ -69,7 +62,7 @@ class NewsAnalyzer:
 
         if not relevant_news.empty:
             for _, row in relevant_news.iterrows():
-                logging.warning(f"[{symbol}] Halting trading due to high-impact news: {row['event_name']} ({row['currency']}) at {row['datetime_utc'].strftime('%H:%M')} UTC.")
+                logging.warning(f"[{symbol}] High-impact news detected: {row['event_name']} ({row['currency']}) at {row['datetime_utc'].strftime('%H:%M')} UTC.")
             return True
 
         return False
