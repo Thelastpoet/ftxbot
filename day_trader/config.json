@@ -86,10 +86,12 @@
     "breakout_search_window": 30,
     "pinbar_wick_ratio": 1.5,
     "rsi_bullish_threshold": 40,
-    "rsi_bearish_threshold": 60
+    "rsi_bearish_threshold": 60,
+    "adx_entry_threshold": 22
   },
   "trending_strategy_settings": {
-      "pullback_atr_factor": 1.5
+      "pullback_atr_factor": 1.5,
+      "adx_entry_threshold": 22
   },
   "ranging_strategy_settings": {
       "level_proximity_factor": 0.1,

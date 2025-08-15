@@ -67,6 +67,11 @@ class ContextEngine:
 
         self.asian_high = None
         self.asian_low = None
+        self.london_high_swept = False
+        self.london_low_swept = False
+        self.london_high_sweep_level = 0.0
+        self.london_low_sweep_level = 0.0
+        self.hypothesis_just_formed = False
         
         self.current_day: date = date(1970, 1, 1) # Initialize to epoch
         engine_logger.info("ContextEngine initialized with configured parameters.")
@@ -76,6 +81,11 @@ class ContextEngine:
         self.narrative = MarketNarrative()
         self.asian_high = None
         self.asian_low = None
+        self.london_high_swept = False
+        self.london_low_swept = False
+        self.london_high_sweep_level = 0.0
+        self.london_low_sweep_level = 0.0
+        self.hypothesis_just_formed = False
         engine_logger.info(f"New trading day detected ({self.current_day}). Engine state has been reset.")
 
     def process_data(self, ohlc_df: pd.DataFrame, indicators_df: pd.DataFrame) -> MarketNarrative:
@@ -104,7 +114,10 @@ class ContextEngine:
             profile = self.narrative.session_profile
 
         if "MANIPULATION_CONFIRMED" in profile:
-            self._validate_hypothesis(ohlc_df)
+            if self.hypothesis_just_formed:
+                self.hypothesis_just_formed = False
+            else:
+                self._validate_hypothesis(ohlc_df)
 
         return self.narrative
 
@@ -217,19 +230,31 @@ class ContextEngine:
         if london_df.empty:
             return
 
-        swept_high = london_df['high'].max() > self.narrative.consolidation_range_high
-        swept_low = london_df['low'].min() < self.narrative.consolidation_range_low
+        # Check for sweeps
+        if not self.london_high_swept and london_df['high'].max() > self.narrative.consolidation_range_high:
+            self.london_high_swept = True
+            self.london_high_sweep_level = london_df[london_df['high'] > self.narrative.consolidation_range_high]['high'].max()
+            engine_logger.info(f"London session swept the Asian high at {self.london_high_sweep_level}")
 
-        if swept_low and not swept_high:
-            self._formulate_hypothesis(direction="down", sweep_level=london_df['low'].min(), bias="Bullish", target=self.narrative.consolidation_range_high)
-        elif swept_high and not swept_low:
-            self._formulate_hypothesis(direction="up", sweep_level=london_df['high'].max(), bias="Bearish", target=self.narrative.consolidation_range_low)
-        elif swept_high and swept_low:
+        if not self.london_low_swept and london_df['low'].min() < self.narrative.consolidation_range_low:
+            self.london_low_swept = True
+            self.london_low_sweep_level = london_df[london_df['low'] < self.narrative.consolidation_range_low]['low'].min()
+            engine_logger.info(f"London session swept the Asian low at {self.london_low_sweep_level}")
+
+        # Formulate hypothesis only once
+        if self.narrative.daily_bias == "Neutral":
+            if self.london_low_swept and not self.london_high_swept:
+                self._formulate_hypothesis(direction="down", sweep_level=self.london_low_sweep_level, bias="Bullish", target=self.narrative.consolidation_range_high)
+            elif self.london_high_swept and not self.london_low_swept:
+                self._formulate_hypothesis(direction="up", sweep_level=self.london_high_sweep_level, bias="Bearish", target=self.narrative.consolidation_range_low)
+        
+        if self.london_high_swept and self.london_low_swept:
             self.narrative.session_profile = "HYPOTHESIS_INVALIDATED"
             self.narrative.narrative_summary = "London session swept both sides. Market is choppy, no clear institutional intent."
             self.narrative.clarity_score = "Low"
             engine_logger.warning(self.narrative.narrative_summary)
-        else:
+        
+        if not self.london_high_swept and not self.london_low_swept:
             london_timeout = london_start + pd.Timedelta(hours=4)
             if latest_time > london_timeout:
                 self.narrative.session_profile = "NO_MANIPULATION_DETECTED"
@@ -242,6 +267,7 @@ class ContextEngine:
         self.narrative.liquidity_target = target
         self.narrative.invalidation_level = sweep_level
         self.narrative.clarity_score = "High"
+        self.hypothesis_just_formed = True
         self.narrative.narrative_summary = (
             f"London confirmed manipulation sweeping the Asian {('low' if direction == 'down' else 'high')}. "
             f"Bias is now {bias}. Target: {target:.5f}. Invalidation: {sweep_level:.5f}."

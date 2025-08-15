@@ -5128,7 +5128,7 @@ ticket_id,symbol,direction,open_time,open_price,stop_loss,take_profit,lot_size,r
       ""cdl_longleggeddoji"": 0.0
     }
   }
-}",,,,open
+}",2025-08-11 10:51:48,1.16491,0.68,closed_manual
 170648484,EURUSD,sell,2025-08-06 23:52:55.224535,1.1659,1.17383,1.15276,0.01,ranging,"{
   ""alignment"": {
     ""16408"": {
@@ -5768,7 +5768,7 @@ ticket_id,symbol,direction,open_time,open_price,stop_loss,take_profit,lot_size,r
       ""cdl_longleggeddoji"": 0.0
     }
   }
-}",,,,open
+}",2025-08-11 10:51:49,1.16491,0.99,closed_manual
 170652344,EURAUD,sell,2025-08-07 00:32:56.072272,1.79167,1.79495,1.78204,0.01,ranging,"{
   ""alignment"": {
     ""16408"": {
@@ -6388,7 +6388,7 @@ ticket_id,symbol,direction,open_time,open_price,stop_loss,take_profit,lot_size,r
       ""cdl_longleggeddoji"": 0.0
     }
   }
-}",,,,open
+}",2025-08-11 10:51:47,1.78756,2.68,closed_manual
 170652886,EURAUD,sell,2025-08-07 00:37:55.978589,1.79179,1.79495,1.78204,0.01,ranging,"{
   ""alignment"": {
     ""16408"": {
@@ -7008,7 +7008,7 @@ ticket_id,symbol,direction,open_time,open_price,stop_loss,take_profit,lot_size,r
       ""cdl_longleggeddoji"": 0.0
     }
   }
-}",,,,open
+}",2025-08-11 10:51:47,1.78756,2.76,closed_manual
 170720752,USDCHF,buy,2025-08-07 09:02:56.590861,0.805,0.80322,0.81182,0.01,ranging,"{
   ""alignment"": {
     ""16408"": {
@@ -7548,7 +7548,7 @@ ticket_id,symbol,direction,open_time,open_price,stop_loss,take_profit,lot_size,r
       ""cdl_longleggeddoji"": 0.0
     }
   }
-}",,,,open
+}",2025-08-11 10:51:50,0.80774,3.39,closed_manual
 170721769,USDCHF,buy,2025-08-07 09:07:56.511018,0.80498,0.80321,0.81182,0.01,ranging,"{
   ""alignment"": {
     ""16408"": {
@@ -8088,4 +8088,4 @@ ticket_id,symbol,direction,open_time,open_price,stop_loss,take_profit,lot_size,r
       ""cdl_longleggeddoji"": 0.0
     }
   }
-}",,,,open
+}",2025-08-11 10:51:51,0.80774,3.42,closed_manual

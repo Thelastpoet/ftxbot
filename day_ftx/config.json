@@ -37,7 +37,7 @@
     "asian_range_max_atr_ratio": 0.70,
     "ltf_swing_length": 5,
     "zones_to_check": 5,
-    "setup_expiry_minutes": 180,
+    "setup_expiry_minutes": 90,
     "rejection_timeout_minutes": 60
   },
   "logging": {

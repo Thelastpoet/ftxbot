@@ -8,7 +8,6 @@ import math
 import os
 import sys
 import time
-import traceback
 from dataclasses import asdict
 from datetime import datetime
 from typing import Any, Dict, Optional, Tuple
@@ -17,7 +16,6 @@ import numpy as np
 import pandas as pd
 import pytz
 
-# External libraries (these must be available in production)
 import MetaTrader5 as mt5
 from session_manager import SessionManager
 from technical_analysis import IndicatorCalculator
@@ -33,7 +31,6 @@ logging.basicConfig(
 )
 UTC = pytz.UTC
 
-
 # -----------------------------
 # Utilities
 # -----------------------------
@@ -44,7 +41,7 @@ def now_utc_iso() -> str:
 
 def compact_json(obj: Any) -> str:
     try:
-        return json.dumps(obj, separators=(",", ":"), default=lambda o: o.isoformat() if isinstance(o, datetime) else str(o))
+        return json.dumps(obj, separators=( ",", ":"), default=lambda o: o.isoformat() if isinstance(o, datetime) else str(o))
     except Exception:
         return json.dumps(str(obj))
 
@@ -421,6 +418,7 @@ class TradeManager:
         self.trade_logger = TradeLogger(filename=config['logging']['trade_log_file'])
         self.indicator_calc = IndicatorCalculator()
         self.context_engine = ContextEngine(strategy_config=config['amd_strategy_parameters'])
+        self.strategy_config = config['amd_strategy_parameters']
         self.order_manager = OrderManager(client, config['risk_management'], config['metatrader_settings'])
 
         self.tf_higher = max(self.timeframes)
@@ -450,22 +448,38 @@ class TradeManager:
 
     async def check_for_signals(self, symbol: str):
         try:
+            # 1. Always get fresh data and context
+            data, indicators = self._prepare_data(symbol)
+            if not data or not indicators:
+                return
+
+            current_hypothesis: MarketNarrative = self.context_engine.process_data(data[self.tf_lower], indicators[self.tf_higher])
+
+            # 2. If we have an active setup, manage it with the new context
             if self.active_setup:
-                await self.monitor_existing_setup(symbol)
+                await self.monitor_existing_setup(symbol, data, indicators, current_hypothesis)
                 return 
             
-            await self.find_new_setup(symbol)
+            # 3. If no active setup, try to find one with the new context
+            await self.find_new_setup(symbol, data, indicators, current_hypothesis)
 
         except Exception:
             logging.exception(f"check_for_signals failed for {symbol}")
             
-    async def monitor_existing_setup(self, symbol: str):
+    async def monitor_existing_setup(self, symbol: str, data: Dict, indicators: Dict, current_hypothesis: MarketNarrative):
         """Monitors and acts on a pre-existing trading hypothesis with detailed logging."""
         now = datetime.now(UTC)
         setup = self.active_setup
-        hypothesis: MarketNarrative = setup["hypothesis"]
+        original_hypothesis: MarketNarrative = setup["hypothesis"]
         entry_zone = setup["entry_zone"]
         status = setup["status"]
+
+        # --- NEW: Context Re-validation Step ---
+        if current_hypothesis.daily_bias != original_hypothesis.daily_bias or \
+           "INVALIDATED" in current_hypothesis.session_profile:
+            logging.warning(f"[{symbol}] STATUS: CONTEXT SHIFT. Original bias was {original_hypothesis.daily_bias}, but current context is '{current_hypothesis.narrative_summary}'. Discarding stale setup.")
+            self.active_setup = None
+            return
 
         # --- A. Check for Expiry or Invalidation first ---
         if now >= setup["expires_at"]:
@@ -473,44 +487,78 @@ class TradeManager:
             self.active_setup = None
             return
 
-        data, indicators = self._prepare_data(symbol)
-        if not data or not indicators:
-            logging.warning(f"[{symbol}] Could not fetch data to monitor active setup. Will retry next cycle.")
-            return
-        
         last_candle = data[self.tf_lower].iloc[-1]
         current_price = last_candle['close']
         
-        is_invalidated = (hypothesis.daily_bias == 'bullish' and current_price < hypothesis.invalidation_level) or \
-                         (hypothesis.daily_bias == 'bearish' and current_price > hypothesis.invalidation_level)
+        is_invalidated = (original_hypothesis.daily_bias == 'bullish' and current_price < original_hypothesis.invalidation_level) or \
+                         (original_hypothesis.daily_bias == 'bearish' and current_price > original_hypothesis.invalidation_level)
         
         if is_invalidated:
-            logging.warning(f"[{symbol}] STATUS: INVALIDATED. Price {current_price:.5f} broke invalidation level {hypothesis.invalidation_level:.5f}. Discarding.")
+            logging.warning(f"[{symbol}] STATUS: INVALIDATED. Price {current_price:.5f} broke invalidation level {original_hypothesis.invalidation_level:.5f}. Discarding.")
             self.active_setup = None
             return
 
         # --- B. Entry Logic State Machine with Detailed Logging ---
-        has_entered_zone = (hypothesis.daily_bias == 'bullish' and last_candle['low'] <= entry_zone['top']) or \
-                           (hypothesis.daily_bias == 'bearish' and last_candle['high'] >= entry_zone['bottom'])
+        point = getattr(self.client.symbol_info(symbol), 'point', 0.00001)
+        buffer = point * 2  # ~2 points, adjust if needed
+
+        if original_hypothesis.daily_bias == 'bullish':
+            # For buys, we want price to dip into the bottom of the zone
+            has_entered_zone = last_candle['low'] <= entry_zone['bottom'] + buffer
+        elif original_hypothesis.daily_bias == 'bearish':
+            # For sells, we want price to rise into the top of the zone
+            has_entered_zone = last_candle['high'] >= entry_zone['top'] - buffer
+        else:
+            has_entered_zone = False
 
         # STATE 1: Awaiting entry into the zone
         if status == "awaiting_zone_entry":
+            # Use same buffer as in has_entered_zone to keep logic consistent
+            point = getattr(self.client.symbol_info(symbol), 'point', 0.00001)
+            buffer = point * 2  # ~2 points buffer
+
+            zone_trigger_price = None
+            has_entered_zone = False
+
+            bias = (original_hypothesis.daily_bias or "").strip().lower()
+
+            if bias == 'bullish':
+                zone_trigger_price = entry_zone['bottom'] + buffer
+                has_entered_zone = last_candle['low'] <= zone_trigger_price
+            elif bias == 'bearish':
+                zone_trigger_price = entry_zone['top'] - buffer
+                has_entered_zone = last_candle['high'] >= zone_trigger_price
+            else:
+                logging.error(
+                    f"[{symbol}] Unexpected daily_bias value '{original_hypothesis.daily_bias}'. "
+                    f"Expected 'bullish' or 'bearish'. Skipping zone entry check."
+                )
+
+            # Safe formatting for trigger price
+            trigger_str = f"{zone_trigger_price:.5f}" if zone_trigger_price is not None else "N/A"
+
             if has_entered_zone:
-                logging.info(f"[{symbol}] STATUS: ZONE ENTERED. Price touched {entry_zone['type']} at {last_candle['high'] if hypothesis.daily_bias == 'bearish' else last_candle['low']:.5f}. Now monitoring for rejection candle.")
+                logging.info(
+                    f"[{symbol}] STATUS: ZONE ENTERED. Price touched {entry_zone['type']} "
+                    f"(Trigger={trigger_str}, "
+                    f"Current={last_candle['low'] if bias == 'bullish' else last_candle['high']:.5f}). "
+                    f"Now monitoring for rejection candle."
+                )
                 setup["status"] = "zone_entered"
                 rejection_timeout_minutes = self.context_engine.strategy_config.get("rejection_timeout_minutes", 60)
                 setup["rejection_expires_at"] = now + pd.Timedelta(minutes=rejection_timeout_minutes)
             else:
-                # This is the new, continuous log message
-                price_needed = entry_zone['bottom'] if hypothesis.daily_bias == 'bearish' else entry_zone['top']
-                logging.info(f"[{symbol}] STATUS: MONITORING. Waiting for price to pull back to zone. "
-                             f"Current High: {last_candle['high']:.5f}, "
-                             f"Current Low: {last_candle['low']:.5f}, "
-                             f"Zone Entry: ~{price_needed:.5f}")
-            return # Wait for next cycle
+                logging.info(
+                    f"[{symbol}] STATUS: MONITORING. Waiting for price to reach zone trigger. "
+                    f"Trigger Price={trigger_str}, "
+                    f"Current High={last_candle['high']:.5f}, "
+                    f"Current Low={last_candle['low']:.5f}."
+                )
+            return  # Wait for next cycle
 
         # STATE 2: Waiting for a rejection candle inside the zone
         if status == "zone_entered":
+            # --- Check rejection candle timeout ---
             if "rejection_expires_at" in setup and now >= setup["rejection_expires_at"]:
                 logging.info(f"[{symbol}] STATUS: REJECTION TIMEOUT. No confirmation candle formed in time. Discarding.")
                 self.active_setup = None
@@ -519,28 +567,30 @@ class TradeManager:
             trade_trigger = self._confirm_entry_trigger(
                 ltf_df=data[self.tf_lower],
                 ltf_indicators=indicators[self.tf_lower],
-                direction=hypothesis.daily_bias.lower(),
+                direction=original_hypothesis.daily_bias.lower(),
                 entry_zone=entry_zone
             )
-            
+
             if trade_trigger and trade_trigger.get('valid'):
-                logging.info(f"[{symbol}] STATUS: ENTRY CONFIRMED. High-probability rejection signal found. Executing trade.")
+                logging.info(
+                    f"[{symbol}] STATUS: ENTRY CONFIRMED. "
+                    f"Setup Type={trade_trigger.get('setup_type')}, "
+                    f"Direction={trade_trigger.get('direction')}, "
+                    f"Executing trade."
+                )
                 setup["status"] = "entry_confirmed"
-                await self._execute_trade(symbol, trade_trigger, hypothesis)
-                self.active_setup = None # Clear after execution
+                await self._execute_trade(symbol, trade_trigger, original_hypothesis)
+                self.active_setup = None  # Clear after execution
             else:
-                # The other new, continuous log message
-                logging.info(f"[{symbol}] STATUS: IN ZONE. Price is inside the FVG. Waiting for a valid rejection candle.")
+                logging.info(
+                    f"[{symbol}] STATUS: IN ZONE. Price within {entry_zone['type']} zone "
+                    f"[Bottom={entry_zone['bottom']:.5f}, Top={entry_zone['top']:.5f}] "
+                    f"but no valid rejection candle yet."
+                )
 
 
-    async def find_new_setup(self, symbol: str):
-        """Looks for a new, valid trading hypothesis."""
-        data, indicators = self._prepare_data(symbol)
-        if not data or not indicators:
-            return
-
-        hypothesis: MarketNarrative = self.context_engine.process_data(data[self.tf_lower], indicators[self.tf_higher])
-
+    async def find_new_setup(self, symbol: str, data: Dict, indicators: Dict, hypothesis: MarketNarrative):
+        """Looks for a new, valid trading hypothesis based on pre-supplied context."""
         # We only care about high-clarity hypotheses that have passed the manipulation stage
         if hypothesis.clarity_score != 'High' or 'MANIPULATION_CONFIRMED' not in hypothesis.session_profile:
             return
@@ -631,10 +681,9 @@ class TradeManager:
         symbol = self.market_data.symbol
         try:
             full_swings = smc.swing_highs_lows(ltf_df, swing_length=swing_length)
-
-            # Keep same-length index for simple comparisons (we still trust smc output shape)
-            full_swings.index = ltf_df.index
-            full_swings.dropna(inplace=True)
+            
+            # from the full_swings, remove any NaNs
+            full_swings = full_swings.dropna()
 
             # Resolve manipulation time
             if isinstance(manipulation_candle, pd.Series):
@@ -649,40 +698,52 @@ class TradeManager:
             manip_time = pd.to_datetime(manip_time)
 
             swings_before = full_swings[full_swings.index < manip_time]
-
-            swing_type_to_break = 1 if direction == 'bullish' else -1
-            relevant = swings_before[swings_before['HighLow'] == swing_type_to_break]
-            if relevant.empty:
-                logging.info("[%s] No prior swing to define MSS.", symbol)
-                return None
-
-            mss_level = relevant['Level'].iloc[-1]
-
-            # --- Robust MSS break check: look for any candle after manipulation that breached the level ---
-            post_manip = ltf_df[ltf_df.index > manip_time]
-            if post_manip.empty:
-                logging.info("[%s] Waiting for MSS break at %s (no candles after manipulation yet).", symbol, mss_level)
-                return None
-
-            # For bullish MSS we accept if any high or close exceeds the MSS level.
+            
             if direction == 'bullish':
-                broke = (post_manip['high'] > mss_level).any() or (post_manip['close'] > mss_level).any()
-            else:
-                broke = (post_manip['low'] < mss_level).any() or (post_manip['close'] < mss_level).any()
+                # Find the last swing high before the manipulation
+                last_swing_high = swings_before[swings_before['HighLow'] == 1]
+                if last_swing_high.empty:
+                    logging.info("[%s] No prior swing high to define MSS.", symbol)
+                    return None
+                
+                mss_level = last_swing_high['Level'].iloc[-1]
 
-            if not broke:
-                # more informative logging
-                last_close = post_manip['close'].iloc[-1]
-                last_high = post_manip['high'].iloc[-1]
-                last_low = post_manip['low'].iloc[-1]
+                # Check if any candle after the manipulation has broken the MSS level
+                post_manip = ltf_df[ltf_df.index > manip_time]
+                if not post_manip.empty:
+                    if (post_manip['high'] > mss_level).any():
+                        logging.info("[%s] MSS break confirmed at level %s", symbol, float(mss_level))
+                        return mss_level
+
+            elif direction == 'bearish':
+                # Find the last swing low before the manipulation
+                last_swing_low = swings_before[swings_before['HighLow'] == -1]
+                if last_swing_low.empty:
+                    logging.info("[%s] No prior swing low to define MSS.", symbol)
+                    return None
+                
+                mss_level = last_swing_low['Level'].iloc[-1]
+
+                # Check if any candle after the manipulation has broken the MSS level
+                post_manip = ltf_df[ltf_df.index > manip_time]
+                if not post_manip.empty:
+                    if (post_manip['low'] < mss_level).any():
+                        logging.info("[%s] MSS break confirmed at level %s", symbol, float(mss_level))
+                        return mss_level
+
+            # if we are here, it means that the MSS has not been confirmed yet
+            # we need to check the current price against the mss_level
+            if 'mss_level' in locals():
+                last_close = ltf_df['close'].iloc[-1]
+                last_high = ltf_df['high'].iloc[-1]
+                last_low = ltf_df['low'].iloc[-1]
                 logging.info(
                     "[%s] Waiting for MSS break at %s (last_close=%s last_high=%s last_low=%s).",
                     symbol, mss_level, last_close, last_high, last_low
                 )
-                return None
 
-            logging.info("[%s] MSS break confirmed at level %s", symbol, float(mss_level))
-            return mss_level
+            return None
+
         except Exception:
             logging.exception("_confirm_market_structure_shift failed for %s", symbol)
             return None
@@ -817,24 +878,50 @@ class TradeManager:
 
             logging.info("[%s] Price has entered the %s zone [%.5f - %.5f]", symbol, entry_zone['type'], entry_zone['bottom'], entry_zone['top'])
 
-            hammer = last_ind.get('cdl_hammer', 0)
-            shooting_star = last_ind.get('cdl_shooting_star', 0)
-            engulfing = last_ind.get('cdl_engulfing', 0)
+            patterns = {
+                'hammer': ltf_indicators.iloc[-1].get('cdl_hammer', 0),
+                'shooting_star': ltf_indicators.iloc[-1].get('cdl_shooting_star', 0),
+                'engulfing': ltf_indicators.iloc[-1].get('cdl_engulfing', 0),
+                'morning_star': ltf_indicators.iloc[-1].get('cdl_morningstar', 0),
+                'evening_star': ltf_indicators.iloc[-1].get('cdl_eveningstar', 0),
+            }
 
             is_rejection = False
-            if direction == 'bullish' and (hammer == 100 or engulfing == 100):
-                is_rejection = True
-                logging.info("[%s] Bullish rejection candle (Hammer or Engulfing) confirmed in zone.", symbol)
-            elif direction == 'bearish' and (shooting_star == 100 or engulfing == -100):
-                is_rejection = True
-                logging.info("[%s] Bearish rejection candle (Shooting Star or Engulfing) confirmed in zone.", symbol)
+            rejection_type = "None"
+
+            if direction == 'bullish':
+                is_bullish_hammer = patterns['hammer'] == 100
+                is_bullish_engulfing = patterns['engulfing'] == 100
+                is_morning_star = patterns['morning_star'] == 100
+                
+                if is_bullish_hammer or is_bullish_engulfing or is_morning_star:
+                    is_rejection = True
+                    # Find out which pattern triggered it for better logging
+                    if is_bullish_hammer: rejection_type = "Hammer"
+                    elif is_bullish_engulfing: rejection_type = "Bullish Engulfing"
+                    elif is_morning_star: rejection_type = "Morning Star"
+                    
+            elif direction == 'bearish':
+                # This includes the original BUG FIX
+                is_shooting_star = patterns['shooting_star'] == -100 
+                is_bearish_engulfing = patterns['engulfing'] == -100
+                is_evening_star = patterns['evening_star'] == -100
+
+                if is_shooting_star or is_bearish_engulfing or is_evening_star:
+                    is_rejection = True
+                    # Find out which pattern triggered it for better logging
+                    if is_shooting_star: rejection_type = "Shooting Star"
+                    elif is_bearish_engulfing: rejection_type = "Bearish Engulfing"
+                    elif is_evening_star: rejection_type = "Evening Star"
 
             if is_rejection:
+                logging.info("[%s] %s rejection candle (%s) confirmed in zone.", symbol, direction.capitalize(), rejection_type)
                 return {
                     'valid': True,
                     'direction': direction,
-                    'setup_type': f"amd_{entry_zone['type'].lower()}_rejection_entry_{direction}"
+                    'setup_type': f"amd_{entry_zone['type'].lower()}_{rejection_type.replace(' ', '_').lower()}_entry"
                 }
+
             return None
         except Exception:
             logging.exception("_confirm_entry_trigger failed for %s", symbol)

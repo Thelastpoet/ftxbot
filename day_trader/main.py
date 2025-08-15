@@ -30,6 +30,16 @@ TIMEFRAME_MAP = {
     'D1': mt5.TIMEFRAME_D1
 }
 
+TIMEFRAME_MINUTES = {
+    mt5.TIMEFRAME_M1: 1,
+    mt5.TIMEFRAME_M5: 5,
+    mt5.TIMEFRAME_M15: 15,
+    mt5.TIMEFRAME_M30: 30,
+    mt5.TIMEFRAME_H1: 60,
+    mt5.TIMEFRAME_H4: 240,
+    mt5.TIMEFRAME_D1: 1440
+}
+
 class DivergenceType(Enum):
     REGULAR_BULLISH = "regular_bullish"
     REGULAR_BEARISH = "regular_bearish"
@@ -62,9 +72,11 @@ class MarketData:
         self.num_candles = {tf: None for tf in timeframes}
         
     def calculate_num_candles(self, timeframe):
-        timeframe_in_minutes = timeframe / 60 if timeframe < mt5.TIMEFRAME_H1 else timeframe / 60 / 60
-        num_candles = MAX_PERIOD * 2
-        self.num_candles[timeframe] = int(num_candles / timeframe_in_minutes)         
+        minutes = TIMEFRAME_MINUTES.get(timeframe)
+        if minutes is None:
+            minutes = 60
+        num_candles = int((MAX_PERIOD * 60) / minutes * 2)
+        self.num_candles[timeframe] = max(200, num_candles)      
 
     def fetch_data(self, timeframe):
         if self.num_candles[timeframe] is None:
@@ -662,7 +674,24 @@ class TradeManager:
             if factors['adx_trending']: score += 0.5
             
             if score >= required_score:
-                logging.info(f"[{symbol}] VALID {direction.upper()} BREAKOUT (Score: {score}/{required_score}). Factors: {factors}")
+                plus_di = med_indicators['plus_di'].iloc[-1]
+                minus_di = med_indicators['minus_di'].iloc[-1]
+                adx = med_indicators['adx'].iloc[-1]
+                adx_threshold = self.config['breakout_strategy_settings']['adx_strength_threshold']
+
+                if adx < adx_threshold:
+                    logging.info(f"[{symbol}] Breakout Rejected: Final check failed ADX ({adx:.2f}) < threshold ({adx_threshold}).")
+                    return None
+
+                if direction == 'buy' and plus_di < minus_di:
+                    logging.info(f"[{symbol}] Breakout Rejected (BUY): Bearish pressure remains dominant (+DI: {plus_di:.2f} < -DI: {minus_di:.2f}).")
+                    return None
+
+                if direction == 'sell' and minus_di < plus_di:
+                    logging.info(f"[{symbol}] Breakout Rejected (SELL): Bullish pressure remains dominant (-DI: {minus_di:.2f} < +DI: {plus_di:.2f}).")
+                    return None
+                
+                logging.info(f"[{symbol}] VALID {direction.upper()} BREAKOUT (Score: {score}/{required_score}). Factors: {factors}. Momentum Confirmed.")
                 return {'valid': True, 'symbol': symbol, 'direction': direction,
                         'setup_type': f'daytrade_breakout_{direction}_score_{score}',
                         'breakout_level': range_high if direction == 'buy' else range_low, 
@@ -817,7 +846,25 @@ class TradeManager:
                     direction = 'sell'
 
             if is_confirmed_rejection:
-                logging.info(f"[{symbol}] VALID {direction.upper()} RETEST. Level: {retest_level:.5f}, Signals: {confirmation_signals}")
+                adx = med_indicators['adx'].iloc[-1]
+                plus_di = med_indicators['plus_di'].iloc[-1]
+                minus_di = med_indicators['minus_di'].iloc[-1]
+                
+                adx_threshold = self.config['retest_strategy_settings']['adx_entry_threshold']
+
+                if adx < adx_threshold:
+                    logging.info(f"[{symbol}] Retest Rejected: ADX ({adx:.2f}) is below threshold ({adx_threshold}). Not enough momentum.")
+                    return None
+
+                if direction == 'buy' and plus_di < minus_di:
+                    logging.info(f"[{symbol}] Retest Rejected (BUY): Bearish pressure is dominant (+DI: {plus_di:.2f} < -DI: {minus_di:.2f}).")
+                    return None
+
+                if direction == 'sell' and minus_di < plus_di:
+                    logging.info(f"[{symbol}] Retest Rejected (SELL): Bullish pressure is dominant (-DI: {minus_di:.2f} < +DI: {plus_di:.2f}).")
+                    return None
+                
+                logging.info(f"[{symbol}] VALID {direction.upper()} RETEST. Level: {retest_level:.5f}, Signals: {confirmation_signals}, Momentum Confirmed (ADX: {adx:.2f})")
                 return {
                     'valid': True, 'symbol': symbol, 'direction': direction,
                     'setup_type': f'retest_{direction}_{len(confirmation_signals)}_signals',
@@ -910,6 +957,24 @@ class TradeManager:
 
             divergence_signal = self._analyze_divergence(data, indicators, trade_direction)
             if divergence_signal is False:
+                return None
+            
+            adx = med_indicators['adx'].iloc[-1]
+            plus_di = med_indicators['plus_di'].iloc[-1]
+            minus_di = med_indicators['minus_di'].iloc[-1]
+            
+            adx_threshold = self.config['trending_strategy_settings']['adx_entry_threshold']
+
+            if adx < adx_threshold:
+                logging.info(f"[{symbol}] Trend Pullback Rejected: ADX ({adx:.2f}) is below threshold ({adx_threshold}). Trend is weakening.")
+                return None
+
+            if trade_direction == 'buy' and plus_di < minus_di:
+                logging.info(f"[{symbol}] Trend Pullback Rejected (BUY): Pullback has not ended; bearish pressure still dominant (+DI: {plus_di:.2f} < -DI: {minus_di:.2f}).")
+                return None
+
+            if trade_direction == 'sell' and minus_di < plus_di:
+                logging.info(f"[{symbol}] Trend Pullback Rejected (SELL): Pullback has not ended; bullish pressure still dominant (-DI: {minus_di:.2f} < +DI: {plus_di:.2f}).")
                 return None
                 
             confluence_note = "A+ (Hidden Divergence Confirmed)" if divergence_signal is True else "Standard"
@@ -1194,11 +1259,32 @@ class OrderManager:
                 
                 atr_tp = current_price + (atr_value * atr_tp_multiplier) if order_type == 'buy' else current_price - (atr_value * atr_tp_multiplier)
 
+                # --- START OF FIX ---
                 liquidity_tp = None
+                filtered_liquidity = liquidity_levels
+                
+                if 'breakout' in setup_type and atr_value > 0:
+                    breakout_level = trade_setup.get('breakout_level')
+                    # For breakouts, ignore liquidity targets too close to the breakout level.
+                    # This prevents the R:R from failing due to the TP being the level that was just broken.
+                    # We create a new dictionary to avoid modifying the original.
+                    filtered_liquidity = {'buy_side': [], 'sell_side': []}
+                    if order_type == 'buy':
+                        min_target_level = breakout_level + (atr_value * 0.5) # Target must be at least 0.5 ATR away
+                        filtered_liquidity['buy_side'] = [l for l in liquidity_levels['buy_side'] if l['level'] > min_target_level]
+                        filtered_liquidity['sell_side'] = liquidity_levels['sell_side']
+                    else: # sell
+                        max_target_level = breakout_level - (atr_value * 0.5) # Target must be at least 0.5 ATR away
+                        filtered_liquidity['sell_side'] = [l for l in liquidity_levels['sell_side'] if l['level'] < max_target_level]
+                        filtered_liquidity['buy_side'] = liquidity_levels['buy_side']
+
                 target_liquidity = self.liquidity_detector.get_target_for_bias(
                     bias=('bullish' if order_type == 'buy' else 'bearish'),
-                    liquidity_levels=liquidity_levels, entry_price=current_price, min_rr=rr_ratio, sl_price=None # SL not needed yet
+                    liquidity_levels=filtered_liquidity, # Use the filtered list
+                    entry_price=current_price, min_rr=rr_ratio, sl_price=None
                 )
+                # --- END OF FIX ---
+                
                 if target_liquidity:
                     liquidity_tp = target_liquidity['level']
 

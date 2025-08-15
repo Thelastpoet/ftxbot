@@ -69,7 +69,7 @@ class IndicatorCalculator:
             
             # --- END: NEW CANDLESTICK PATTERN INDICATORS ---
 
-            # Calculate the maximum required lookback period
+            # Calculate the maximum required lookback period. NOTE: This is an approximation, especially for Ichimoku.
             max_period = max(
                 ema_long_period,
                 adx_period + dmi_period,
@@ -110,6 +110,8 @@ class IndicatorCalculator:
                          index=data.index, name='chandelier_exit')
                     
     def identify_support_resistance_levels(self, data):  
+        # NOTE: This function calculates SR levels using the entire dataframe. 
+        # For more accurate results, consider calculating these on a daily or weekly basis.
         if data is None or data.empty:
             logging.info("No data provided for SR level identification")
             return []
@@ -149,6 +151,8 @@ class PivotPointsCalculator:
         return data
 
     def calculate_pivots(self, data, anchor='D', method='traditional'):        
+        # NOTE: This method modifies the dataframe in place, which is not ideal.
+        # It's recommended to return a new dataframe with the pivot point columns.
         _open = data['open']
         high = data['high']
         low = data['low']

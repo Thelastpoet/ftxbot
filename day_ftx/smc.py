@@ -36,7 +36,6 @@ def inputvalidator(input_="ohlc"):
 
     return dfcheck
 
-
 def apply(decorator):
     def decorate(cls):
         for attr in cls.__dict__:
@@ -143,7 +142,7 @@ class smc:
         A swing low is when the current low is the lowest low out of the swing_length amount of candles before and after.
 
         parameters:
-        swing_length: int - the amount of candles to look back and forward to determine the swing high or low
+        swing_length: int - the amount of candles to look back and forward to determine the swing high or low (e.g., a value of 10 means 10 candles before and 10 after)
 
         returns:
         HighLow = 1 if swing high, -1 if swing low
@@ -204,8 +203,8 @@ class smc:
 
         return pd.concat(
             [
-                pd.Series(swing_highs_lows, name="HighLow"),
-                pd.Series(level, name="Level"),
+                pd.Series(swing_highs_lows, name="HighLow", index=ohlc.index),
+                pd.Series(level, name="Level", index=ohlc.index),
             ],
             axis=1,
         )
@@ -218,6 +217,8 @@ class smc:
         BOS - Break of Structure
         CHoCH - Change of Character
         these are both indications of market structure changing
+
+        NOTE: This function is complex and experimental. Use with caution.
 
         parameters:
         swing_highs_lows: DataFrame - provide the dataframe from the swing_highs_lows function
@@ -374,6 +375,8 @@ class smc:
         """
         OB - Order Blocks
         This method detects order blocks when there is a high amount of market orders exist on a price range.
+
+        NOTE: This function is complex and experimental. Use with caution.
 
         parameters:
         swing_highs_lows: DataFrame - provide the dataframe from the swing_highs_lows function
@@ -869,6 +872,8 @@ class smc:
         """
         Retracement
         This method returns the percentage of a retracement from the swing high or low
+
+        NOTE: The logic for removing the first 3 retracements is arbitrary and may not be suitable for all use cases.
 
         parameters:
         swing_highs_lows: DataFrame - provide the dataframe from the swing_highs_lows function
