@@ -31,9 +31,9 @@ MAX_PERIOD = CONFIG['trading_settings']['max_period']
 CHECK_INTERVAL = CONFIG['trading_settings']['main_loop_interval_seconds']
 
 TIMEFRAME_MAP = {
+    'M5': mt5.TIMEFRAME_M5,
     'M15': mt5.TIMEFRAME_M15,
     'H1': mt5.TIMEFRAME_H1,
-    'D1': mt5.TIMEFRAME_D1
 }
 
 TIMEFRAME_MINUTES = {
@@ -248,68 +248,68 @@ class TradeManager:
         
     async def check_for_signals(self, symbol):
         try:
-            # Fetch data for all timeframes once
-            d1_data = self.market_data.fetch_data(self.tf_higher)
-            h1_data = self.market_data.fetch_data(self.tf_medium)
-            m15_data = self.market_data.fetch_data(self.tf_lower)
+            # Fetch data
+            higher_tf_data = self.market_data.fetch_data(self.tf_higher)
+            medium_tf_data = self.market_data.fetch_data(self.tf_medium)
+            lower_tf_data = self.market_data.fetch_data(self.tf_lower)
             
-            if d1_data is None or h1_data is None or m15_data is None:
+            if higher_tf_data is None or medium_tf_data is None or lower_tf_data is None:
                 logging.warning(f"[{symbol}] Insufficient data for analysis.")
                 return
+            
+            # Analyze ATR
+            atr = talib.ATR(medium_tf_data['high'], medium_tf_data['low'], medium_tf_data['close'], timeperiod=self.config['risk_management']['atr_period']).iloc[-2]
 
             # Analyze structures
-            d1_structure = self.analyze_market_structure(d1_data, 'D1')
-            h1_structure = self.analyze_market_structure(h1_data, 'H1')
-            m15_structure = self.analyze_market_structure(m15_data, 'M15')
+            higher_tf_structure = self.analyze_market_structure(higher_tf_data, self.tf_higher)
+            medium_tf_structure = self.analyze_market_structure(medium_tf_data, self.tf_medium)
 
-            if not d1_structure or not h1_structure or not m15_structure:
+            if not higher_tf_structure or not medium_tf_structure:
                 return
 
-            # D1 Trend
-            trend = d1_structure['trend']
-            if trend == 'sideways' or trend == 'Insufficient Data':
-                logging.debug(f"[{symbol}] No clear trend on D1: {trend}")
+            # 1. Higher Timeframe: Determines Trend Direction
+            trend = higher_tf_structure['trend']
+            if trend not in ['bullish', 'bearish']:
                 return
 
-            # H1 Pullback level
+            # 2. Medium Timeframe: Identifies the Pullback/Setup
             if trend == 'bullish':
-                h1_swing_lows = h1_structure['swing_points']['lows']
-                if h1_swing_lows.empty:
-                    logging.debug(f"[{symbol}] H1 swing lows are empty, skipping bullish analysis.")
+                medium_tf_swing_lows = medium_tf_structure['swing_points']['lows']
+                if medium_tf_swing_lows.empty:
                     return
-                pullback_level = h1_swing_lows.iloc[-1]['low']
+                pullback_level = medium_tf_swing_lows.iloc[-1]['low']
                 direction = 'buy'
-            elif trend == 'bearish':
-                h1_swing_highs = h1_structure['swing_points']['highs']
-                if h1_swing_highs.empty:
-                    logging.debug(f"[{symbol}] H1 swing highs are empty, skipping bearish analysis.")
+            else: # bearish
+                medium_tf_swing_highs = medium_tf_structure['swing_points']['highs']
+                if medium_tf_swing_highs.empty:
                     return
-                pullback_level = h1_swing_highs.iloc[-1]['high']
+                pullback_level = medium_tf_swing_highs.iloc[-1]['high']
                 direction = 'sell'
-            else:
-                return
 
-            # M15 Entry
-            if len(m15_data) < self.indicator_calc.mfi_period + 2: return
+            # 3. Lower Timeframe: Pinpoints the Entry Signal
+            if len(lower_tf_data) < self.indicator_calc.mfi_period + 2: return
             
-            atr_period = self.config['risk_management'].get('atr_period', 14)
-            atr = talib.ATR(m15_data['high'], m15_data['low'], m15_data['close'], timeperiod=atr_period).iloc[-2]
-            
-            # Use IndicatorCalculator to check for multiple entry patterns
-            m15_with_indicators = self.indicator_calc.calculate_candlestick_patterns(m15_data)
-            is_entry_signal = self.indicator_calc.check_entry_patterns(m15_with_indicators, direction, pullback_level=pullback_level, atr=atr)
-            logging.info(f"[{symbol}] Entry signal found: {is_entry_signal} (direction: {direction})")
+            lower_tf_with_indicators = self.indicator_calc.calculate_candlestick_patterns(lower_tf_data)
+            is_entry_signal = self.indicator_calc.check_entry_patterns(lower_tf_with_indicators, direction, pullback_level=pullback_level, atr=atr)
 
             if is_entry_signal:
                 logging.info(f"[{symbol}] Valid entry signal found for {direction}!")
-                entry_price = m15_data.iloc[-2]['close']
-                sl, tp = self.order_manager.calculate_sl_tp(symbol, direction, entry_price, m15_data, m15_structure['swing_points'])
+                entry_price = lower_tf_data.iloc[-2]['close']
+                
+                # Use the Medium Timeframe (the setup timeframe) for all Stop Loss calculations
+                sl, tp = self.order_manager.calculate_sl_tp(
+                    symbol, 
+                    direction, 
+                    entry_price, 
+                    medium_tf_data,
+                    medium_tf_structure['swing_points']
+                )
+
                 if sl is None or tp is None:
                     return
-                trade_setup = {'valid': True, 'direction': direction, 'sl': sl, 'tp': tp}
+                
+                trade_setup = {'valid': True, 'direction': direction, 'entry_price': entry_price, 'sl': sl, 'tp': tp}
                 await self._execute_trade(symbol, trade_setup)
-            else:
-                logging.debug(f"[{symbol}] No entry signal on M15.")
 
         except Exception as e:
             logging.error(f"Error in check_for_signals for {symbol}: {str(e)}\n{traceback.format_exc()}")
@@ -325,7 +325,7 @@ class TradeManager:
                 return
 
             trade_result = self.order_manager.place_order(
-                symbol, trade_setup['direction'], trade_setup['sl'], trade_setup['tp']
+                symbol, trade_setup['direction'], trade_setup['entry_price'], trade_setup['sl'], trade_setup['tp']
             )
             if trade_result:
                 self.trade_logger.log_trade(symbol, trade_setup['direction'], trade_result)
@@ -366,52 +366,94 @@ class OrderManager:
         self.trade_logger = trade_logger
         self.config = config
 
-    def calculate_sl_tp(self, symbol, direction, entry_price, m15_data, swing_points):
-        if swing_points is None or m15_data is None or m15_data.empty:
+    def calculate_sl_tp(self, symbol, direction, entry_price, m15_data, medium_tf_swing_points):
+        """
+        Calculates SL and TP based on the most extreme price of the last N swing points.
+        """
+        if m15_data is None or m15_data.empty or medium_tf_swing_points is None:
+            logging.warning(f"[{symbol}] Insufficient data for SL/TP calculation.")
+            return None, None
+
+        symbol_info = mt5.symbol_info(symbol)
+        symbol_tick = mt5.symbol_info_tick(symbol)
+        if not symbol_info or not symbol_tick:
+            logging.error(f"[{symbol}] Could not get symbol info for SL/TP calculation.")
             return None, None
         
-        symbol_tick = mt5.symbol_info_tick(symbol)
-        if not symbol_tick:
-            logging.error(f"[{symbol}] Could not get symbol tick info to calculate spread.")
-            return None, None
-        spread = symbol_tick.ask - symbol_tick.bid
+        risk_params = self.config['risk_management']
+        num_swings = risk_params.get('num_swings_for_sl', 3)
         
         try:
-            risk_params = self.config['risk_management']
             atr_period = risk_params.get('atr_period', 14)
             atr = talib.ATR(m15_data['high'], m15_data['low'], m15_data['close'], timeperiod=atr_period).iloc[-2]
-            sl_buffer_atr_multiplier = risk_params.get('structural_sl_buffer_atr', 0.5)
+            sl_buffer_atr_multiplier = risk_params.get('structural_sl_buffer_atr', 1.5)
             sl_buffer = atr * sl_buffer_atr_multiplier
-            
         except Exception as e:
-            logging.warning(f"Could not calculate ATR. Cannot validate trade risk. Error: {e}")
+            logging.error(f"[{symbol}] Could not calculate ATR. Cannot place trade. Error: {e}")
             return None, None
-        
+
+        sl = None
+        risk = 0
+
         if direction == 'buy':
-            structural_sl_point = swing_points['lows']['low'].iloc[-1] if not swing_points['lows'].empty else None
-            if structural_sl_point is None: return None, None
-            sl = structural_sl_point - sl_buffer            
+            # Stop loss must go below the lowest of the last N MEDIUM timeframe swing lows.
+            recent_lows = medium_tf_swing_points['lows']
+            if recent_lows.empty:
+                logging.warning(f"[{symbol}] Cannot place buy trade: No structural swing lows found on medium timeframe.")
+                return None, None
+            
+            # Get the lowest price from the last 'num_swings' swing lows
+            structural_sl_point = recent_lows['low'].tail(num_swings).min()
+            
+            sl = structural_sl_point - sl_buffer
             risk = entry_price - sl
-                            
-            rr_ratio = risk_params.get('rr_ratio', 2.0)
-            tp = entry_price + (risk * rr_ratio)
 
-        else: # sell
-            structural_sl_point = swing_points['highs']['high'].iloc[-1] if not swing_points['highs'].empty else None
-            if structural_sl_point is None: return None, None
+        elif direction == 'sell':
+            # Stop loss must go above the highest of the last N MEDIUM timeframe swing highs.
+            recent_highs = medium_tf_swing_points['highs']
+            if recent_highs.empty:
+                logging.warning(f"[{symbol}] Cannot place sell trade: No structural swing highs found on medium timeframe.")
+                return None, None
 
-            sl = structural_sl_point + sl_buffer            
+            # Get the highest price from the last 'num_swings' swing highs
+            structural_sl_point = recent_highs['high'].tail(num_swings).max()
+
+            sl = structural_sl_point + sl_buffer
+            # Adjust for spread on sell stop orders
+            spread = symbol_tick.ask - symbol_tick.bid
+            sl += spread
             risk = sl - entry_price
         
-            rr_ratio = risk_params.get('rr_ratio', 2.0)
-            tp = entry_price - (risk * rr_ratio)
+        if risk <= 0:
+            logging.warning(f"[{symbol}] Trade aborted. Initial SL calculation is invalid.")
+            return None, None
         
-        # Spread to final SL/TP
-        if direction == 'buy':
-            tp += spread
-        else: # sell
-            sl += spread
-            
+        min_sl_atr_mult = risk_params.get('min_sl_atr_multiplier', 1.5)
+        max_sl_atr_mult = risk_params.get('max_sl_atr_multiplier', 4.0)
+        
+        min_sl_risk = min_sl_atr_mult * atr
+        max_sl_risk = max_sl_atr_mult * atr
+        
+        if risk > max_sl_risk:
+            logging.warning(f"[{symbol}] Trade aborted. Structural SL risk ({risk:.5f}) "
+                            f"exceeds max allowed ATR multiple ({max_sl_risk:.5f}). SL is too wide.")
+            return None, None
+        
+        if risk < min_sl_risk:
+            logging.warning(f"[{symbol}] Trade aborted. Structural SL risk ({risk:.5f}) "
+                            f"is below min allowed ATR multiple ({min_sl_risk:.5f}). SL is too narrow.")
+            return None, None
+
+        # Calculate Take Profit based on a fixed Risk-to-Reward ratio
+        rr_ratio = risk_params.get('rr_ratio', 2.0)
+        tp = entry_price + (risk * rr_ratio) if direction == 'buy' else entry_price - (risk * rr_ratio)
+        
+        # Round final values to the symbol's correct number of decimal places
+        digits = symbol_info.digits
+        sl = round(sl, digits)
+        tp = round(tp, digits)
+        
+        logging.info(f"[{symbol}] Calculated valid SL: {sl}, TP: {tp} based on structural point from last {num_swings} swings.")
         return sl, tp
         
     def calculate_lot_size(self, symbol, entry_price, sl):
@@ -432,7 +474,7 @@ class OrderManager:
         lot_size = max(symbol_info.volume_min, min(lot_size, symbol_info.volume_max))
         return lot_size
     
-    def place_order(self, symbol, direction, sl, tp):        
+    def place_order(self, symbol, direction, signal_entry_price, sl, tp):        
         symbol_tick = mt5.symbol_info_tick(symbol)
         if not symbol_tick: return None
         magic = self.config['misc']['mt5_magic_number']
@@ -440,20 +482,20 @@ class OrderManager:
         
         if direction == "buy":
             mt5_order_type = mt5.ORDER_TYPE_BUY
-            entry_price = symbol_tick.ask
+            execution_price = symbol_tick.ask
         elif direction == "sell":
             mt5_order_type = mt5.ORDER_TYPE_SELL
-            entry_price = symbol_tick.bid
+            execution_price = symbol_tick.bid
         else: return None
         
-        lot_size = self.calculate_lot_size(symbol, entry_price, sl)
+        lot_size = self.calculate_lot_size(symbol, signal_entry_price, sl)
         if lot_size is None or lot_size <= 0:
             logging.error(f"[{symbol}] Invalid lot size calculated: {lot_size}")
             return None
                              
         request = {
             "action": mt5.TRADE_ACTION_DEAL, "symbol": symbol, "volume": lot_size,
-            "type": mt5_order_type, "price": entry_price, "sl": sl, "tp": tp,
+            "type": mt5_order_type, "price": execution_price, "sl": sl, "tp": tp,
             "magic": magic, "comment": comment, "type_time": mt5.ORDER_TIME_GTC,
             "type_filling": mt5.ORDER_FILLING_IOC,
         }

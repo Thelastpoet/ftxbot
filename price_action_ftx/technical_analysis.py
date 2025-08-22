@@ -6,7 +6,6 @@ from talib import (
     CDLEVENINGSTAR, CDLDARKCLOUDCOVER, CDL3BLACKCROWS, CDLEVENINGDOJISTAR,
     MFI
 )
-import pandas as pd
 import numpy as np
 import logging
 
@@ -15,8 +14,14 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 class IndicatorCalculator:
     def __init__(self, config=None):
         self.config = config or {}
+        
+        # Load MFI parameters
         mfi_params = self.config.get('mfi', {})
         self.mfi_period = mfi_params.get('period', 14)
+        
+        # Load Price Action parameters
+        pa_settings = self.config.get('price_action_settings', {})
+        self.proximity_atr_multiplier = pa_settings.get('proximity_atr_multiplier', 1.5) # Default to 1.5 if not found
 
     def calculate_candlestick_patterns(self, data):
         try:
@@ -52,33 +57,23 @@ class IndicatorCalculator:
             return None
 
     def check_entry_patterns(self, data_with_indicators, direction, pullback_level=None, atr=None):
-        """
-        Checks for reversal patterns with context filters:
-        - MFI 50-level cross for momentum confirmation.
-        - Proximity to H1 pullback level.
-        - Candlestick pattern must exist.
-        - Candlestick must show a strong close in the intended direction.
-        """
-        # We need at least 3 bars to check the MFI cross on the last closed bar
-        if data_with_indicators is None or len(data_with_indicators) < self.mfi_period + 2:
+        if data_with_indicators is None or len(data_with_indicators) < 2:
             return False
 
         last_closed = data_with_indicators.iloc[-2]
         
-        candle_range = last_closed['high'] - last_closed['low']
-        if candle_range == 0: return False
-        
-        if atr is None or atr <= 0:
-            atr = candle_range * 0.5  
+        # Proximity Filter: Check if the candle is within a multiplier of the ATR from the pullback level
+        if pullback_level is not None and atr is not None and atr > 0:
+            proximity_zone = atr * self.proximity_atr_multiplier
             
-        if pullback_level is not None:
-            near_level = abs((last_closed['low'] if direction == 'buy' else last_closed['high']) - pullback_level) <= atr
-            if not near_level:
+            price_to_check = last_closed['low'] if direction == 'buy' else last_closed['high']
+            distance = abs(price_to_check - pullback_level)
+            
+            if distance > proximity_zone:
                 return False
         
-        # 3. Candlestick Pattern & Strong Close Confirmation
+        # Candlestick Pattern Logic
         is_pattern_valid = False
-        
         if direction == 'buy':
             is_pattern_valid = (
                 last_closed['cdl_engulfing'] == 100 or
@@ -88,7 +83,6 @@ class IndicatorCalculator:
                 last_closed['cdl_harami'] == 100 or
                 last_closed['cdl_3_white_soldiers'] == 100
             )
-
         elif direction == 'sell':
             is_pattern_valid = (
                 last_closed['cdl_engulfing'] == -100 or
@@ -102,13 +96,9 @@ class IndicatorCalculator:
         return is_pattern_valid
 
     def identify_support_resistance_levels(self, swing_points):
-        """
-        Identifies support and resistance levels from pre-calculated swing points.
-        This is moved from the main.py stub for consolidation.
-        """
         if swing_points:
             highs = swing_points['highs']['high'].unique()
             lows = swing_points['lows']['low'].unique()
             levels = np.concatenate([highs, lows])
-            return np.unique(levels) # Return unique levels
+            return np.unique(levels)
         return np.array([])
