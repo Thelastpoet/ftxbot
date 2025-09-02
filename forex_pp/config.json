@@ -19,7 +19,7 @@
   "symbols": [
     {
       "name": "EURUSD",
-      "timeframes": ["M5", "M15", "H1"]
+      "timeframes": ["M15", "H1"]
     },
     {
       "name": "GBPUSD",

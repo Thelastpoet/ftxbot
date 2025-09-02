@@ -6,8 +6,9 @@ Handles position sizing and risk management calculations
 import logging
 from typing import Dict, Any
 
-logger = logging.getLogger(__name__)
+from utils import get_pip_size
 
+logger = logging.getLogger(__name__)
 
 class RiskManager:
     """Manages risk and position sizing"""
@@ -105,9 +106,14 @@ class RiskManager:
             Stop loss distance in pips
         """
         try:
-            if not symbol_info or symbol_info.point <= 0:
+            if not symbol_info:
                 return 0.0
-            pip_size = symbol_info.point * 10  # 1 pip = 10 points for most FX symbols
+            
+            pip_size = get_pip_size(symbol_info)
+            
+            if pip_size <= 0:
+                return 0.0
+            
             return abs(entry_price - stop_loss) / pip_size
         except Exception as e:
             logger.error(f"Error calculating stop loss pips: {e}")

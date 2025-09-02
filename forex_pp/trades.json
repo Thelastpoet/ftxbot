@@ -1,0 +1,22 @@
+[
+  {
+    "timestamp": "2025-09-02T14:27:55.441751",
+    "symbol": "USDCAD",
+    "order_type": "BUY",
+    "entry_price": 1.37904,
+    "volume": 0.01,
+    "stop_loss": 1.37785,
+    "take_profit": 1.3813,
+    "ticket": 176191463
+  },
+  {
+    "timestamp": "2025-09-02T14:28:56.304967",
+    "symbol": "USDCAD",
+    "order_type": "BUY",
+    "entry_price": 1.37901,
+    "volume": 0.01,
+    "stop_loss": 1.3778700000000002,
+    "take_profit": 1.3812299999999995,
+    "ticket": 176191563
+  }
+]

@@ -10,7 +10,7 @@ import json
 import argparse
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, Optional, Tuple
 from dataclasses import asdict, is_dataclass
 import sys
 
@@ -154,6 +154,7 @@ class TradingBot:
         self.session_manager = TradingSession(config)
         self.running = False
         self.initial_balance = None
+        self.last_processed_candle_time: Dict[Tuple[str, str], datetime] = {}
         
     async def initialize(self):
         """Initialize all bot components"""
@@ -309,15 +310,30 @@ class TradingBot:
         for timeframe in symbol_config['timeframes']:
             try:
                 # Fetch market data
+                num_candles_to_fetch = self.config.lookback_period + self.config.swing_window * 2 + 5
                 data = await self.market_data.fetch_data(
                     symbol=symbol,
                     timeframe=timeframe,
-                    num_candles=self.config.max_period * 2
+                    num_candles=num_candles_to_fetch
                 )
                 
                 if data is None or data.empty:
                     logger.warning(f"No data available for {symbol} {timeframe}")
                     continue
+                
+                current_completed_candle_time = data.iloc[-2].name
+                
+                tracker_key = (symbol, timeframe)
+
+                # Check if this completed candle has already been processed
+                if tracker_key in self.last_processed_candle_time and \
+                   self.last_processed_candle_time[tracker_key] == current_completed_candle_time:
+                    logger.debug(f"No new completed candle for {symbol} {timeframe} (last processed: {current_completed_candle_time}). Skipping signal generation.")
+                    continue # No new candle, skip to next symbol/timeframe
+
+                # Update the tracker for this symbol/timeframe
+                self.last_processed_candle_time[tracker_key] = current_completed_candle_time
+                logger.debug(f"New completed candle detected for {symbol} {timeframe}: {current_completed_candle_time}. Proceeding with signal generation.")
                 
                 # Generate trading signal
                 signal = self.strategy.generate_signal(data, symbol)

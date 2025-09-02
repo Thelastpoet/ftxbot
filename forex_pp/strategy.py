@@ -15,6 +15,8 @@ from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass, asdict
 from datetime import datetime
 
+from utils import get_pip_size
+
 logger = logging.getLogger(__name__)
 
 @dataclass
@@ -88,9 +90,7 @@ class PurePriceActionStrategy:
             return []
 
         symbol_info = self._get_symbol_info(symbol)
-        point = symbol_info.get('point', 0.00001)
-        # define pip size: 1 pip = 10 points for typical 5-digit brokers; for 3-digit JPY pairs pip is 0.01
-        pip_size = 0.01 if symbol_info.get('digits', 5) in (2, 3) else point * 10
+        pip_size = get_pip_size(symbol_info)
 
         proximity = self.proximity_threshold * pip_size  # convert pips to price units
 
@@ -120,8 +120,7 @@ class PurePriceActionStrategy:
         Detect breakout above resistance or below support
         """
         symbol_info = self._get_symbol_info(symbol)
-        point = symbol_info.get('point', 0.00001)
-        pip_size = 0.01 if symbol_info.get('digits', 5) in (2, 3) else point * 10
+        pip_size = get_pip_size(symbol_info)
         breakout_threshold_price = self.breakout_threshold * pip_size
 
         # bullish breakout
@@ -270,8 +269,7 @@ class PurePriceActionStrategy:
         Calculate stop loss based on support/resistance levels and minimum SL
         """
         symbol_info = self._get_symbol_info(symbol)
-        point = symbol_info.get('point', 0.00001)
-        pip_size = 0.01 if symbol_info.get('digits', 5) in (2, 3) else point * 10
+        pip_size = get_pip_size(symbol_info)
 
         buffer = 5 * pip_size  # 5 pip buffer
         if breakout['type'] == 'bullish':
@@ -332,6 +330,9 @@ class PurePriceActionStrategy:
 
         try:
             analysis_data = data.tail(self.lookback_period).copy()
+            
+            if len(analysis_data) < 2:
+                return None
 
             swing_highs, swing_lows = self.find_swing_points(analysis_data)
             if len(swing_highs) == 0 and len(swing_lows) == 0:
@@ -344,21 +345,35 @@ class PurePriceActionStrategy:
             if not resistance_levels and not support_levels:
                 return None
 
-            current_candle = analysis_data.iloc[-1]
-            breakout = self.detect_breakout(current_candle, resistance_levels, support_levels, symbol)
+            signal_candle = analysis_data.iloc[-2]
+            breakout = self.detect_breakout(signal_candle, resistance_levels, support_levels, symbol)
             if not breakout:
                 return None
 
-            if not self.confirm_signal(analysis_data, breakout):
+            if not self.confirm_signal(analysis_data.iloc[:-1], breakout):
+                return None
+            
+            symbol_info = self._get_symbol_info(symbol)
+            pip_size = get_pip_size(symbol_info)
+            gap_threshold = 10 * pip_size  # Or pull from config for flexibility
+
+            current_candle_open = analysis_data.iloc[-1]['open']
+            signal_candle_close = signal_candle['close']
+
+            if abs(current_candle_open - signal_candle_close) > gap_threshold:
+                logger.warning(
+                    f"Large gap detected for {symbol}. "
+                    f"Signal candle close: {signal_candle_close}, "
+                    f"New candle open: {current_candle_open}. Skipping signal."
+                )
                 return None
 
-            entry_price = float(current_candle['close'])
+            entry_price = float(current_candle_open)
             stop_loss = self.calculate_stop_loss(breakout, support_levels, resistance_levels, entry_price, symbol)
             take_profit = self.calculate_take_profit(entry_price, stop_loss, breakout)
 
             symbol_info = self._get_symbol_info(symbol)
-            point = symbol_info.get('point', 0.00001)
-            pip_size = 0.01 if symbol_info.get('digits', 5) in (2, 3) else point * 10
+            pip_size = get_pip_size(symbol_info)
             stop_loss_pips = abs(entry_price - stop_loss) / pip_size
 
             # normalize confidence to 0-1
