@@ -1,0 +1,98 @@
+{
+  "trading_settings": {
+    "max_period": 50,
+    "main_loop_interval_seconds": 60,
+    "order_retry_attempts": 3,
+    "lookback_period": 20,
+    "swing_window": 5,
+    "breakout_threshold_pips": 5,
+    "min_peak_rank": 2,
+    "proximity_threshold_pips": 10,
+    "min_stop_loss_pips": 10
+  },
+  "strategy": {
+    "lookback_bars": 250,
+    "order": 5,
+    "proximity_pips": 15,
+    "min_rank": 3,
+    "breakout_buffer_pips": 2,
+    "trend_ema_fast": 21,
+    "trend_ema_slow": 50
+  },
+  "risk_management": {
+    "risk_per_trade": 0.02,
+    "fixed_lot_size": null,
+    "max_drawdown_percentage": 0.1,
+    "risk_reward_ratio": 2.0
+  },
+  "symbols": [
+    {
+      "name": "EURUSD",
+      "timeframes": ["M5", "M15", "H1"]
+    },
+    {
+      "name": "GBPUSD",
+      "timeframes": ["M15", "H1"]
+    },
+    {
+      "name": "USDJPY",
+      "timeframes": ["M15", "H1"]
+    },
+    {
+      "name": "AUDUSD",
+      "timeframes": ["M15", "H1"]
+    },
+    {
+      "name": "NZDUSD",
+      "timeframes": ["M15", "H1"]
+    },
+    {
+      "name": "USDCAD",
+      "timeframes": ["M15", "H1"]
+    },
+    {
+      "name": "USDCHF",
+      "timeframes": ["M15", "H1"]
+    },
+    {
+      "name": "XAUUSD",
+      "timeframes": ["M15", "H1"]
+    },
+    {
+      "name": "XAGUSD",
+      "timeframes": ["M15", "H1"]
+    }
+  ],
+  "trading_sessions": [
+    {
+      "name": "Sydney",
+      "start_time": "22:00",
+      "end_time": "07:00"
+    },
+    {
+      "name": "Tokyo",
+      "start_time": "00:00",
+      "end_time": "09:00"
+    },
+    {
+      "name": "London",
+      "start_time": "07:00",
+      "end_time": "16:00"
+    },
+    {
+      "name": "New_York",
+      "start_time": "12:00",
+      "end_time": "21:00"
+    },
+    {
+      "name": "Tokyo_London_Overlap",
+      "start_time": "07:00",
+      "end_time": "09:00"
+    },
+    {
+      "name": "London_New_York_Overlap",
+      "start_time": "12:00",
+      "end_time": "16:00"
+    }
+  ]
+}

@@ -11,7 +11,7 @@ from typing import Tuple
 import json
 import talib
 
-from technical_analysis import IndicatorCalculator
+from indicators import IndicatorCalculator
 
 # TradeLogger stub remains the same
 class TradeLogger:
@@ -285,14 +285,14 @@ class TradeManager:
                     return
                 pullback_level = medium_tf_swing_highs.iloc[-1]['high']
                 direction = 'sell'
-
-            # 3. Lower Timeframe: Pinpoints the Entry Signal
-            if len(lower_tf_data) < self.indicator_calc.divergence_lookback + 2:
-                logging.warning(f"[{symbol}] Not enough lower timeframe data for divergence check (need {self.indicator_calc.divergence_lookback + 2}, have {len(lower_tf_data)}).")
-                return
             
-            lower_tf_with_indicators = self.indicator_calc.calculate_candlestick_patterns(lower_tf_data)
-            is_entry_signal = self.indicator_calc.check_entry_patterns(lower_tf_with_indicators, direction, pullback_level=pullback_level, atr=atr)
+            lower_tf_with_indicators = self.indicator_calc.calculate_indicators(lower_tf_data)
+            is_entry_signal = self.indicator_calc.check_entry_patterns(
+                lower_tf_with_indicators, 
+                direction, 
+                pullback_level=pullback_level, 
+                atr=atr
+            )
 
             if is_entry_signal:
                 logging.info(f"[{symbol}] Valid entry signal found for {direction}!")

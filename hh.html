@@ -1,0 +1,544 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Holiday Hills Christmas Trees — San Antonio B2B Real Trees (10'–20'+)</title>
+  <meta name="description" content="Real, fresh-cut commercial Christmas trees, wreaths & garlands for San Antonio hotels, banks, insurance and corporate offices. Delivery, install & post-season removal. Optional on-site Tree Decorating service." />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root{--green:#0E3B2E;--green-700:#115c49;--gold:#C9A227;--cream:#FAF7F2;--ink:#0b1a13;--muted:#5b6b63;--border:#e6e2da}
+    *{box-sizing:border-box}
+    html,body{margin:0;padding:0;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:var(--ink);background:#fff}
+    a{color:var(--green)}
+    .container{max-width:1180px;margin:0 auto;padding:0 20px}
+    .btn{display:inline-flex;align-items:center;gap:.6rem;border-radius:999px;padding:.85rem 1.2rem;font-weight:600;border:2px solid transparent;text-decoration:none;cursor:pointer;transition:all 0.3s ease}
+    .btn-primary{background:var(--green);color:#fff}
+    .btn-primary:hover{background:var(--green-700);transform:translateY(-2px)}
+    .btn-ghost{background:transparent;border-color:var(--green);color:var(--green)}
+    .btn-ghost:hover{background:#eaf2ef}
+    header{position:sticky;top:0;z-index:40;background:#fff;border-bottom:1px solid var(--border);backdrop-filter:saturate(1.2) blur(6px)}
+    .nav{display:flex;align-items:center;justify-content:space-between;padding:14px 0}
+    .brand{display:flex;align-items:center;gap:.6rem;font-weight:800;color:var(--green);letter-spacing:.2px}
+    .brand img{height:32px;width:auto;display:block}
+    nav ul{display:flex;gap:1.1rem;list-style:none;margin:0;padding:0}
+    nav a{color:var(--ink);text-decoration:none;font-weight:500;transition:color 0.3s ease}
+    nav a:hover{color:var(--green)}
+    
+    /* Enhanced Hero Section */
+    .hero{
+      background:linear-gradient(135deg, #ffffff 0%, var(--cream) 50%, #f0f8f5 100%);
+      padding:80px 0 60px;
+      position:relative;
+      overflow:hidden
+    }
+    .hero::before{
+      content:'';
+      position:absolute;
+      top:0;
+      right:0;
+      width:50%;
+      height:100%;
+      background:url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><polygon points="20,20 80,30 70,70 30,80" fill="%23f0f8f5" opacity="0.3"/></svg>');
+      z-index:0
+    }
+    .hero-content{position:relative;z-index:1}
+    .hero-grid{display:grid;grid-template-columns:1fr 1fr;gap:40px;align-items:center}
+    .hero-text h1{font-size:clamp(32px,4.8vw,48px);line-height:1.1;margin:.25em 0 .35em;font-weight:800}
+    .hero-text p{font-size:clamp(16px,2.2vw,20px);color:var(--muted);max-width:600px;line-height:1.6}
+    .hero-image{
+      background:linear-gradient(45deg, #e8f5e8, #f0faf0);
+      border-radius:24px;
+      padding:30px;
+      text-align:center;
+      border:2px dashed var(--green);
+      min-height:400px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      position:relative
+    }
+    .hero-image::before{
+      content:'🎄';
+      font-size:120px;
+      opacity:0.7
+    }
+    .hero-image::after{
+      content:'Premium 15ft Christmas Tree in Corporate Lobby';
+      position:absolute;
+      bottom:20px;
+      left:20px;
+      right:20px;
+      font-size:14px;
+      color:var(--muted);
+      font-style:italic
+    }
+    .badge-row{display:flex;flex-wrap:wrap;gap:.6rem;margin-top:20px}
+    .badge{font-size:13px;background:#eef5f1;color:#1a3b30;border:1px solid #d9e7e0;padding:.4rem .7rem;border-radius:999px;transition:transform 0.2s ease}
+    .badge:hover{transform:translateY(-1px)}
+    .cta-row{display:flex;flex-wrap:wrap;gap:.8rem;margin-top:24px}
+    
+    /* Content Sections with Alternating Images */
+    .section{padding:70px 0}
+    .section:nth-child(even){background:var(--cream)}
+    .section h2{font-size:clamp(24px,3.4vw,36px);margin:0 0 16px;font-weight:700}
+    .sub{color:var(--muted);max-width:820px;font-size:18px;line-height:1.6}
+    
+    .content-grid{display:grid;grid-template-columns:1fr 1fr;gap:60px;align-items:center;margin-top:40px}
+    .content-grid.reverse{direction:rtl}
+    .content-grid.reverse > *{direction:ltr}
+    
+    .content-image{
+      background:linear-gradient(45deg, #f8faf8, #eef5f1);
+      border-radius:20px;
+      padding:40px;
+      text-align:center;
+      border:1px solid var(--border);
+      min-height:300px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      position:relative;
+      transition:transform 0.3s ease
+    }
+    .content-image:hover{transform:translateY(-5px)}
+    
+    .trusted{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:20px;align-items:center;margin-top:30px}
+    .trusted .logo{height:60px;background:#f8faf8;border:2px dashed #ddd;border-radius:12px;transition:border-color 0.3s ease}
+    .trusted .logo:hover{border-color:var(--green)}
+    
+    .how{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;margin-top:30px}
+    .card{background:#fff;border:1px solid var(--border);border-radius:20px;padding:24px;transition:all 0.3s ease;box-shadow:0 2px 10px rgba(0,0,0,0.05)}
+    .card:hover{transform:translateY(-5px);box-shadow:0 8px 25px rgba(0,0,0,0.1)}
+    .card h3{margin:.2rem 0 .6rem;font-size:20px;font-weight:600}
+    
+    .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:24px}
+    .size-card header{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+    .chip{font-size:12px;background:#f5efe1;color:#6e5310;border:1px solid #ecd9a5;padding:.3rem .6rem;border-radius:999px;font-weight:600}
+    .list{margin:12px 0 0;padding-left:18px}
+    .list li{margin:.3rem 0}
+    .pkg-cta{display:flex;gap:.6rem;flex-wrap:wrap;margin-top:12px}
+    .note{font-size:14px;color:var(--muted)}
+    
+    .logi{display:grid;grid-template-columns:repeat(3,1fr);gap:24px}
+    
+    .testimonial-section{padding:80px 0;background:linear-gradient(135deg, #f8fdf9 0%, var(--cream) 100%)}
+    .testimonial{display:grid;grid-template-columns:1fr 1fr;gap:60px;align-items:center}
+    .testimonial-image{
+      background:linear-gradient(45deg, #e8f5e8, #f0faf0);
+      border-radius:20px;
+      padding:40px;
+      text-align:center;
+      border:2px solid var(--green);
+      min-height:300px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      position:relative
+    }
+    .testimonial-image::before{
+      content:'👔';
+      font-size:80px;
+      opacity:0.7
+    }
+    .testimonial-image::after{
+      content:'Hotel Manager with Decorated Tree';
+      position:absolute;
+      bottom:20px;
+      left:20px;
+      right:20px;
+      font-size:14px;
+      color:var(--muted);
+      font-style:italic
+    }
+    
+    blockquote{font-size:22px;font-weight:600;margin:0;line-height:1.4;color:var(--ink)}
+    
+    .form{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+    .form .full{grid-column:1/-1}
+    label{font-size:14px;color:#30423a;font-weight:600;margin-bottom:6px;display:block}
+    input,select,textarea{width:100%;padding:.9rem;border:1px solid #d8d5cd;border-radius:12px;background:#fff;transition:border-color 0.3s ease}
+    input:focus,select:focus,textarea:focus{outline:none;border-color:var(--green)}
+    textarea{min-height:120px;resize:vertical}
+    
+    .faq{background:var(--cream)}
+    .faq details{border:1px solid var(--border);border-radius:16px;padding:20px;background:#fff;margin-bottom:16px;transition:all 0.3s ease}
+    .faq details:hover{box-shadow:0 4px 15px rgba(0,0,0,0.05)}
+    .faq summary{cursor:pointer;font-weight:600;font-size:16px}
+    
+    footer{padding:50px 0;background:#0f201a;color:#e8f1ec;margin-top:0}
+    footer a{color:#d7e7df;text-decoration:none;transition:color 0.3s ease}
+    footer a:hover{color:#fff}
+    .foot-grid{display:grid;grid-template-columns:2fr 1fr 1fr;gap:30px}
+    
+    /* Process Images */
+    .process-image-1::before{content:'📋';font-size:80px;opacity:0.8}
+    .process-image-1::after{content:'Tree Selection & Planning';position:absolute;bottom:15px;font-size:14px;color:var(--muted);font-style:italic}
+    
+    .process-image-2::before{content:'🚛';font-size:80px;opacity:0.8}
+    .process-image-2::after{content:'Professional Delivery Setup';position:absolute;bottom:15px;font-size:14px;color:var(--muted);font-style:italic}
+    
+    .process-image-3::before{content:'✨';font-size:80px;opacity:0.8}
+    .process-image-3::after{content:'On-Site Decoration Service';position:absolute;bottom:15px;font-size:14px;color:var(--muted);font-style:italic}
+    
+    .sr-only{position:absolute;left:-10000px;top:auto;width:1px;height:1px;overflow:hidden}
+    
+    @media (max-width:960px){
+      .hero-grid,.content-grid,.testimonial,.form,.foot-grid{grid-template-columns:1fr}
+      .how,.grid,.logi{grid-template-columns:1fr}
+      .trusted{grid-template-columns:repeat(3,1fr)}
+      nav ul{display:none}
+      .hero{padding:60px 0 40px}
+      .section{padding:50px 0}
+      .content-grid{gap:40px}
+      .content-grid.reverse{direction:ltr}
+    }
+    
+    @media (max-width:640px){
+      .trusted{grid-template-columns:repeat(2,1fr)}
+      .badge-row{justify-content:center}
+      .cta-row{justify-content:center}
+    }
+  </style>
+</head>
+<body>
+  <a class="sr-only" href="#lead-form">Skip to lead form</a>
+  <header>
+    <div class="container nav">
+      <div class="brand">
+        <img src="HHCT logo small with words.jpg" alt="Holiday Hills Christmas Trees logo" />
+      </div>
+      <nav aria-label="Primary">
+        <ul>
+          <li><a href="#sizes">Sizes & Options</a></li>
+          <li><a href="#how">How It Works</a></li>
+          <li><a href="#compliance">Compliance</a></li>
+          <li><a href="#faq">FAQ</a></li>
+          <li><a href="#lead-form">Contact</a></li>
+        </ul>
+      </nav>
+      <a class="btn btn-primary" href="#lead-form">Get a Quote & Reserve</a>
+    </div>
+  </header>
+
+  <section class="hero">
+    <div class="container hero-content">
+      <div class="hero-grid">
+        <div class="hero-text">
+          <h1>San Antonio's White-Glove Real Christmas Trees for Hotels & Corporate Lobbies</h1>
+          <p>Real, fresh-cut Christmas trees, wreaths & garlands delivered and installed by our local crew. Purchase remotely and schedule delivery anywhere in Greater San Antonio. Optional <strong>on-site Tree Decorating</strong> (lights & ornaments) makes your tree lobby-ready the same day.</p>
+          <div class="badge-row" aria-label="Trust badges">
+            <span class="badge">Fully Insured</span>
+            <span class="badge">COI Provided</span>
+            <span class="badge">On-Time Install Guarantee</span>
+            <span class="badge">Post-Season Removal</span>
+          </div>
+          <div class="cta-row">
+            <a class="btn btn-primary" href="#lead-form">Get a Quote & Reserve</a>
+            <a class="btn btn-ghost" href="#sizes">View Sizes & Options</a>
+          </div>
+        </div>
+        <div class="hero-image"></div>
+      </div>
+      <p class="note" style="margin-top:30px;text-align:center;max-width:800px;margin-left:auto;margin-right:auto">Looking for a hassle-free way to get a real tree this season? We deliver fresh, premium trees across San Antonio and can return after the holidays for pickup.</p>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="container">
+      <div class="sub">Trusted by San Antonio's hotels and corporate properties. (Add client logos below.)</div>
+      <div class="trusted">
+        <div class="logo" aria-label="Client logo placeholder"></div>
+        <div class="logo" aria-label="Client logo placeholder"></div>
+        <div class="logo" aria-label="Client logo placeholder"></div>
+        <div class="logo" aria-label="Client logo placeholder"></div>
+        <div class="logo" aria-label="Client logo placeholder"></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="how" class="section">
+    <div class="container">
+      <h2>How It Works</h2>
+      <p class="sub">Three steps to a show-stopping tree that elevates your space—and zero hassle for your team.</p>
+      
+      <!-- Step 1 with Image -->
+      <div class="content-grid">
+        <div class="content-image process-image-1"></div>
+        <div>
+          <h3 style="font-size:24px;margin-bottom:16px">1) Select Size & Options</h3>
+          <p style="font-size:18px;line-height:1.6">Choose a real tree from <strong>10' to 20'+</strong>, plus wreaths & garlands. Tell us ceiling height, footprint, and brand colors. Our team will recommend the perfect size and style for your space.</p>
+        </div>
+      </div>
+      
+      <!-- Step 2 with Image -->
+      <div class="content-grid reverse" style="margin-top:60px">
+        <div class="content-image process-image-2"></div>
+        <div>
+          <h3 style="font-size:24px;margin-bottom:16px">2) Schedule Delivery & Removal</h3>
+          <p style="font-size:18px;line-height:1.6">We coordinate with building management and work around your schedule. After-hours and weekend windows available throughout San Antonio. Full logistics support included.</p>
+        </div>
+      </div>
+      
+      <!-- Step 3 with Image -->
+      <div class="content-grid" style="margin-top:60px">
+        <div class="content-image process-image-3"></div>
+        <div>
+          <h3 style="font-size:24px;margin-bottom:16px">3) Install & Decorate</h3>
+          <p style="font-size:18px;line-height:1.6">Our white-glove crew installs safely with commercial-grade stands. <strong>Optional on-site Tree Decorating</strong> service includes lights & ornaments matched to your brand colors. We return for post-season removal.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="sizes" class="section">
+    <div class="container">
+      <h2>Sizes & Options</h2>
+      <p class="sub">All tree orders include delivery, install, commercial stand, skirt, and post-season removal. Decorating service is optional and performed on-site.</p>
+      <div class="grid" style="margin-top:30px">
+        <!-- 10' -->
+        <div class="card size-card">
+          <header>
+            <h3>10' Real Tree</h3>
+            <span class="chip">Popular</span>
+          </header>
+          <ul class="list">
+            <li>Ideal for mid-size lobbies & reception</li>
+            <li>Includes delivery • install • removal</li>
+            <li>Options: <strong>On-site Decorating</strong>; wreaths & garlands; after-hours</li>
+          </ul>
+          <div class="pkg-cta">
+            <a class="btn btn-primary" href="#lead-form">Get a Quote</a>
+          </div>
+        </div>
+        <!-- 12' -->
+        <div class="card size-card">
+          <header>
+            <h3>12' Real Tree</h3>
+            <span class="chip">Grand Lobbies</span>
+          </header>
+          <ul class="list">
+            <li>Includes delivery • install • removal</li>
+            <li>Options: <strong>On-site Decorating</strong>; wreaths & garlands; after-hours</li>
+          </ul>
+          <div class="pkg-cta">
+            <a class="btn btn-primary" href="#lead-form">Get a Quote</a>
+          </div>
+        </div>
+        <!-- 14' -->
+        <div class="card size-card">
+          <header>
+            <h3>14' Real Tree</h3>
+            <span class="chip">Atriums</span>
+          </header>
+          <ul class="list">
+            <li>Includes delivery • install • removal</li>
+            <li>Lift access planning as needed</li>
+            <li>Options: On-site Decorating; wreaths & garlands</li>
+          </ul>
+          <div class="pkg-cta">
+            <a class="btn btn-primary" href="#lead-form">Get a Quote</a>
+          </div>
+        </div>
+        <!-- 16' -->
+        <div class="card size-card">
+          <header>
+            <h3>16' Real Tree</h3>
+            <span class="chip">Statement</span>
+          </header>
+          <ul class="list">
+            <li>Includes delivery • install • removal</li>
+            <li>Engineering/lift planning as needed</li>
+            <li>Options: On-site Decorating; wreaths & garlands</li>
+          </ul>
+          <div class="pkg-cta">
+            <a class="btn btn-primary" href="#lead-form">Get a Quote</a>
+          </div>
+        </div>
+        <!-- 18' -->
+        <div class="card size-card">
+          <header>
+            <h3>18' Real Tree</h3>
+            <span class="chip">Flagship</span>
+          </header>
+          <ul class="list">
+            <li>Includes delivery • install • removal</li>
+            <li>Engineering/lift planning as needed</li>
+            <li>Options: On-site Decorating; wreaths & garlands</li>
+          </ul>
+          <div class="pkg-cta">
+            <a class="btn btn-primary" href="#lead-form">Get a Quote</a>
+          </div>
+        </div>
+        <!-- 20'+ -->
+        <div class="card size-card">
+          <header>
+            <h3>20'+ Real Tree (Custom)</h3>
+            <span class="chip">Signature</span>
+          </header>
+          <ul class="list">
+            <li>Site review recommended</li>
+            <li>Engineering/rigging plan as needed</li>
+            <li>Options: On-site Decorating; wreaths & garlands</li>
+          </ul>
+          <div class="pkg-cta">
+            <a class="btn btn-primary" href="#lead-form">Request Custom Proposal</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="addons">
+    <div class="container">
+      <h2>Optional Decorating Service & Greenery</h2>
+      <p class="sub">Choose on-site Tree Decorating to make your tree ready for the season the same day—plus real wreaths & garlands to complete the look.</p>
+      
+      <!-- Services with alternating images -->
+      <div class="content-grid" style="margin-top:50px">
+        <div class="content-image" style="background:linear-gradient(45deg, #fff8e1, #fffbf0)">
+          <div style="text-align:center">
+            <div style="font-size:80px;opacity:0.8">🎨</div>
+            <div style="position:absolute;bottom:15px;left:20px;right:20px;font-size:14px;color:var(--muted);font-style:italic">Professional Decoration Service</div>
+          </div>
+        </div>
+        <div>
+          <h3 style="font-size:24px;margin-bottom:16px">On-Site Tree Decorating</h3>
+          <ul class="list" style="font-size:16px">
+            <li>Commercial-grade LED lights for safety & longevity</li>
+            <li>Ornaments matched to your brand colors</li>
+            <li>Professional tree topper & skirt options</li>
+            <li>Photo-worthy finishing touches</li>
+            <li>Same-day completion</li>
+          </ul>
+        </div>
+      </div>
+      
+      <div class="content-grid reverse" style="margin-top:60px">
+        <div class="content-image" style="background:linear-gradient(45deg, #e8f5e8, #f0faf0)">
+          <div style="text-align:center">
+            <div style="font-size:80px;opacity:0.8">🌿</div>
+            <div style="position:absolute;bottom:15px;left:20px;right:20px;font-size:14px;color:var(--muted);font-style:italic">Fresh Wreaths & Garlands</div>
+          </div>
+        </div>
+        <div>
+          <h3 style="font-size:24px;margin-bottom:16px">Wreaths & Garlands</h3>
+          <ul class="list" style="font-size:16px">
+            <li>Fresh, real greenery to complement your tree</li>
+            <li>Perfect for doors, desks, and railings</li>
+            <li>Optional ribbon & branded signage</li>
+            <li>Bundled with tree delivery for convenience</li>
+            <li>Post-season removal included</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="compliance" class="section">
+    <div class="container">
+      <h2>Logistics & Compliance</h2>
+      <div class="logi" style="margin-top:30px">
+        <div class="card"><h3>Insurance & Documentation</h3><p>Fully insured with comprehensive liability coverage. COI naming your building plus W-9 available upon booking. Professional service standards.</p></div>
+        <div class="card"><h3>Safety Standards</h3><p>Low-heat LED lighting, secure commercial stands, OSHA-aware installation crews. Fire-retardant treatment available when required.</p></div>
+        <div class="card"><h3>Environmental Responsibility</h3><p>Post-season pickup and removal with responsible recycling or mulching. Sustainable practices throughout our process.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="testimonial-section">
+    <div class="container testimonial">
+      <div class="testimonial-image"></div>
+      <div>
+        <blockquote>"The tree was stunning and completely hassle-free. Install at 6am, no mess, and removal right after New Year's. Our guests were impressed all season long."</blockquote>
+        <p class="note" style="margin:20px 0">— Name, Title, Company</p>
+        <ul class="list">
+          <li>Lobby-ready same day with optional decorating service</li>
+          <li>Coordinated installation around high-traffic hours</li>
+          <li>Dedicated San Antonio support team</li>
+          <li>Seamless post-season removal process</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section id="lead-form" class="section">
+    <div class="container">
+      <h2>Get a Quote & Reserve Your San Antonio Delivery Window</h2>
+      <p class="sub">Contact us to purchase remotely and schedule delivery. We'll confirm availability within 1 business day.</p>
+      <form class="form" name="lead" onsubmit="return handleSubmit(event)" style="margin-top:40px">
+        <div>
+          <label for="company">Company</label>
+          <input id="company" name="company" required />
+        </div>
+        <div>
+          <label for="name">Your Name & Title</label>
+          <input id="name" name="name" required />
+        </div>
+        <div>
+          <label for="email">Work Email</label>
+          <input id="email" type="email" name="email" required />
+        </div>
+        <div>
+          <label for="phone">Mobile (day-of)</label>
+          <input id="phone" name="phone" />
+        </div>
+        <div class="full">
+          <label for="address">Service Address</label>
+          <input id="address" name="address" required />
+        </div>
+        <div>
+          <label for="ceiling">Ceiling Height</label>
+          <input id="ceiling" name="ceiling" placeholder="e.g., 14 ft" />
+        </div>
+        <div>
+          <label for="footprint">Available Footprint</label>
+          <input id="footprint" name="footprint" placeholder="e.g., 8 ft diameter" />
+        </div>
+        <div>
+          <label for="size">Tree Size</label>
+          <select id="size" name="size" required>
+            <option value="">Select</option>
+            <option>10'</option>
+            <option>12'</option>
+            <option>14'</option>
+            <option>16'</option>
+            <option>18'</option>
+            <option>20'+</option>
+          </select>
+        </div>
+        <div>
+          <label for="qty">Quantity</label>
+          <select id="qty" name="qty">
+            <option>1</option><option>2</option><option>3</option><option>4</option><option>5+</option>
+          </select>
+        </div>
+        <div>
+          <label for="decorating">On-Site Decorating Service</label>
+          <select id="decorating" name="decorating">
+            <option>No</option><option>Yes</option>
+          </select>
+        </div>
+        <div>
+          <label for="greenery">Wreaths & Garlands</label>
+          <select id="greenery" name="greenery">
+            <option>No</option><option>Yes — include options</option>
+          </select>
+        </div>
+        <div>
+          <label for="install">Preferred Install Window</label>
+          <input id="install" name="install" placeholder="Date & time" />
+        </div>
+        <div>
+          <label for="removal">Preferred Removal Window</label>
+          <input id="removal" name="removal" placeholder="Date & time" />
+        </div>
+        <div>
+          <label for="dock">Loading Dock / Freight Elevator</label>
+          <select id="dock" name="dock">
+            <option>Unsure</option><option>Yes</option><option>No</option>
+          </select>
+        </div>
+        <div>

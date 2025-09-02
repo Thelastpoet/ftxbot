@@ -37,6 +37,7 @@
         "rsi": {
             "period": 14
         },
+        "ema": { "fast": 20, "slow": 50 },
         "sma": {
             "period": 50
         },
@@ -44,6 +45,12 @@
             "period": 14,
             "oversold": 20,
             "overbought": 80
+        },
+        "price_action_settings": {
+            "proximity_atr_multiplier": 1.2,
+            "divergence_lookback": 20,
+            "mfi_oversold_threshold": 40,
+            "mfi_overbought_threshold": 60
         }
     },
     "misc": {
