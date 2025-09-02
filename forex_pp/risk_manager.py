@@ -139,11 +139,6 @@ class RiskManager:
                 logger.warning(f"Low margin level: {account_info.margin_level}%")
                 return False
 
-            positions = self.mt5_client.get_positions(symbol)
-            if len(positions) >= 2:
-                logger.info(f"Position already open for {symbol}, skipping new signal")
-                return False
-
             all_positions = self.mt5_client.get_all_positions()
             if len(all_positions) >= 20:
                 logger.warning(f"Maximum total positions reached: {len(all_positions)}")

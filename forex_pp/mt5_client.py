@@ -126,11 +126,13 @@ class MetaTrader5Client:
             'MN1': mt5.TIMEFRAME_MN1
         }
         
-        if isinstance(timeframe, str):
-            timeframe = timeframe_map.get(timeframe, mt5.TIMEFRAME_M15)
-        
-        rates = mt5.copy_rates_from_pos(symbol, timeframe, start_pos, count)
-        
+        timeframe_mt5 = timeframe_map.get(timeframe)
+        if timeframe_mt5 is None:
+            logger.error(f"Unknown timeframe: {timeframe}")
+            return None
+
+        rates = mt5.copy_rates_from_pos(symbol, timeframe_mt5, start_pos, count)
+
         if rates is None or len(rates) == 0:
             logger.error(f"Failed to get rates for {symbol}")
             return None

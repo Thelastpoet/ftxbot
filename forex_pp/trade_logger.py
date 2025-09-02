@@ -8,11 +8,9 @@ import json
 import csv
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Any
-import pandas as pd
+from typing import Dict, Any
 
 logger = logging.getLogger(__name__)
-
 
 class TradeLogger:
     """Handles trade logging and performance tracking"""
@@ -23,6 +21,7 @@ class TradeLogger:
         self.json_file = Path(log_file.replace('.log', '.json'))
         self._setup_logging()
         self.trades = []
+        self.load_trades_from_file()
         
     def _setup_logging(self):
         """Setup logging files"""
@@ -66,7 +65,6 @@ class TradeLogger:
             
         except Exception as e:
             logger.error(f"Error logging trade: {e}")
-
     
     def _write_to_csv(self, trade_details: Dict[str, Any]):
         """Write trade to CSV file"""

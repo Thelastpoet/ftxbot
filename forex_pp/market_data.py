@@ -5,12 +5,11 @@ Handles fetching and processing of market data from MT5
 
 import pandas as pd
 import logging
+from talib import ATR, SMA, STDDEV
 from typing import Optional, Dict, Any, Tuple
 from datetime import datetime
 
-
 logger = logging.getLogger(__name__)
-
 
 class MarketData:
     """Manages market data fetching and processing"""
@@ -54,6 +53,12 @@ class MarketData:
             
             # Cache the data
             self.data_cache[cache_key] = (df, datetime.now())
+            
+            # Clean old cache entries
+            if len(self.data_cache) > 20:  # Simple limit
+                oldest_key = min(self.data_cache.keys(), 
+                                key=lambda k: self.data_cache[k][1])
+                del self.data_cache[oldest_key]
             
             return df
             
@@ -124,29 +129,8 @@ class MarketData:
     def calculate_atr(self, data: pd.DataFrame, period: int = 14) -> pd.Series:
         """
         Calculate Average True Range (ATR)
-        
-        Args:
-            data: DataFrame with OHLC data
-            period: ATR period
-            
-        Returns:
-            ATR series
         """
-        high = data['high']
-        low = data['low']
-        close = data['close']
-        
-        # Calculate True Range
-        tr1 = high - low
-        tr2 = abs(high - close.shift())
-        tr3 = abs(low - close.shift())
-        
-        tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
-        
-        # Calculate ATR
-        atr = tr.rolling(window=period).mean()
-        
-        return atr
+        return ATR(data['high'], data['low'], data['close'], timeperiod=period)
     
     def calculate_pivot_points(self, data: pd.DataFrame) -> Dict[str, float]:
         """
@@ -201,7 +185,7 @@ class MarketData:
             return 'ranging'
         
         # Calculate moving averages
-        sma = data['close'].rolling(window=period).mean()
+        sma = SMA(data['close'], timeperiod=period)
         
         # Get recent data
         recent_close = data['close'].iloc[-1]
@@ -230,11 +214,8 @@ class MarketData:
         if len(data) < period:
             return 0.0
         
-        # Calculate returns
-        returns = data['close'].pct_change().dropna()
-        
         # Calculate standard deviation of returns
-        volatility = returns.tail(period).std()
+        volatility = STDDEV(data['close'].pct_change().dropna(), timeperiod=period).iloc[-1]
         
         return volatility
     

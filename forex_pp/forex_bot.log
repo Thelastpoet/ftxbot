@@ -148,3 +148,123 @@
 2025-09-02 15:19:30,092 - __main__ - INFO - Trading bot shutdown complete
 2025-09-02 15:19:30,093 - __main__ - INFO - Program terminated by user
 2025-09-02 15:19:30,093 - mt5_client - INFO - MT5 connection shut down
+2025-09-02 15:51:25,541 - __main__ - INFO - Configuration loaded successfully from config.json
+2025-09-02 15:51:27,380 - mt5_client - INFO - Connected to MT5 terminal: MetaTrader 5
+2025-09-02 15:51:27,381 - mt5_client - INFO - MT5 version: (500, 5200, '1 Aug 2025')
+2025-09-02 15:51:27,381 - __main__ - INFO - Initial account balance: 210.33
+2025-09-02 15:51:27,381 - __main__ - INFO - Trading bot initialized successfully
+2025-09-02 15:51:27,382 - __main__ - INFO - Starting main trading loop
+2025-09-02 17:38:35,503 - mt5_client - ERROR - MT5 not connected
+2025-09-02 17:38:35,512 - market_data - WARNING - No data available for EURUSD M15
+2025-09-02 17:38:35,512 - __main__ - WARNING - No data available for EURUSD M15
+2025-09-02 17:38:35,513 - market_data - WARNING - No data available for EURUSD H1
+2025-09-02 17:38:35,513 - __main__ - WARNING - No data available for EURUSD H1
+2025-09-02 17:38:35,513 - market_data - WARNING - No data available for GBPUSD M15
+2025-09-02 17:38:35,513 - __main__ - WARNING - No data available for GBPUSD M15
+2025-09-02 17:38:35,514 - market_data - WARNING - No data available for GBPUSD H1
+2025-09-02 17:38:35,514 - __main__ - WARNING - No data available for GBPUSD H1
+2025-09-02 17:38:35,514 - market_data - WARNING - No data available for USDJPY M15
+2025-09-02 17:38:35,514 - __main__ - WARNING - No data available for USDJPY M15
+2025-09-02 17:38:35,515 - market_data - WARNING - No data available for USDJPY H1
+2025-09-02 17:38:35,515 - __main__ - WARNING - No data available for USDJPY H1
+2025-09-02 17:38:35,515 - market_data - WARNING - No data available for AUDUSD M15
+2025-09-02 17:38:35,515 - __main__ - WARNING - No data available for AUDUSD M15
+2025-09-02 17:38:35,516 - market_data - WARNING - No data available for AUDUSD H1
+2025-09-02 17:38:35,516 - __main__ - WARNING - No data available for AUDUSD H1
+2025-09-02 17:38:35,517 - market_data - WARNING - No data available for NZDUSD M15
+2025-09-02 17:38:35,517 - __main__ - WARNING - No data available for NZDUSD M15
+2025-09-02 17:38:35,517 - market_data - WARNING - No data available for NZDUSD H1
+2025-09-02 17:38:35,518 - __main__ - WARNING - No data available for NZDUSD H1
+2025-09-02 17:38:35,518 - market_data - WARNING - No data available for USDCAD M15
+2025-09-02 17:38:35,518 - __main__ - WARNING - No data available for USDCAD M15
+2025-09-02 17:38:35,519 - market_data - WARNING - No data available for USDCAD H1
+2025-09-02 17:38:35,519 - __main__ - WARNING - No data available for USDCAD H1
+2025-09-02 17:38:35,520 - market_data - WARNING - No data available for USDCHF M15
+2025-09-02 17:38:35,520 - __main__ - WARNING - No data available for USDCHF M15
+2025-09-02 17:38:35,520 - market_data - WARNING - No data available for USDCHF H1
+2025-09-02 17:38:35,521 - __main__ - WARNING - No data available for USDCHF H1
+2025-09-02 17:38:35,521 - market_data - WARNING - No data available for XAUUSD M15
+2025-09-02 17:38:35,521 - __main__ - WARNING - No data available for XAUUSD M15
+2025-09-02 17:38:35,522 - market_data - WARNING - No data available for XAUUSD H1
+2025-09-02 17:38:35,522 - __main__ - WARNING - No data available for XAUUSD H1
+2025-09-02 17:38:35,523 - market_data - WARNING - No data available for XAGUSD M15
+2025-09-02 17:38:35,523 - __main__ - WARNING - No data available for XAGUSD M15
+2025-09-02 17:38:35,523 - market_data - WARNING - No data available for XAGUSD H1
+2025-09-02 17:38:35,523 - __main__ - WARNING - No data available for XAGUSD H1
+2025-09-02 17:39:04,510 - __main__ - INFO - Shutting down trading bot
+2025-09-02 17:39:04,511 - __main__ - INFO - Trading bot shutdown complete
+2025-09-02 17:39:04,523 - __main__ - INFO - Program terminated by user
+2025-09-02 17:39:04,524 - mt5_client - INFO - MT5 connection shut down
+2025-09-02 17:39:17,296 - __main__ - INFO - Configuration loaded successfully from config.json
+2025-09-02 17:39:20,246 - mt5_client - INFO - Connected to MT5 terminal: MetaTrader 5
+2025-09-02 17:39:20,246 - mt5_client - INFO - MT5 version: (500, 5200, '1 Aug 2025')
+2025-09-02 17:39:20,247 - __main__ - INFO - Initial account balance: 211.93
+2025-09-02 17:39:20,247 - __main__ - INFO - Trading bot initialized successfully
+2025-09-02 17:39:20,247 - __main__ - INFO - Starting main trading loop
+2025-09-02 18:01:09,060 - __main__ - INFO - Shutting down trading bot
+2025-09-02 18:01:09,062 - __main__ - INFO - Trading bot shutdown complete
+2025-09-02 18:01:09,064 - __main__ - INFO - Program terminated by user
+2025-09-02 18:01:09,065 - mt5_client - INFO - MT5 connection shut down
+2025-09-02 18:01:12,714 - __main__ - INFO - Configuration loaded successfully from config.json
+2025-09-02 18:01:13,671 - mt5_client - INFO - Connected to MT5 terminal: MetaTrader 5
+2025-09-02 18:01:13,671 - mt5_client - INFO - MT5 version: (500, 5200, '1 Aug 2025')
+2025-09-02 18:01:13,672 - __main__ - INFO - Initial account balance: 211.93
+2025-09-02 18:01:13,672 - __main__ - INFO - Trading bot initialized successfully
+2025-09-02 18:01:13,672 - __main__ - INFO - Starting main trading loop
+2025-09-02 21:32:29,035 - mt5_client - ERROR - MT5 not connected
+2025-09-02 21:32:29,037 - market_data - WARNING - No data available for EURUSD M15
+2025-09-02 21:32:29,038 - __main__ - WARNING - No data available for EURUSD M15
+2025-09-02 21:32:29,039 - market_data - WARNING - No data available for EURUSD H1
+2025-09-02 21:32:29,039 - __main__ - WARNING - No data available for EURUSD H1
+2025-09-02 21:32:29,040 - market_data - WARNING - No data available for GBPUSD M15
+2025-09-02 21:32:29,040 - __main__ - WARNING - No data available for GBPUSD M15
+2025-09-02 21:32:29,041 - market_data - WARNING - No data available for GBPUSD H1
+2025-09-02 21:32:29,041 - __main__ - WARNING - No data available for GBPUSD H1
+2025-09-02 21:32:29,042 - market_data - WARNING - No data available for USDJPY M15
+2025-09-02 21:32:29,042 - __main__ - WARNING - No data available for USDJPY M15
+2025-09-02 21:32:29,043 - market_data - WARNING - No data available for USDJPY H1
+2025-09-02 21:32:29,043 - __main__ - WARNING - No data available for USDJPY H1
+2025-09-02 21:32:29,044 - market_data - WARNING - No data available for AUDUSD M15
+2025-09-02 21:32:29,044 - __main__ - WARNING - No data available for AUDUSD M15
+2025-09-02 21:32:29,045 - market_data - WARNING - No data available for AUDUSD H1
+2025-09-02 21:32:29,045 - __main__ - WARNING - No data available for AUDUSD H1
+2025-09-02 21:32:29,046 - market_data - WARNING - No data available for NZDUSD M15
+2025-09-02 21:32:29,046 - __main__ - WARNING - No data available for NZDUSD M15
+2025-09-02 21:32:29,047 - market_data - WARNING - No data available for NZDUSD H1
+2025-09-02 21:32:29,047 - __main__ - WARNING - No data available for NZDUSD H1
+2025-09-02 21:32:29,047 - market_data - WARNING - No data available for USDCAD M15
+2025-09-02 21:32:29,048 - __main__ - WARNING - No data available for USDCAD M15
+2025-09-02 21:32:29,048 - market_data - WARNING - No data available for USDCAD H1
+2025-09-02 21:32:29,048 - __main__ - WARNING - No data available for USDCAD H1
+2025-09-02 21:32:29,049 - market_data - WARNING - No data available for USDCHF M15
+2025-09-02 21:32:29,049 - __main__ - WARNING - No data available for USDCHF M15
+2025-09-02 21:32:29,050 - market_data - WARNING - No data available for USDCHF H1
+2025-09-02 21:32:29,050 - __main__ - WARNING - No data available for USDCHF H1
+2025-09-02 21:32:29,050 - market_data - WARNING - No data available for XAUUSD M15
+2025-09-02 21:32:29,050 - __main__ - WARNING - No data available for XAUUSD M15
+2025-09-02 21:32:29,051 - market_data - WARNING - No data available for XAUUSD H1
+2025-09-02 21:32:29,051 - __main__ - WARNING - No data available for XAUUSD H1
+2025-09-02 21:32:29,051 - market_data - WARNING - No data available for XAGUSD M15
+2025-09-02 21:32:29,051 - __main__ - WARNING - No data available for XAGUSD M15
+2025-09-02 21:32:29,052 - market_data - WARNING - No data available for XAGUSD H1
+2025-09-02 21:32:29,052 - __main__ - WARNING - No data available for XAGUSD H1
+2025-09-02 21:32:33,938 - __main__ - INFO - Shutting down trading bot
+2025-09-02 21:32:33,939 - __main__ - INFO - Trading bot shutdown complete
+2025-09-02 21:32:33,942 - __main__ - INFO - Program terminated by user
+2025-09-02 21:32:33,942 - mt5_client - INFO - MT5 connection shut down
+2025-09-02 21:42:01,944 - __main__ - INFO - Configuration loaded successfully from config.json
+2025-09-02 21:42:01,974 - mt5_client - INFO - Connected to MT5 terminal: MetaTrader 5
+2025-09-02 21:42:01,975 - mt5_client - INFO - MT5 version: (500, 5200, '1 Aug 2025')
+2025-09-02 21:42:01,975 - trade_logger - INFO - Loaded 2 trades from file
+2025-09-02 21:42:01,976 - __main__ - INFO - Initial account balance: 211.93
+2025-09-02 21:42:01,976 - __main__ - INFO - Trading bot initialized successfully
+2025-09-02 21:42:01,976 - __main__ - INFO - Starting main trading loop
+2025-09-02 21:42:01,977 - trade_logger - INFO - Loaded 2 trades from file
+2025-09-02 21:43:02,618 - trade_logger - INFO - Loaded 2 trades from file
+2025-09-02 21:44:02,701 - trade_logger - INFO - Loaded 2 trades from file
+2025-09-02 21:45:02,746 - trade_logger - INFO - Loaded 2 trades from file
+2025-09-02 21:46:03,039 - trade_logger - INFO - Loaded 2 trades from file
+2025-09-02 21:46:25,437 - __main__ - INFO - Shutting down trading bot
+2025-09-02 21:46:25,439 - __main__ - INFO - Trading bot shutdown complete
+2025-09-02 21:46:25,439 - __main__ - INFO - Program terminated by user
+2025-09-02 21:46:25,440 - mt5_client - INFO - MT5 connection shut down

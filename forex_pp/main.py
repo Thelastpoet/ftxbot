@@ -11,8 +11,9 @@ import argparse
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, Optional, Tuple
-from dataclasses import asdict, is_dataclass
 import sys
+
+from strategy import TradingSignal
 
 # Configure logging
 logging.basicConfig(
@@ -206,16 +207,12 @@ class TradingBot:
         
         return False
     
-    async def execute_trade(self, signal, symbol: str):
-        """Execute a trade based on signal (accepts dataclass or dict)"""
-        # allow both dataclass and dict for signal
-        if is_dataclass(signal):
-            signal = asdict(signal)
-
+    async def execute_trade(self, signal: TradingSignal, symbol: str):
+        """Execute a trade based on signal"""
         try:
             # First check if we already have a position for this symbol
             existing_positions = self.mt5_client.get_positions(symbol)
-            if existing_positions and len(existing_positions) > 2:
+            if existing_positions and len(existing_positions) >= 1:  # Fixed: was > 2
                 logger.info(f"Position already exists for {symbol}, skipping new signal to let it work")
                 return
 
@@ -225,13 +222,15 @@ class TradingBot:
                 logger.error(f"Failed to get symbol info for {symbol}, aborting trade execution")
                 return
 
-            # Recompute stop loss pips using RiskManager (ensures consistent pip units)
-            entry_price = float(signal.get('entry_price'))
-            sl_price = float(signal.get('stop_loss'))
-            tp_price = float(signal.get('take_profit'))
+            # Direct attribute access from dataclass
+            entry_price = float(signal.entry_price)
+            sl_price = float(signal.stop_loss)
+            tp_price = float(signal.take_profit)
 
             # Use the risk manager helper to compute real pip distance
-            computed_sl_pips = self.risk_manager.calculate_stop_loss_pips(entry_price, sl_price, symbol_info)
+            computed_sl_pips = self.risk_manager.calculate_stop_loss_pips(
+                entry_price, sl_price, symbol_info
+            )
 
             # Log both price distance and pip distance clearly
             price_distance = abs(entry_price - sl_price)
@@ -273,35 +272,44 @@ class TradingBot:
                 logger.warning(f"Trade parameters validation failed for {symbol}")
                 return
 
-            # Place order
+            # Place order - using dataclass attributes directly
             result = self.mt5_client.place_order(
                 symbol=symbol,
-                order_type=signal['type'],
+                order_type=signal.type,  # Direct attribute access
                 volume=position_size,
                 sl=sl_price,
                 tp=tp_price,
-                comment=f"PPA_{signal.get('reason')}"
+                comment=f"PPA_{signal.reason}"  # Direct attribute access
             )
 
             if result and getattr(result, 'retcode', None) == self.mt5_client.mt5.TRADE_RETCODE_DONE:
-                # Log successful trade
+                # Log successful trade with all signal details
                 trade_details = {
                     'timestamp': datetime.now(),
                     'symbol': symbol,
-                    'order_type': 'BUY' if signal['type'] == 0 else 'SELL',
+                    'order_type': 'BUY' if signal.type == 0 else 'SELL',
                     'entry_price': result.price,
                     'volume': position_size,
                     'stop_loss': sl_price,
                     'take_profit': tp_price,
-                    'ticket': result.order
+                    'ticket': result.order,
+                    'reason': signal.reason,  # Add signal reason
+                    'confidence': signal.confidence,  # Add confidence
+                    'signal_time': signal.timestamp  # Add when signal was generated
                 }
                 self.trade_logger.log_trade(trade_details)
-                logger.info(f"Trade executed successfully: {trade_details}")
+                logger.info(
+                    f"Trade executed successfully: {symbol} "
+                    f"{'BUY' if signal.type == 0 else 'SELL'} "
+                    f"@ {result.price:.5f}, Volume: {position_size:.2f}, "
+                    f"Ticket: {result.order}"
+                )
             else:
-                logger.error(f"Failed to execute trade: {result}")
+                error_msg = getattr(result, 'comment', 'Unknown error') if result else 'No result returned'
+                logger.error(f"Failed to execute trade for {symbol}: {error_msg}")
 
         except Exception as e:
-            logger.error(f"Error executing trade: {e}")
+            logger.error(f"Error executing trade for {symbol}: {e}", exc_info=True)
     
     async def process_symbol(self, symbol_config: Dict):
         """Process a single symbol for trading opportunities"""
@@ -327,35 +335,39 @@ class TradingBot:
 
                 # Check if this completed candle has already been processed
                 if tracker_key in self.last_processed_candle_time and \
-                   self.last_processed_candle_time[tracker_key] == current_completed_candle_time:
-                    logger.debug(f"No new completed candle for {symbol} {timeframe} (last processed: {current_completed_candle_time}). Skipping signal generation.")
-                    continue # No new candle, skip to next symbol/timeframe
+                self.last_processed_candle_time[tracker_key] == current_completed_candle_time:
+                    logger.debug(f"No new completed candle for {symbol} {timeframe}. Skipping.")
+                    continue
 
                 # Update the tracker for this symbol/timeframe
                 self.last_processed_candle_time[tracker_key] = current_completed_candle_time
-                logger.debug(f"New completed candle detected for {symbol} {timeframe}: {current_completed_candle_time}. Proceeding with signal generation.")
+                logger.debug(f"New completed candle detected for {symbol} {timeframe}: {current_completed_candle_time}")
                 
-                # Generate trading signal
+                # Generate trading signal - returns TradingSignal dataclass
                 signal = self.strategy.generate_signal(data, symbol)
                 
                 if signal:
-                    logger.info(f"Signal generated for {symbol}: {signal}")
+                    logger.info(
+                        f"Signal generated for {symbol}: "
+                        f"Type={'BUY' if signal.type == 0 else 'SELL'}, "
+                        f"Confidence={signal.confidence:.2f}"
+                    )
                     
                     # Check if within trading session
                     if self.session_manager.is_trading_time():
-                        await self.execute_trade(signal, symbol)
+                        await self.execute_trade(signal, symbol)  # Pass dataclass directly
                     else:
                         logger.info("Outside trading session, signal ignored")
                         
             except Exception as e:
-                logger.error(f"Error processing {symbol} {timeframe}: {e}")
+                logger.error(f"Error processing {symbol} {timeframe}: {e}", exc_info=True)
                 
     async def sync_trade_status(self):
         """Sync trade status using MT5's position checking"""
         if not self.trade_logger:
             return
             
-        try:
+        try:                        
             # Get trades that are marked as OPEN in our records
             open_trades = [t for t in self.trade_logger.trades if t.get('status') == 'OPEN']
             

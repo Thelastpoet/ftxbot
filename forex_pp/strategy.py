@@ -7,8 +7,9 @@ import pandas as pd
 import numpy as np
 try:
     import talib
-except Exception:
-    talib = None
+    TALIB_AVAILABLE = True
+except ImportError:
+    TALIB_AVAILABLE = False
 from scipy.signal import argrelextrema
 import logging
 from typing import Dict, List, Optional, Tuple
@@ -141,7 +142,7 @@ class PurePriceActionStrategy:
 
     def confirm_signal(self, data: pd.DataFrame, breakout: Dict) -> bool:
         """
-        Confirm breakout signal using TA-Lib patterns when available with fallback
+        Confirm breakout signal using TA-Lib patterns when available with fallback.
         """
         # require enough candles for pattern recognition
         if len(data) < 20:
@@ -156,42 +157,38 @@ class PurePriceActionStrategy:
             patterns_found = []
 
             if talib:
+                # Determine which set of patterns to check
                 if breakout['type'] == 'bullish':
-                    patterns = {
-                        'ENGULFING': talib.CDLENGULFING(open_prices, high_prices, low_prices, close_prices),
-                        'HAMMER': talib.CDLHAMMER(open_prices, high_prices, low_prices, close_prices),
-                        'INVERTED_HAMMER': talib.CDLINVERTEDHAMMER(open_prices, high_prices, low_prices, close_prices),
-                        'PIERCING': talib.CDLPIERCING(open_prices, high_prices, low_prices, close_prices),
-                        'MORNING_STAR': talib.CDLMORNINGSTAR(open_prices, high_prices, low_prices, close_prices),
-                        'BULLISH_HARAMI': talib.CDLHARAMI(open_prices, high_prices, low_prices, close_prices),
-                        'THREE_WHITE_SOLDIERS': talib.CDL3WHITESOLDIERS(open_prices, high_prices, low_prices, close_prices),
-                        'MARUBOZU': talib.CDLMARUBOZU(open_prices, high_prices, low_prices, close_prices)
+                    patterns_to_check = {
+                        'ENGULFING': talib.CDLENGULFING, 'HAMMER': talib.CDLHAMMER,
+                        'INVERTED_HAMMER': talib.CDLINVERTEDHAMMER, 'PIERCING': talib.CDLPIERCING,
+                        'MORNING_STAR': talib.CDLMORNINGSTAR, 'BULLISH_HARAMI': talib.CDLHARAMI,
+                        'THREE_WHITE_SOLDIERS': talib.CDL3WHITESOLDIERS, 'MARUBOZU': talib.CDLMARUBOZU
                     }
-                    for pattern_name, pattern_result in patterns.items():
-                        # check last 3 candles for positive value
-                        for i in range(1, 4):
-                            if -i >= -len(pattern_result) and pattern_result[-i] > 0:
-                                patterns_found.append(pattern_name)
-                                logger.debug(f"Bullish pattern found: {pattern_name}")
-                                break
-
+                    # Bullish patterns return a positive value (e.g., 100)
+                    is_signal = lambda val: val > 0
                 else:  # bearish
-                    patterns = {
-                        'ENGULFING': talib.CDLENGULFING(open_prices, high_prices, low_prices, close_prices),
-                        'SHOOTING_STAR': talib.CDLSHOOTINGSTAR(open_prices, high_prices, low_prices, close_prices),
-                        'HANGING_MAN': talib.CDLHANGINGMAN(open_prices, high_prices, low_prices, close_prices),
-                        'DARK_CLOUD': talib.CDLDARKCLOUDCOVER(open_prices, high_prices, low_prices, close_prices),
-                        'EVENING_STAR': talib.CDLEVENINGSTAR(open_prices, high_prices, low_prices, close_prices),
-                        'BEARISH_HARAMI': talib.CDLHARAMI(open_prices, high_prices, low_prices, close_prices),
-                        'THREE_BLACK_CROWS': talib.CDL3BLACKCROWS(open_prices, high_prices, low_prices, close_prices),
-                        'MARUBOZU': talib.CDLMARUBOZU(open_prices, high_prices, low_prices, close_prices)
+                    patterns_to_check = {
+                        'ENGULFING': talib.CDLENGULFING, 'SHOOTING_STAR': talib.CDLSHOOTINGSTAR,
+                        'HANGING_MAN': talib.CDLHANGINGMAN, 'DARK_CLOUD': talib.CDLDARKCLOUDCOVER,
+                        'EVENING_STAR': talib.CDLEVENINGSTAR, 'BEARISH_HARAMI': talib.CDLHARAMI,
+                        'THREE_BLACK_CROWS': talib.CDL3BLACKCROWS, 'MARUBOZU': talib.CDLMARUBOZU
                     }
-                    for pattern_name, pattern_result in patterns.items():
-                        for i in range(1, 4):
-                            if -i >= -len(pattern_result) and pattern_result[-i] < 0:
-                                patterns_found.append(pattern_name)
-                                logger.debug(f"Bearish pattern found: {pattern_name}")
-                                break
+                    # Bearish patterns return a negative value (e.g., -100)
+                    is_signal = lambda val: val < 0
+
+                # Calculate and check patterns
+                for name, func in patterns_to_check.items():
+                    result = func(open_prices, high_prices, low_prices, close_prices)
+                    
+                    # Check the last 3 candles for a signal using negative indexing
+                    # Ensure we don't go out of bounds if there are fewer than 3 results
+                    for i in range(1, min(4, len(result) + 1)):
+                        if is_signal(result[-i]):
+                            patterns_found.append(name)
+                            logger.debug(f"{breakout['type'].capitalize()} pattern found: {name} on candle {-i}")
+                            # Break the inner loop once a pattern is found for this type
+                            break
 
             # fallback to strong candle if no TA-Lib or no patterns found
             if not patterns_found:
@@ -214,7 +211,7 @@ class PurePriceActionStrategy:
                         patterns_found.append('STRONG_BEARISH_CANDLE')
 
             if patterns_found:
-                logger.info(f"Signal confirmed with patterns: {patterns_found}")
+                logger.info(f"Signal confirmed with patterns: {list(set(patterns_found))}")
                 return True
             else:
                 logger.debug("No confirming candlestick patterns found")
@@ -222,6 +219,7 @@ class PurePriceActionStrategy:
 
         except Exception as e:
             logger.error(f"Error in candlestick pattern confirmation: {e}")
+            # Fallback to basic confirmation on any error
             return self._basic_pattern_confirmation(data, breakout)
 
     def _basic_pattern_confirmation(self, data: pd.DataFrame, breakout: Dict) -> bool:
@@ -329,15 +327,18 @@ class PurePriceActionStrategy:
             return None
 
         try:
+            # Get the analysis window
             analysis_data = data.tail(self.lookback_period).copy()
             
             if len(analysis_data) < 2:
                 return None
 
+            # Find swing points in the analysis window
             swing_highs, swing_lows = self.find_swing_points(analysis_data)
             if len(swing_highs) == 0 and len(swing_lows) == 0:
                 return None
 
+            # Calculate support and resistance levels
             resistance_levels, support_levels = self.calculate_support_resistance(
                 analysis_data, swing_highs, swing_lows, symbol
             )
@@ -345,40 +346,64 @@ class PurePriceActionStrategy:
             if not resistance_levels and not support_levels:
                 return None
 
-            signal_candle = analysis_data.iloc[-2]
-            breakout = self.detect_breakout(signal_candle, resistance_levels, support_levels, symbol)
+            # Use clear variable names
+            last_completed_candle = analysis_data.iloc[-2]  # The candle we analyze for signals
+            current_forming_candle = analysis_data.iloc[-1]  # The candle where we would enter
+            
+            # Detect breakout on the last completed candle
+            breakout = self.detect_breakout(
+                last_completed_candle, 
+                resistance_levels, 
+                support_levels, 
+                symbol
+            )
+            
             if not breakout:
                 return None
 
+            # Confirm signal using all completed candles (exclude current forming)
             if not self.confirm_signal(analysis_data.iloc[:-1], breakout):
                 return None
             
+            # Get symbol info for pip calculations
             symbol_info = self._get_symbol_info(symbol)
             pip_size = get_pip_size(symbol_info)
-            gap_threshold = 10 * pip_size  # Or pull from config for flexibility
+            gap_threshold = 10 * pip_size  # Could make this configurable
 
-            current_candle_open = analysis_data.iloc[-1]['open']
-            signal_candle_close = signal_candle['close']
+            # Check for gap between last completed candle close and current candle open
+            current_open = current_forming_candle['open']
+            last_close = last_completed_candle['close']
 
-            if abs(current_candle_open - signal_candle_close) > gap_threshold:
+            if abs(current_open - last_close) > gap_threshold:
                 logger.warning(
                     f"Large gap detected for {symbol}. "
-                    f"Signal candle close: {signal_candle_close}, "
-                    f"New candle open: {current_candle_open}. Skipping signal."
+                    f"Last close: {last_close:.5f}, "
+                    f"Current open: {current_open:.5f}, "
+                    f"Gap: {abs(current_open - last_close):.5f} "
+                    f"(threshold: {gap_threshold:.5f})"
                 )
                 return None
 
-            entry_price = float(current_candle_open)
-            stop_loss = self.calculate_stop_loss(breakout, support_levels, resistance_levels, entry_price, symbol)
+            # Set entry at current candle open
+            entry_price = float(current_open)
+            
+            # Calculate stop loss and take profit
+            stop_loss = self.calculate_stop_loss(
+                breakout, 
+                support_levels, 
+                resistance_levels, 
+                entry_price, 
+                symbol
+            )
             take_profit = self.calculate_take_profit(entry_price, stop_loss, breakout)
 
-            symbol_info = self._get_symbol_info(symbol)
-            pip_size = get_pip_size(symbol_info)
+            # Calculate stop loss in pips for position sizing
             stop_loss_pips = abs(entry_price - stop_loss) / pip_size
 
-            # normalize confidence to 0-1
+            # Normalize confidence to 0-1
             confidence = max(0.0, min(float(breakout.get('strength', 0.0)), 1.0))
 
+            # Create the trading signal
             signal = TradingSignal(
                 type=0 if breakout['type'] == 'bullish' else 1,
                 entry_price=entry_price,
@@ -390,11 +415,18 @@ class PurePriceActionStrategy:
                 timestamp=datetime.utcnow()
             )
 
-            logger.info(f"Signal generated for {symbol}: {asdict(signal)}")
+            logger.info(
+                f"Signal generated for {symbol}: "
+                f"Type={'BUY' if signal.type == 0 else 'SELL'}, "
+                f"Entry={entry_price:.5f}, "
+                f"SL={stop_loss:.5f} ({stop_loss_pips:.1f} pips), "
+                f"TP={take_profit:.5f}"
+            )
+            
             return signal
 
         except Exception as e:
-            logger.error(f"Error generating signal: {e}")
+            logger.error(f"Error generating signal for {symbol}: {e}")
             return None
 
     def _get_symbol_info(self, symbol: str) -> Dict:
@@ -410,8 +442,4 @@ class PurePriceActionStrategy:
             logger.error(f"Failed to get symbol info for {symbol}")
             raise ValueError(f"Symbol {symbol} not found in MT5")
 
-        return {
-            "point": info.point,
-            "digits": info.digits,
-            "spread": info.spread  # live spread from broker
-        }
+        return info

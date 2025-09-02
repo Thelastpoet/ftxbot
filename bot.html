@@ -1,0 +1,1406 @@
+<!DOCTYPE html><html lang="en"><head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>Building a Profitable Forex Day Trading Bot with Pure Price Action</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/js/all.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&amp;family=Inter:wght@300;400;500;600&amp;display=swap" rel="stylesheet"/>
+    <style>
+        :root {
+            --primary: #1e3a5f;
+            --secondary: #2d5a87;
+            --accent: #d4af37;
+            --neutral: #f8fafc;
+            --text-primary: #1f2937;
+            --text-secondary: #6b7280;
+        }
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            line-height: 1.6;
+            color: var(--text-primary);
+            background: var(--neutral);
+        }
+        
+        .serif {
+            font-family: 'Playfair Display', serif;
+        }
+        
+        .hero-gradient {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+        }
+        
+        .gold-accent {
+            color: var(--accent);
+        }
+        
+        .toc-sidebar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 280px;
+            height: 100vh;
+            background: white;
+            border-right: 1px solid #e5e7eb;
+            overflow-y: auto;
+            z-index: 50;
+            padding: 2rem 1.5rem;
+        }
+        
+        .main-content {
+            margin-left: 280px;
+            min-height: 100vh;
+        }
+        
+        .citation {
+            display: inline-block;
+            background: var(--accent);
+            color: white;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            text-decoration: none;
+            margin-left: 2px;
+            transition: all 0.2s;
+        }
+        
+        .citation:hover {
+            background: #b8941f;
+            transform: translateY(-1px);
+        }
+        
+        .section-divider {
+            height: 2px;
+            background: linear-gradient(90deg, var(--accent) 0%, transparent 100%);
+            margin: 3rem 0;
+        }
+        
+        .code-block {
+            background: #1f2937;
+            color: #e5e7eb;
+            border-radius: 8px;
+            padding: 1.5rem;
+            overflow-x: auto;
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 0.875rem;
+            line-height: 1.5;
+        }
+        
+        .bento-grid {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            grid-template-rows: auto auto;
+            gap: 1.5rem;
+            height: 70vh;
+        }
+        
+        .bento-hero {
+            grid-row: 1 / 3;
+            background: var(--primary);
+            color: white;
+            padding: 3rem;
+            border-radius: 12px;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .bento-stat {
+            background: white;
+            padding: 2rem;
+            border-radius: 12px;
+            border: 1px solid #e5e7eb;
+        }
+        
+        .toc-link {
+            display: block;
+            padding: 0.5rem 0;
+            color: var(--text-secondary);
+            text-decoration: none;
+            border-left: 2px solid transparent;
+            padding-left: 1rem;
+            margin-left: -1rem;
+            transition: all 0.2s;
+        }
+        
+        .toc-link:hover, .toc-link.active {
+            color: var(--primary);
+            border-left-color: var(--accent);
+            background: #f8fafc;
+            margin-left: -1.5rem;
+            padding-left: 1.5rem;
+        }
+        
+        .toc-link.sub {
+            font-size: 0.875rem;
+            margin-left: 1rem;
+        }
+        
+        @media (max-width: 1024px) {
+            .toc-sidebar {
+                transform: translateX(-100%);
+                transition: transform 0.3s;
+            }
+            
+            .toc-sidebar.open {
+                transform: translateX(0);
+            }
+            
+            .main-content {
+                margin-left: 0;
+            }
+            
+            .bento-grid {
+                grid-template-columns: 1fr;
+                grid-template-rows: auto auto auto;
+                height: auto;
+            }
+            
+            .bento-hero {
+                grid-row: 1;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .bento-hero {
+                padding: 1.5rem;
+            }
+            .bento-hero h1 {
+                font-size: 2.5rem;
+            }
+            .bento-hero h1 span {
+                font-size: 2rem;
+            }
+        }
+    </style>
+  </head>
+
+  <body>
+    <!-- Table of Contents Sidebar -->
+    <nav class="toc-sidebar">
+      <div class="mb-8">
+        <h3 class="serif text-lg font-semibold text-gray-900 mb-4">Contents</h3>
+        <a href="#executive-summary" class="toc-link">Executive Summary</a>
+        <a href="#core-strategy" class="toc-link">1. Core Strategy</a>
+        <a href="#strategy-overview" class="toc-link sub">1.1 Strategy Overview</a>
+        <a href="#identifying-levels" class="toc-link sub">1.2 Identifying Key Levels</a>
+        <a href="#trading-signals" class="toc-link sub">1.3 Generating Trading Signals</a>
+        <a href="#bot-architecture" class="toc-link">2. Bot Architecture</a>
+        <a href="#main-loop" class="toc-link sub">2.1 Main Application Loop</a>
+        <a href="#class-design" class="toc-link sub">2.2 Modular Class Design</a>
+        <a href="#implementation" class="toc-link">3. Implementation Details</a>
+        <a href="#mt5-connection" class="toc-link sub">3.1 Connecting to MT5</a>
+        <a href="#data-management" class="toc-link sub">3.2 Data Management</a>
+        <a href="#order-execution" class="toc-link sub">3.3 Order Execution</a>
+        <a href="#configuration" class="toc-link">4. Configuration &amp; Deployment</a>
+        <a href="#config-management" class="toc-link sub">4.1 Configuration Management</a>
+        <a href="#setup-guide" class="toc-link sub">4.2 Setup and Execution</a>
+        <a href="#testing-deployment" class="toc-link sub">4.3 Testing and Deployment</a>
+      </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <!-- Hero Section with Bento Layout -->
+      <section class="p-8 pb-0">
+        <div class="bento-grid max-w-7xl mx-auto">
+          <!-- Main Hero Content -->
+          <div class="bento-hero">
+            <div class="relative z-10">
+              <h1 class="serif text-5xl font-bold mb-6 leading-tight">
+                Building a Profitable Forex
+                <em class="gold-accent">Day Trading Bot</em>
+                with Pure Price Action in Python
+              </h1>
+              <p class="text-xl text-blue-100 mb-8 leading-relaxed">
+                A comprehensive guide to creating an automated trading system that connects to MetaTrader 5 and executes trades based on pure price action strategies, focusing on breakout signals from key support and resistance levels.
+              </p>
+            </div>
+            <div class="absolute inset-0 opacity-10">
+              <img src="https://kimi-web-img.moonshot.cn/img/4kwallpapers.com/2a6d0891922d2b63f2173ced415fdd2a3ac1e26f.jpg" alt="Abstract forex candlestick pattern background" class="w-full h-full object-cover filter blur-sm" size="wallpaper" aspect="wide" query="abstract forex candlestick pattern" referrerpolicy="no-referrer" data-modified="1" data-score="0.00"/>
+            </div>
+          </div>
+
+          <!-- Key Statistics -->
+          <div class="bento-stat">
+            <div class="flex items-center mb-3">
+              <i class="fas fa-chart-line text-2xl gold-accent mr-3"></i>
+              <h3 class="serif text-lg font-semibold">Strategy Focus</h3>
+            </div>
+            <p class="text-gray-600">Pure price action breakout strategy using support/resistance levels with automated execution through MetaTrader 5 API.</p>
+          </div>
+
+          <div class="bento-stat">
+            <div class="flex items-center mb-3">
+              <i class="fas fa-code text-2xl gold-accent mr-3"></i>
+              <h3 class="serif text-lg font-semibold">Technical Stack</h3>
+            </div>
+            <p class="text-gray-600">Python, MetaTrader5 API, pandas, scipy, and asyncio for real-time market monitoring and execution.</p>
+          </div>
+        </div>
+      </section>
+
+      <div class="section-divider max-w-7xl mx-auto"></div>
+
+      <!-- Executive Summary -->
+      <section id="executive-summary" class="px-8 py-12 max-w-7xl mx-auto">
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-8">
+          <h2 class="serif text-3xl font-bold mb-6 gold-accent">Executive Summary</h2>
+          <div class="prose prose-lg max-w-none">
+            <p class="text-gray-700 mb-6">
+              This comprehensive guide presents a systematic approach to building an automated forex day trading bot that leverages pure price action principles to identify and capitalize on breakout opportunities. The strategy focuses exclusively on raw price movements, eschewing traditional indicators in favor of identifying key support and resistance levels that represent significant psychological barriers in the market.
+            </p>
+
+            <div class="grid md:grid-cols-3 gap-6 my-8">
+              <div class="bg-blue-50 p-6 rounded-lg">
+                <h4 class="serif font-semibold text-blue-900 mb-3">Core Methodology</h4>
+                <p class="text-sm text-blue-700">Pure price action analysis combining swing point identification with breakout logic to capture high-probability market moves.</p>
+              </div>
+              <div class="bg-green-50 p-6 rounded-lg">
+                <h4 class="serif font-semibold text-green-900 mb-3">Risk Management</h4>
+                <p class="text-sm text-green-700">Systematic position sizing based on fixed fractional risk with precise stop-loss and take-profit placement.</p>
+              </div>
+              <div class="bg-purple-50 p-6 rounded-lg">
+                <h4 class="serif font-semibold text-purple-900 mb-3">Implementation</h4>
+                <p class="text-sm text-purple-700">Modular Python architecture with MetaTrader 5 integration for robust real-time execution.</p>
+              </div>
+            </div>
+
+            <p class="text-gray-700">
+              The bot employs sophisticated algorithms to identify swing highs and lows, clusters them into meaningful support and resistance zones, and generates trading signals when price breaks decisively through these key levels. The implementation emphasizes disciplined risk management through fixed fractional position sizing and strategic stop-loss placement just beyond key support and resistance zones.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <div class="section-divider max-w-7xl mx-auto"></div>
+
+      <!-- Section 1: Core Strategy -->
+      <section id="core-strategy" class="px-8 py-12 max-w-7xl mx-auto">
+        <h2 class="serif text-4xl font-bold mb-12 text-gray-900">1. Core Strategy: Pure Price Action Breakout</h2>
+
+        <!-- Strategy Overview -->
+        <div id="strategy-overview" class="mb-16">
+          <h3 class="serif text-2xl font-semibold mb-8 gold-accent">1.1 Strategy Overview</h3>
+
+          <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-8 mb-8">
+            <h4 class="serif text-xl font-semibold mb-6">1.1.1 Philosophy of Pure Price Action</h4>
+            <p class="text-gray-700 mb-6">
+              Pure price action trading represents a minimalist approach that prioritizes the analysis of raw price movements over lagging technical indicators
+              <a href="https://www.babypips.com/forexpedia/category/price-action" class="citation" target="_blank">2</a>.
+              This methodology operates on the foundational premise that all relevant market information—fundamental data, market sentiment, and economic events—is already reflected in the price chart, making additional indicators potentially redundant
+              <a href="https://www.babypips.com/forexpedia/category/price-action" class="citation" target="_blank">2</a>.
+            </p>
+
+            <blockquote class="border-l-4 border-yellow-400 pl-6 py-4 bg-yellow-50 rounded-r-lg mb-6">
+              <p class="text-gray-800 italic serif text-lg">
+                &#34;By removing the layers of complexity that often accompany indicator-based strategies, traders can focus on what truly matters: the price.&#34;
+              </p>
+            </blockquote>
+
+            <p class="text-gray-700 mb-6">
+              The practice involves deep analysis of &#34;naked&#34; price charts, focusing on candlestick formations, support and resistance levels, and market structure to guide trading decisions
+              <a href="https://www.quantifiedstrategies.com/price-action-trading-strategies/" class="citation" target="_blank">47</a>.
+              This approach requires significant skill and experience, demanding nuanced interpretation of market signals such as pin bars, engulfing patterns, and breakout formations
+              <a href="https://www.quantifiedstrategies.com/price-action-trading-strategies/" class="citation" target="_blank">48</a>.
+            </p>
+          </div>
+
+          <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-8 mb-8">
+            <h4 class="serif text-xl font-semibold mb-6">1.1.2 Combining Support/Resistance with Breakout Logic</h4>
+            <p class="text-gray-700 mb-6">
+              A cornerstone of successful pure price action strategies involves the synergistic combination of identifying key support and resistance levels with breakout trading logic
+              <a href="https://blog.quantinsti.com/price-action-trading/" class="citation" target="_blank">45</a>.
+              Support and resistance levels represent horizontal price zones where the market historically shows tendency to reverse or consolidate, formed by previous swing highs and lows
+              <a href="https://blog.quantinsti.com/price-action-trading/" class="citation" target="_blank">45</a>.
+            </p>
+
+            <div class="grid md:grid-cols-2 gap-6 mb-6">
+              <div class="bg-green-50 p-6 rounded-lg">
+                <h5 class="serif font-semibold text-green-900 mb-3">Support Levels</h5>
+                <p class="text-sm text-green-700">Price points where buying interest overcomes selling pressure, causing price to bounce upward.</p>
+              </div>
+              <div class="bg-red-50 p-6 rounded-lg">
+                <h5 class="serif font-semibold text-red-900 mb-3">Resistance Levels</h5>
+                <p class="text-sm text-red-700">Price points where selling pressure overcomes buying interest, causing price to reverse downward.</p>
+              </div>
+            </div>
+
+            <p class="text-gray-700">
+              Breakout trading seeks to capitalize on significant price movements when price breaks through predefined support or resistance levels
+              <a href="https://blog.quantinsti.com/price-action-trading/" class="citation" target="_blank">45</a>.
+              A genuine breakout often signals market momentum overcoming key barriers, potentially leading to sustained trends
+              <a href="https://www.quantifiedstrategies.com/price-action-trading-strategies/" class="citation" target="_blank">48</a>.
+            </p>
+          </div>
+
+          <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-8">
+            <h4 class="serif text-xl font-semibold mb-6">1.1.3 Why This Strategy Can Be Profitable</h4>
+            <p class="text-gray-700 mb-6">
+              The profitability stems from identifying high-probability opportunities arising from market structure. By focusing on key support and resistance levels, traders align with collective market psychology—levels formed by thousands of traders creating self-fulfilling prophecies.
+            </p>
+
+            <div class="bg-blue-50 p-6 rounded-lg mb-6">
+              <h5 class="serif font-semibold text-blue-900 mb-3">Key Profitability Factors</h5>
+              <ul class="text-sm text-blue-700 space-y-2">
+                <li>• Timely assessment without indicator lag enables favorable entry/exit prices</li>
+                <li>• Breakouts capture significant market moves after consolidation periods</li>
+                <li>• Systematic risk management through precise stop-loss placement</li>
+                <li>• High risk-to-reward ratios achievable through momentum capture</li>
+              </ul>
+            </div>
+
+            <p class="text-gray-700">
+              The combination of support/resistance analysis with breakout logic provides robust risk management. Stop-loss orders placed just beyond key levels define risk with precision, ensuring losses remain small and manageable—essential for long-term capital preservation.
+            </p>
+          </div>
+        </div>
+
+        <!-- Identifying Key Levels -->
+        <div id="identifying-levels" class="mb-16">
+          <h3 class="serif text-2xl font-semibold mb-8 gold-accent">1.2 Identifying Key Levels</h3>
+
+          <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-8 mb-8">
+            <h4 class="serif text-xl font-semibold mb-6">1.2.1 Finding Swing Highs and Lows with argrelextrema</h4>
+            <p class="text-gray-700 mb-6">
+              The critical first step involves detecting local maxima (swing highs) and local minima (swing lows) using the
+              <code class="bg-gray-100 px-2 py-1 rounded text-sm">argrelextrema</code> function from the SciPy library
+              <a href="https://blog.stackademic.com/python-trading-guide-support-resistance-89a5e78edc97" class="citation" target="_blank">26</a>.
+              This function finds indices of relative extrema in data arrays, making it ideal for analyzing historical price data.
+            </p>
+
+            <div class="code-block mb-6">
+              <pre><code># Example implementation of swing point detection
+from scipy.signal import argrelextrema
+import numpy as np
+
+# Finding swing highs and lows
+swing_highs = argrelextrema(price_data, np.greater_equal, order=window)[0]
+swing_lows = argrelextrema(price_data, np.less_equal, order=window)[0]</code></pre>
+            </div>
+
+            <p class="text-gray-700 mb-6">
+              The
+              <code class="bg-gray-100 px-2 py-1 rounded text-sm">order</code> parameter defines sensitivity: smaller values identify frequent short-term swing points, while larger values filter noise to find significant long-term turning points
+              <a href="https://blog.stackademic.com/python-trading-guide-support-resistance-89a5e78edc97" class="citation" target="_blank">30</a>.
+              The use of
+              <code class="bg-gray-100 px-2 py-1 rounded text-sm">np.greater_equal</code> and
+              <code class="bg-gray-100 px-2 py-1 rounded text-sm">np.less_equal</code> allows identification of flat extrema, providing more robust level detection
+              <a href="#" class="citation">29</a>.
+            </p>
+          </div>
+
+          <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-8 mb-8">
+            <h4 class="serif text-xl font-semibold mb-6">1.2.2 Calculating Dynamic Support and Resistance Levels</h4>
+            <p class="text-gray-700 mb-6">
+              After identifying swing points, discrete points must be transformed into continuous horizontal levels. A &#34;peak ranking&#34; system clusters nearby swing points, with each point receiving a rank based on how many other peaks fall within a specified price range
+              <a href="#" class="citation">34</a>.
+            </p>
+
+            <div class="bg-yellow-50 p-6 rounded-lg mb-6">
+              <h5 class="serif font-semibold text-yellow-900 mb-3">Peak Ranking Process</h5>
+              <ol class="text-sm text-yellow-700 space-y-2">
+                <li>1. Iterate through identified swing highs and lows</li>
+                <li>2. Assign rank based on proximity to other swing points</li>
+                <li>3. Apply minimum rank threshold to filter significant levels</li>
+                <li>4. Consolidate close-proximity levels into single representative zones</li>
+              </ol>
+            </div>
+
+            <p class="text-gray-700">
+              Close-proximity levels are merged by averaging their prices. For instance, if two resistance levels are identified at 1.1050 and 1.1051, they would be combined into a single level at 1.10505, creating clean, non-overlapping zones for trading signals.
+            </p>
+          </div>
+
+          <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-8">
+            <h4 class="serif text-xl font-semibold mb-6">1.2.3 Filtering and Consolidating Levels for Accuracy</h4>
+            <p class="text-gray-700 mb-6">
+              Filtering and consolidation enhance strategy accuracy by distilling raw extrema into robust, actionable price levels. The peak ranking method quantifies level strength based on historical reversal frequency
+              <a href="#" class="citation">34</a>.
+            </p>
+
+            <div class="grid md:grid-cols-2 gap-6">
+              <div class="bg-green-50 p-6 rounded-lg">
+                <h5 class="serif font-semibold text-green-900 mb-3">Filtering Benefits</h5>
+                <ul class="text-sm text-green-700 space-y-1">
+                  <li>• Eliminates weak, easily broken levels</li>
+                  <li>• Focuses on high-probability zones</li>
+                  <li>• Reduces false signals</li>
+                  <li>• Improves signal reliability</li>
+                </ul>
+              </div>
+              <div class="bg-blue-50 p-6 rounded-lg">
+                <h5 class="serif font-semibold text-blue-900 mb-3">Consolidation Process</h5>
+                <ul class="text-sm text-blue-700 space-y-1">
+                  <li>• Merges levels within proximity threshold</li>
+                  <li>• Creates cleaner chart representation</li>
+                  <li>• Provides realistic market zones</li>
+                  <li>• Enhances level respect probability</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Trading Signals -->
+        <div id="trading-signals" class="mb-16">
+          <h3 class="serif text-2xl font-semibold mb-8 gold-accent">1.3 Generating Trading Signals</h3>
+
+          <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-8 mb-8">
+            <h4 class="serif text-xl font-semibold mb-6">1.3.1 Entry Signal: Breakout Above Resistance or Below Support</h4>
+            <p class="text-gray-700 mb-6">
+              Primary entry signals occur when price decisively moves beyond identified support or resistance levels. A breakout above resistance suggests buying pressure has overwhelmed selling pressure, while a breakdown below support indicates the opposite.
+            </p>
+
+            <div class="code-block mb-6">
+              <pre><code># Breakout detection logic example
+def detect_breakout(current_candle, resistance_level, support_level):
+    bullish_breakout = (current_candle.high &gt; resistance_level and 
+                       current_candle.close &gt; resistance_level)
+    bearish_breakout = (current_candle.low &lt; support_level and 
+                       current_candle.close &lt; support_level)
+    return bullish_breakout, bearish_breakout</code></pre>
+            </div>
+
+            <p class="text-gray-700">
+              To filter false breakouts, the strategy requires price to not only break the level but close beyond it significantly. Confirmation might require closing price to be several pips beyond the breakout level, ensuring genuine market sentiment shifts
+              <a href="https://wire.insiderfinance.io/python-trading-tutorial-how-to-use-rsi-with-support-and-resistance-for-accurate-signals-46a188e44c55" class="citation" target="_blank">32</a>.
+            </p>
+          </div>
+
+          <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-8 mb-8">
+            <h4 class="serif text-xl font-semibold mb-6">1.3.2 Confirmation Logic: Candlestick Patterns and Momentum</h4>
+            <p class="text-gray-700 mb-6">
+              While breakouts provide strong initial signals, confirmation logic enhances accuracy by incorporating additional technical factors that corroborate the breakout&#39;s validity.
+            </p>
+
+            <div class="grid md:grid-cols-2 gap-6 mb-6">
+              <div class="bg-red-50 p-6 rounded-lg">
+                <h5 class="serif font-semibold text-red-900 mb-3">Candlestick Confirmation</h5>
+                <ul class="text-sm text-red-700 space-y-2">
+                  <li>• Bullish engulfing patterns for buy signals</li>
+                  <li>• Bearish engulfing patterns for sell signals</li>
+                  <li>• Large, decisive candles indicating strong pressure</li>
+                  <li>• Avoidance of indecisive patterns like dojis</li>
+                </ul>
+              </div>
+              <div class="bg-green-50 p-6 rounded-lg">
+                <h5 class="serif font-semibold text-green-900 mb-3">Momentum Confirmation</h5>
+                <ul class="text-sm text-green-700 space-y-2">
+                  <li>• RSI below 45 for bullish breakouts</li>
+                  <li>• Rising RSI confirming building momentum</li>
+                  <li>• Avoidance of overbought/oversold extremes</li>
+                  <li>• Confluence of multiple confirmation factors</li>
+                </ul>
+              </div>
+            </div>
+
+            <p class="text-gray-700">
+              A specific example shows buy signal generation when price nears resistance with RSI below 45, suggesting room for upward movement before overbought conditions
+              <a href="https://wire.insiderfinance.io/python-trading-tutorial-how-to-use-rsi-with-support-and-resistance-for-accurate-signals-46a188e44c55" class="citation" target="_blank">32</a>.
+            </p>
+          </div>
+
+          <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-8">
+            <h4 class="serif text-xl font-semibold mb-6">1.3.3 Exit Signals: Stop-Loss and Take-Profit Placement</h4>
+            <p class="text-gray-700 mb-6">
+              Well-defined exit strategies manage risk and secure profits. Exit points are determined using the same support and resistance levels employed for entries, creating cohesive trade management.
+            </p>
+
+            <div class="grid md:grid-cols-2 gap-6 mb-6">
+              <div class="bg-red-50 p-6 rounded-lg">
+                <h5 class="serif font-semibold text-red-900 mb-3">Stop-Loss Placement</h5>
+                <ul class="text-sm text-red-700 space-y-2">
+                  <li>• Long positions: Just below significant support</li>
+                  <li>• Short positions: Just above significant resistance</li>
+                  <li>• Invalidates trade thesis when level breaks</li>
+                  <li>• Precise risk definition on each trade</li>
+                </ul>
+              </div>
+              <div class="bg-green-50 p-6 rounded-lg">
+                <h5 class="serif font-semibold text-green-900 mb-3">Take-Profit Targets</h5>
+                <ul class="text-sm text-green-700 space-y-2">
+                  <li>• Long positions: Next major resistance level</li>
+                  <li>• Short positions: Next major support level</li>
+                  <li>• Logical profit-taking at historical reaction zones</li>
+                  <li>• Risk-to-reward ratio optimization</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <div class="section-divider max-w-7xl mx-auto"></div>
+
+      <!-- Section 2: Bot Architecture -->
+      <section id="bot-architecture" class="px-8 py-12 max-w-7xl mx-auto">
+        <h2 class="serif text-4xl font-bold mb-12 text-gray-900">2. Bot Architecture and Code Structure</h2>
+
+        <!-- Main Application Loop -->
+        <div id="main-loop" class="mb-16">
+          <h3 class="serif text-2xl font-semibold mb-8 gold-accent">2.1 Main Application Loop (forex_bot.py)</h3>
+
+          <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-8 mb-8">
+            <h4 class="serif text-xl font-semibold mb-6">2.1.1 Asynchronous Execution with asyncio</h4>
+            <p class="text-gray-700 mb-6">
+              The main application loop employs Python&#39;s
+              <code class="bg-gray-100 px-2 py-1 rounded text-sm">asyncio</code> library for concurrent operations without blocking. This design enables real-time trading applications to perform multiple tasks simultaneously, such as fetching data from MetaTrader 5 or waiting for new candle formations.
+            </p>
+
+            <div class="code-block mb-6">
+              <pre><code>async def main():
+    bot = TradingBot()
+    try:
+        await bot.initialize()
+        await bot.run()
+    except KeyboardInterrupt:
+        await bot.shutdown()
+
+if __name__ == &#34;__main__&#34;:
+    asyncio.run(main())</code></pre>
+            </div>
+
+            <p class="text-gray-700">
+              The
+              <code class="bg-gray-100 px-2 py-1 rounded text-sm">asyncio.run()</code> function executes the main coroutine, initializing the trading session and starting the main trading loop. This asynchronous approach allows efficient resource management and timely response to market events.
+            </p>
+          </div>
+
+          <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-8 mb-8">
+            <h4 class="serif text-xl font-semibold mb-6">2.1.2 Continuous Market Monitoring and Scheduling</h4>
+            <p class="text-gray-700 mb-6">
+              The bot implements continuous market monitoring through periodic data fetching and strategy execution. The
+              <code class="bg-gray-100 px-2 py-1 rounded text-sm">CHECK_INTERVAL</code> parameter defines how frequently the bot checks for new data and trading opportunities.
+            </p>
+
+            <div class="code-block mb-6">
+              <pre><code>async def execute(self):
+    while True:
+        for symbol in self.config.symbols:
+            data = await self.market_data.fetch(symbol)
+            signal = self.strategy.generate_signal(data)
+            if signal:
+                await self.execute_trade(signal, symbol)
+        await asyncio.sleep(CHECK_INTERVAL)</code></pre>
+            </div>
+
+            <p class="text-gray-700">
+              This scheduling approach balances timely information gathering with efficient resource management, avoiding constant polling of the MT5 terminal while maintaining responsiveness to market changes.
+            </p>
+          </div>
+
+          <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-8">
+            <h4 class="serif text-xl font-semibold mb-6">2.1.3 Graceful Shutdown and Error Handling</h4>
+            <p class="text-gray-700 mb-6">
+              Robust error handling and graceful shutdown mechanisms ensure the bot can handle unexpected errors and terminate cleanly without leaving orphaned orders or open positions.
+            </p>
+
+            <div class="bg-green-50 p-6 rounded-lg mb-6">
+              <h5 class="serif font-semibold text-green-900 mb-3">Error Handling Features</h5>
+              <ul class="text-sm text-green-700 space-y-2">
+                <li>• KeyboardInterrupt handling for clean shutdown</li>
+                <li>• Automatic MT5 connection shutdown</li>
+                <li>• Error logging without application crash</li>
+                <li>• Resilient operation during network issues</li>
+              </ul>
+            </div>
+
+            <p class="text-gray-700">
+              The bot&#39;s
+              <code class="bg-gray-100 px-2 py-1 rounded text-sm">try...except</code> block catches
+              <code class="bg-gray-100 px-2 py-1 rounded text-sm">KeyboardInterrupt</code> exceptions, allowing users to stop the bot with Ctrl+C while triggering proper cleanup procedures.
+            </p>
+          </div>
+        </div>
+
+        <!-- Class Design -->
+        <div id="class-design" class="mb-16">
+          <h3 class="serif text-2xl font-semibold mb-8 gold-accent">2.2 Modular Class Design</h3>
+
+          <div class="grid md:grid-cols-2 gap-8 mb-8">
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+              <h4 class="serif text-lg font-semibold mb-4 text-blue-900">MetaTrader5Client</h4>
+              <p class="text-sm text-gray-600 mb-4">Handles all MT5 API interactions, encapsulating platform-specific code for improved maintainability and portability.</p>
+              <ul class="text-xs text-gray-500 space-y-1">
+                <li>• MT5 initialization and shutdown</li>
+                <li>• Account information retrieval</li>
+                <li>• Market data fetching</li>
+                <li>• Order execution management</li>
+              </ul>
+            </div>
+
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+              <h4 class="serif text-lg font-semibold mb-4 text-green-900">MarketData</h4>
+              <p class="text-sm text-gray-600 mb-4">Fetches and processes real-time market data into pandas DataFrames for analysis.</p>
+              <ul class="text-xs text-gray-500 space-y-1">
+                <li>• Multi-symbol data management</li>
+                <li>• Multi-timeframe support</li>
+                <li>• Data cleaning and processing</li>
+                <li>• Time series optimization</li>
+              </ul>
+            </div>
+
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+              <h4 class="serif text-lg font-semibold mb-4 text-purple-900">PurePriceActionStrategy</h4>
+              <p class="text-sm text-gray-600 mb-4">Encapsulates all trading logic for generating signals based on price action methodology.</p>
+              <ul class="text-xs text-gray-500 space-y-1">
+                <li>• Swing point identification</li>
+                <li>• Support/resistance calculation</li>
+                <li>• Trend detection</li>
+                <li>• Signal generation</li>
+              </ul>
+            </div>
+
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+              <h4 class="serif text-lg font-semibold mb-4 text-red-900">RiskManager</h4>
+              <p class="text-sm text-gray-600 mb-4">Calculates position sizes and manages risk according to configured parameters.</p>
+              <ul class="text-xs text-gray-500 space-y-1">
+                <li>• Fixed fractional risk calculation</li>
+                <li>• Position sizing optimization</li>
+                <li>• Risk parameter management</li>
+                <li>• Account balance protection</li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-8">
+            <h4 class="serif text-xl font-semibold mb-6">TradeLogger: Recording Trade History and Performance</h4>
+            <p class="text-gray-700 mb-6">
+              The TradeLogger class handles all trading activity logging, recording essential details for performance analysis, strategy refinement, and compliance purposes.
+            </p>
+
+            <div class="code-block">
+              <pre><code>class TradeLogger:
+    def __init__(self, filename):
+        self.filename = filename
+        self.logger = logging.getLogger(&#39;trade_logger&#39;)
+        self.setup_logging()
+
+    def log_trade(self, trade_details):
+        &#34;&#34;&#34;Log trade execution details&#34;&#34;&#34;
+        log_entry = {
+            &#39;timestamp&#39;: datetime.now(),
+            &#39;symbol&#39;: trade_details.symbol,
+            &#39;order_type&#39;: trade_details.order_type,
+            &#39;entry_price&#39;: trade_details.entry_price,
+            &#39;volume&#39;: trade_details.volume,
+            &#39;stop_loss&#39;: trade_details.stop_loss,
+            &#39;take_profit&#39;: trade_details.take_profit
+        }
+        self.logger.info(log_entry)</code></pre>
+            </div>
+
+            <p class="text-gray-700 mt-4">
+              This modular approach ensures consistent and organized capture of all trade-related information, crucial for long-term strategy evaluation and optimization.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <div class="section-divider max-w-7xl mx-auto"></div>
+
+      <!-- Section 3: Implementation Details -->
+      <section id="implementation" class="px-8 py-12 max-w-7xl mx-auto">
+        <h2 class="serif text-4xl font-bold mb-12 text-gray-900">3. Implementation Details</h2>
+
+        <!-- MT5 Connection -->
+        <div id="mt5-connection" class="mb-16">
+          <h3 class="serif text-2xl font-semibold mb-8 gold-accent">3.1 Connecting to MetaTrader 5</h3>
+
+          <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-8 mb-8">
+            <h4 class="serif text-xl font-semibold mb-6">3.1.1 Initializing the MT5 Terminal Connection</h4>
+            <p class="text-gray-700 mb-6">
+              The connection process begins with the MetaTrader5Client class encapsulating initialization logic. The
+              <code class="bg-gray-100 px-2 py-1 rounded text-sm">mt5.initialize()</code> function establishes communication with the running MT5 terminal.
+            </p>
+
+            <div class="code-block mb-6">
+              <pre><code>class MetaTrader5Client:
+    def __init__(self):
+        self.initialized = mt5.initialize()
+        if self.initialized:
+            logging.info(&#34;MetaTrader5 initialized successfully.&#34;)
+        else:
+            logging.error(&#34;Failed to initialize MetaTrader5.&#34;)
+            
+    def __del__(self):
+        mt5.shutdown()
+        logging.info(&#34;MetaTrader5 connection shut down.&#34;)</code></pre>
+            </div>
+
+            <p class="text-gray-700">
+              The destructor ensures proper shutdown by calling
+              <code class="bg-gray-100 px-2 py-1 rounded text-sm">mt5.shutdown()</code>, releasing API resources and ensuring clean exit. This encapsulation provides robust connection management.
+            </p>
+          </div>
+
+          <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-8 mb-8">
+            <h4 class="serif text-xl font-semibold mb-6">3.1.2 Fetching Account Information and Symbol Data</h4>
+            <p class="text-gray-700 mb-6">
+              Once connected, the bot retrieves account and symbol information essential for risk management and order execution.
+            </p>
+
+            <div class="code-block mb-6">
+              <pre><code>def get_account_info(self):
+    &#34;&#34;&#34;Retrieve current account information&#34;&#34;&#34;
+    account_info = mt5.account_info()
+    if account_info is None:
+        logging.error(&#34;Failed to get account info&#34;)
+        return None
+    return account_info
+
+def get_symbol_info(self, symbol):
+    &#34;&#34;&#34;Retrieve symbol information&#34;&#34;&#34;
+    symbol_info = mt5.symbol_info(symbol)
+    if symbol_info is None:
+        logging.error(f&#34;Failed to get symbol info for {symbol}&#34;)
+        return None
+    return symbol_info</code></pre>
+            </div>
+
+            <p class="text-gray-700">
+              Account information provides balance and equity data for position sizing, while symbol information includes contract specifications and trading parameters necessary for accurate order placement.
+            </p>
+          </div>
+
+          <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-8">
+            <h4 class="serif text-xl font-semibold mb-6">3.1.3 Handling Connection Errors and Reconnections</h4>
+            <p class="text-gray-700 mb-6">
+              Robust error handling includes connection status monitoring and automatic reconnection attempts for improved reliability.
+            </p>
+
+            <div class="bg-yellow-50 p-6 rounded-lg mb-6">
+              <h5 class="serif font-semibold text-yellow-900 mb-3">Connection Management Features</h5>
+              <ul class="text-sm text-yellow-700 space-y-2">
+                <li>• Periodic connection status verification</li>
+                <li>• Automatic reconnection attempts with retry logic</li>
+                <li>• Recovery from temporary network issues</li>
+                <li>• Graceful degradation during connection loss</li>
+              </ul>
+            </div>
+
+            <p class="text-gray-700">
+              The
+              <code class="bg-gray-100 px-2 py-1 rounded text-sm">is_initialized</code> method provides connection status checking, while reconnection logic with retry mechanisms ensures resilience against temporary connectivity problems.
+            </p>
+          </div>
+        </div>
+
+        <!-- Data Management -->
+        <div id="data-management" class="mb-16">
+          <h3 class="serif text-2xl font-semibold mb-8 gold-accent">3.2 Data Management</h3>
+
+          <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-8 mb-8">
+            <h4 class="serif text-xl font-semibold mb-6">3.2.1 Fetching Historical Candles (copy_rates_from_pos)</h4>
+            <p class="text-gray-700 mb-6">
+              Historical price data retrieval uses the
+              <code class="bg-gray-100 px-2 py-1 rounded text-sm">copy_rates_from_pos</code> function from the MetaTrader5 Python package, allowing retrieval of specified candle counts for given symbols and timeframes.
+            </p>
+
+            <div class="code-block mb-6">
+              <pre><code>def fetch_data(self, symbol, timeframe, num_candles):
+    &#34;&#34;&#34;Fetch historical candle data&#34;&#34;&#34;
+    rates = mt5.copy_rates_from_pos(symbol, timeframe, 0, num_candles)
+    if rates is None:
+        logging.error(f&#34;No rates available for {symbol}&#34;)
+        return None
+    return rates</code></pre>
+            </div>
+
+            <p class="text-gray-700">
+              The function returns a tuple of named tuples, each containing open, high, low, close, volume, and timestamp data for individual candles, providing comprehensive price action information for analysis.
+            </p>
+          </div>
+
+          <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-8 mb-8">
+            <h4 class="serif text-xl font-semibold mb-6">3.2.2 Processing Data into Pandas DataFrames</h4>
+            <p class="text-gray-700 mb-6">
+              Raw historical data undergoes processing into pandas DataFrames for enhanced analytical capabilities and convenient data manipulation.
+            </p>
+
+            <div class="code-block mb-6">
+              <pre><code>def process_data(self, rates):
+    &#34;&#34;&#34;Convert raw rates to pandas DataFrame&#34;&#34;&#34;
+    if rates is None:
+        return None
+        
+    df = pd.DataFrame(rates)
+    df[&#39;time&#39;] = pd.to_datetime(df[&#39;time&#39;], unit=&#39;s&#39;)
+    df.set_index(&#39;time&#39;, inplace=True)
+    df = df[df[&#39;tick_volume&#39;] != 0]  # Filter inactive periods
+    
+    return df</code></pre>
+            </div>
+
+            <p class="text-gray-700 mb-6">
+              The processing includes timestamp conversion to pandas datetime objects, time-based indexing, and filtering of candles with zero tick volume to eliminate inactive trading periods that could skew analysis.
+            </p>
+
+            <div class="bg-blue-50 p-6 rounded-lg">
+              <h5 class="serif font-semibold text-blue-900 mb-3">Data Processing Benefits</h5>
+              <ul class="text-sm text-blue-700 space-y-2">
+                <li>• Enhanced time series analysis capabilities</li>
+                <li>• Convenient data access and manipulation</li>
+                <li>• Clean, structured data representation</li>
+                <li>• Optimized storage and retrieval</li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-8">
+            <h4 class="serif text-xl font-semibold mb-6">3.2.3 Managing Data for Multiple Symbols and Timeframes</h4>
+            <p class="text-gray-700 mb-6">
+              The MarketData class supports simultaneous monitoring of multiple symbols across different timeframes, enabling sophisticated multi-timeframe analysis strategies.
+            </p>
+
+            <div class="grid md:grid-cols-2 gap-6 mb-6">
+              <div class="bg-purple-50 p-6 rounded-lg">
+                <h5 class="serif font-semibold text-purple-900 mb-3">Multi-Symbol Support</h5>
+                <ul class="text-sm text-purple-700 space-y-2">
+                  <li>• Simultaneous symbol monitoring</li>
+                  <li>• Independent data management</li>
+                  <li>• Scalable architecture</li>
+                  <li>• Resource-efficient processing</li>
+                </ul>
+              </div>
+              <div class="bg-orange-50 p-6 rounded-lg">
+                <h5 class="serif font-semibold text-orange-900 mb-3">Multi-Timeframe Analysis</h5>
+                <ul class="text-sm text-orange-700 space-y-2">
+                  <li>• Higher timeframe trend analysis</li>
+                  <li>• Lower timeframe entry timing</li>
+                  <li>• Cross-timeframe signal confirmation</li>
+                  <li>• Comprehensive market perspective</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Order Execution -->
+        <div id="order-execution" class="mb-16">
+          <h3 class="serif text-2xl font-semibold mb-8 gold-accent">3.3 Order Execution and Management</h3>
+
+          <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-8 mb-8">
+            <h4 class="serif text-xl font-semibold mb-6">3.3.1 Placing Market Orders (order_send)</h4>
+            <p class="text-gray-700 mb-6">
+              The
+              <code class="bg-gray-100 px-2 py-1 rounded text-sm">order_send</code> function serves as the primary mechanism for order placement, modification, and closing within the MT5 terminal.
+            </p>
+
+            <div class="code-block mb-6">
+              <pre><code>def place_order(self, symbol, order_type, volume, price=None, 
+                sl=None, tp=None, comment=&#34;&#34;):
+    &#34;&#34;&#34;Place a market order&#34;&#34;&#34;
+    request = {
+        &#34;action&#34;: mt5.TRADE_ACTION_DEAL,
+        &#34;symbol&#34;: symbol,
+        &#34;volume&#34;: volume,
+        &#34;type&#34;: order_type,
+        &#34;price&#34;: price,
+        &#34;sl&#34;: sl,
+        &#34;tp&#34;: tp,
+        &#34;comment&#34;: comment,
+        &#34;type_time&#34;: mt5.ORDER_TIME_GTC,
+        &#34;type_filling&#34;: mt5.ORDER_FILLING_IOC,
+    }
+    
+    result = mt5.order_send(request)
+    return result</code></pre>
+            </div>
+
+            <p class="text-gray-700">
+              The request dictionary includes all necessary parameters: action type, symbol, volume, order type, price levels, and execution parameters. This comprehensive approach ensures proper order construction and execution.
+            </p>
+          </div>
+
+          <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-8 mb-8">
+            <h4 class="serif text-xl font-semibold mb-6">3.3.2 Setting Stop-Loss and Take-Profit Levels</h4>
+            <p class="text-gray-700 mb-6">
+              Stop-loss and take-profit levels are integrated into the order placement process, ensuring immediate risk management upon trade execution.
+            </p>
+
+            <div class="bg-green-50 p-6 rounded-lg mb-6">
+              <h5 class="serif font-semibold text-green-900 mb-3">Risk Management Integration</h5>
+              <ul class="text-sm text-green-700 space-y-2">
+                <li>• Automated stop-loss placement at order entry</li>
+                <li>• Take-profit targets set with market orders</li>
+                <li>• Immediate risk protection</li>
+                <li>• Consistent risk management application</li>
+              </ul>
+            </div>
+
+            <p class="text-gray-700">
+              The
+              <code class="bg-gray-100 px-2 py-1 rounded text-sm">sl</code> and
+              <code class="bg-gray-100 px-2 py-1 rounded text-sm">tp</code> parameters in the order request ensure that risk management orders are placed simultaneously with market orders, maintaining disciplined trading execution.
+            </p>
+          </div>
+
+          <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-8">
+            <h4 class="serif text-xl font-semibold mb-6">3.3.3 Monitoring and Closing Open Positions</h4>
+            <p class="text-gray-700 mb-6">
+              Active position management enables the bot to monitor trade status and execute closing operations when necessary, either through reaching profit targets or strategy-based exit signals.
+            </p>
+
+            <div class="code-block mb-6">
+              <pre><code>def get_positions(self, symbol):
+    &#34;&#34;&#34;Retrieve open positions for a symbol&#34;&#34;&#34;
+    positions = mt5.positions_get(symbol=symbol)
+    return positions
+
+def close_position(self, position_ticket, volume=None):
+    &#34;&#34;&#34;Close an open position&#34;&#34;&#34;
+    position = mt5.positions_get(ticket=position_ticket)
+    if not position:
+        return False
+        
+    position = position[0]
+    close_request = {
+        &#34;action&#34;: mt5.TRADE_ACTION_DEAL,
+        &#34;position&#34;: position_ticket,
+        &#34;volume&#34;: volume if volume else position.volume,
+        &#34;type&#34;: (mt5.ORDER_TYPE_SELL if position.type == mt5.POSITION_TYPE_BUY 
+                 else mt5.ORDER_TYPE_BUY),
+    }
+    
+    result = mt5.order_send(close_request)
+    return result</code></pre>
+            </div>
+
+            <p class="text-gray-700">
+              Position monitoring and closing functionality enables dynamic trade management, allowing the bot to respond to changing market conditions and strategy requirements while maintaining proper risk control.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <div class="section-divider max-w-7xl mx-auto"></div>
+
+      <!-- Section 4: Configuration and Deployment -->
+      <section id="configuration" class="px-8 py-12 max-w-7xl mx-auto">
+        <h2 class="serif text-4xl font-bold mb-12 text-gray-900">4. Configuration and Deployment</h2>
+
+        <!-- Configuration Management -->
+        <div id="config-management" class="mb-16">
+          <h3 class="serif text-2xl font-semibold mb-8 gold-accent">4.1 Configuration Management</h3>
+
+          <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-8 mb-8">
+            <h4 class="serif text-xl font-semibold mb-6">4.1.1 Using config.json for Core Settings</h4>
+            <p class="text-gray-700 mb-6">
+              The bot employs a
+              <code class="bg-gray-100 px-2 py-1 rounded text-sm">config.json</code> file for comprehensive configuration management, enabling customization without code modifications.
+            </p>
+
+            <div class="code-block mb-6">
+              <pre><code>{
+  &#34;trading_settings&#34;: {
+    &#34;max_period&#34;: 50,
+    &#34;main_loop_interval_seconds&#34;: 60,
+    &#34;order_retry_attempts&#34;: 3
+  },
+  &#34;risk_management&#34;: {
+    &#34;risk_per_trade&#34;: 0.02,
+    &#34;fixed_lot_size&#34;: null,
+    &#34;max_drawdown_percentage&#34;: 0.1
+  },
+  &#34;symbols&#34;: [
+    {
+      &#34;name&#34;: &#34;EURUSD&#34;,
+      &#34;timeframes&#34;: [&#34;M5&#34;, &#34;M15&#34;, &#34;H1&#34;]
+    }
+  ]
+}</code></pre>
+            </div>
+
+            <div class="grid md:grid-cols-3 gap-6">
+              <div class="bg-blue-50 p-4 rounded-lg">
+                <h5 class="serif font-semibold text-blue-900 mb-2">Trading Settings</h5>
+                <p class="text-xs text-blue-700">Strategy parameters, intervals, and operational settings</p>
+              </div>
+              <div class="bg-green-50 p-4 rounded-lg">
+                <h5 class="serif font-semibold text-green-900 mb-2">Risk Management</h5>
+                <p class="text-xs text-green-700">Risk parameters, position sizing, and drawdown limits</p>
+              </div>
+              <div class="bg-purple-50 p-4 rounded-lg">
+                <h5 class="serif font-semibold text-purple-900 mb-2">Symbol Configuration</h5>
+                <p class="text-xs text-purple-700">Trading instruments and their respective timeframes</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-8 mb-8">
+            <h4 class="serif text-xl font-semibold mb-6">4.1.2 Overriding with Command-Line Arguments</h4>
+            <p class="text-gray-700 mb-6">
+              Command-line argument support provides flexible configuration overrides without modifying the config.json file, enabling quick parameter adjustments for specific trading sessions.
+            </p>
+
+            <div class="code-block mb-6">
+              <pre><code>import argparse
+
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument(&#39;--risk-per-trade&#39;, type=float, 
+                       help=&#39;Override risk percentage per trade&#39;)
+    parser.add_argument(&#39;--symbol&#39;, type=str, 
+                       help=&#39;Override trading symbol&#39;)
+    parser.add_argument(&#39;--timeframe&#39;, type=str, 
+                       help=&#39;Override primary timeframe&#39;)
+    return parser.parse_args()
+
+# Usage: python forex_bot.py --risk-per-trade 0.01 --symbol GBPUSD</code></pre>
+            </div>
+
+            <p class="text-gray-700">
+              This approach allows command-line arguments to take precedence over config.json settings, providing convenient experimentation with different parameters and operational modes.
+            </p>
+          </div>
+
+          <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-8">
+            <h4 class="serif text-xl font-semibold mb-6">4.1.3 Key Parameters: Symbols, Timeframes, Risk Tolerance</h4>
+            <p class="text-gray-700 mb-6">
+              Configuration centers on three critical parameter categories that significantly impact bot performance: symbols and timeframes, strategy parameters, and risk management settings.
+            </p>
+
+            <div class="grid md:grid-cols-2 gap-8 mb-6">
+              <div class="bg-blue-50 p-6 rounded-lg">
+                <h5 class="serif font-semibold text-blue-900 mb-4">Symbols &amp; Timeframes</h5>
+                <ul class="text-sm text-blue-700 space-y-2">
+                  <li>• Multiple symbol support</li>
+                  <li>• Multi-timeframe analysis</li>
+                  <li>• Custom instrument configurations</li>
+                  <li>• Flexible trading session definitions</li>
+                </ul>
+              </div>
+              <div class="bg-green-50 p-6 rounded-lg">
+                <h5 class="serif font-semibold text-green-900 mb-4">Strategy Parameters</h5>
+                <ul class="text-sm text-green-700 space-y-2">
+                  <li>• Lookback period for swing points</li>
+                  <li>• Trend detection length</li>
+                  <li>• Breakout confirmation thresholds</li>
+                  <li>• Level filtering sensitivity</li>
+                </ul>
+              </div>
+            </div>
+
+            <div class="bg-red-50 p-6 rounded-lg">
+              <h5 class="serif font-semibold text-red-900 mb-4">Risk Management Parameters</h5>
+              <ul class="text-sm text-red-700 space-y-2">
+                <li>• Risk per trade percentage</li>
+                <li>• Maximum drawdown limits</li>
+                <li>• Fixed vs dynamic position sizing</li>
+                <li>• Stop-loss and take-profit rules</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <!-- Setup Guide -->
+        <div id="setup-guide" class="mb-16">
+          <h3 class="serif text-2xl font-semibold mb-8 gold-accent">4.2 Setup and Execution Guide</h3>
+
+          <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-8 mb-8">
+            <h4 class="serif text-xl font-semibold mb-6">4.2.1 Prerequisites: Python, MT5, and Required Libraries</h4>
+            <p class="text-gray-700 mb-6">
+              Before running the trading bot, ensure all prerequisites are met:
+            </p>
+
+            <div class="grid md:grid-cols-3 gap-6 mb-6">
+              <div class="bg-blue-50 p-6 rounded-lg">
+                <h5 class="serif font-semibold text-blue-900 mb-3">Python Environment</h5>
+                <ul class="text-sm text-blue-700 space-y-2">
+                  <li>• Python 3.7+ required</li>
+                  <li>• pip for package management</li>
+                  <li>• Virtual environment recommended</li>
+                </ul>
+              </div>
+              <div class="bg-green-50 p-6 rounded-lg">
+                <h5 class="serif font-semibold text-green-900 mb-3">MetaTrader 5</h5>
+                <ul class="text-sm text-green-700 space-y-2">
+                  <li>• MT5 terminal installed</li>
+                  <li>• Running instance required</li>
+                  <li>• Trading account logged in</li>
+                </ul>
+              </div>
+              <div class="bg-purple-50 p-6 rounded-lg">
+                <h5 class="serif font-semibold text-purple-900 mb-3">Required Libraries</h5>
+                <ul class="text-sm text-purple-700 space-y-2">
+                  <li>• MetaTrader5</li>
+                  <li>• pandas, numpy, scipy</li>
+                  <li>• asyncio and logging</li>
+                </ul>
+              </div>
+            </div>
+
+            <div class="code-block">
+              <pre><code># Install required packages
+pip install -r requirements.txt
+
+# Create requirements.txt
+MetaTrader5==5.0.45
+pandas==1.3.5
+numpy==1.21.5
+scipy==1.7.3</code></pre>
+            </div>
+          </div>
+
+          <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-8 mb-8">
+            <h4 class="serif text-xl font-semibold mb-6">4.2.2 Running the Bot: python forex_bot.py</h4>
+            <p class="text-gray-700 mb-6">
+              Execute the trading bot with simple command-line operations, using either default configuration or command-line argument overrides.
+            </p>
+
+            <div class="code-block mb-6">
+              <pre><code># Basic execution with default config
+python forex_bot.py
+
+# Override specific parameters
+python forex_bot.py --risk-per-trade 0.02 --symbol GBPUSD
+
+# Run with verbose logging
+python forex_bot.py --log-level DEBUG</code></pre>
+            </div>
+
+            <div class="bg-green-50 p-6 rounded-lg mb-6">
+              <h5 class="serif font-semibold text-green-900 mb-3">Execution Process</h5>
+              <ol class="text-sm text-green-700 space-y-2">
+                <li>1. Load configuration from config.json</li>
+                <li>2. Apply command-line argument overrides</li>
+                <li>3. Initialize MT5 connection</li>
+                <li>4. Start asynchronous trading loop</li>
+                <li>5. Begin market monitoring and signal generation</li>
+              </ol>
+            </div>
+
+            <p class="text-gray-700">
+              The bot runs continuously until manually stopped with Ctrl+C, at which point it executes graceful shutdown procedures to close connections and clean up resources.
+            </p>
+          </div>
+
+          <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-8">
+            <h4 class="serif text-xl font-semibold mb-6">4.2.3 Defining Trading Sessions (e.g., London, New York)</h4>
+            <p class="text-gray-700 mb-6">
+              Configure the bot to trade during specific market sessions to capitalize on increased volatility and liquidity during optimal trading hours.
+            </p>
+
+            <div class="code-block mb-6">
+              <pre><code># Trading session configuration
+&#34;trading_sessions&#34;: [
+    {
+        &#34;name&#34;: &#34;London_Open&#34;,
+        &#34;start_time&#34;: &#34;08:00&#34;,
+        &#34;end_time&#34;: &#34;12:00&#34;
+    },
+    {
+        &#34;name&#34;: &#34;New_York_Overlap&#34;,
+        &#34;start_time&#34;: &#34;13:00&#34;,
+        &#34;end_time&#34;: &#34;17:00&#34;
+    }
+]</code></pre>
+            </div>
+
+            <div class="grid md:grid-cols-2 gap-6 mb-6">
+              <div class="bg-blue-50 p-6 rounded-lg">
+                <h5 class="serif font-semibold text-blue-900 mb-3">Session Benefits</h5>
+                <ul class="text-sm text-blue-700 space-y-2">
+                  <li>• Focus on high-volatility periods</li>
+                  <li>• Reduced exposure during quiet hours</li>
+                  <li>• Optimized for session-specific strategies</li>
+                  <li>• Improved liquidity utilization</li>
+                </ul>
+              </div>
+              <div class="bg-orange-50 p-6 rounded-lg">
+                <h5 class="serif font-semibold text-orange-900 mb-3">Implementation</h5>
+                <ul class="text-sm text-orange-700 space-y-2">
+                  <li>• Time-based trading activation</li>
+                  <li>• Local timezone support</li>
+                  <li>• Multiple session definitions</li>
+                  <li>• Automatic session validation</li>
+                </ul>
+              </div>
+            </div>
+
+            <p class="text-gray-700">
+              The TradingSession class checks current time against defined sessions before executing trades, waiting for optimal market conditions and reducing exposure during less favorable periods.
+            </p>
+          </div>
+        </div>
+
+        <!-- Testing and Deployment -->
+        <div id="testing-deployment" class="mb-16">
+          <h3 class="serif text-2xl font-semibold mb-8 gold-accent">4.3 Testing and Deployment Strategy</h3>
+
+          <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-8 mb-8">
+            <h4 class="serif text-xl font-semibold mb-6">4.3.1 Backtesting the Strategy on Historical Data</h4>
+            <p class="text-gray-700 mb-6">
+              Comprehensive backtesting on historical data evaluates strategy performance and identifies potential improvements before risking real capital.
+            </p>
+
+            <div class="code-block mb-6">
+              <pre><code>import pandas as pd
+from pure_price_action_strategy import PurePriceActionStrategy
+
+def backtest_strategy(historical_data):
+    strategy = PurePriceActionStrategy(config)
+    results = []
+    
+    for i in range(len(historical_data)):
+        data_slice = historical_data.iloc[:i]
+        if len(data_slice) &gt; strategy.lookback_period:
+            signal = strategy.generate_signal(data_slice)
+            if signal:
+                results.append({
+                    &#39;timestamp&#39;: data_slice.index[-1],
+                    &#39;signal&#39;: signal,
+                    &#39;price&#39;: data_slice[&#39;close&#39;].iloc[-1]
+                })
+    
+    return pd.DataFrame(results)</code></pre>
+            </div>
+
+            <div class="bg-green-50 p-6 rounded-lg mb-6">
+              <h5 class="serif font-semibold text-green-900 mb-3">Backtesting Benefits</h5>
+              <ul class="text-sm text-green-700 space-y-2">
+                <li>• Historical performance evaluation</li>
+                <li>• Strategy validation and optimization</li>
+                <li>• Risk parameter testing</li>
+                <li>• Market condition analysis</li>
+              </ul>
+            </div>
+
+            <p class="text-gray-700">
+              Independent strategy design enables easy backtesting by passing historical data to the generate_signal method and simulating trade execution to calculate performance metrics like win rate, profit factor, and maximum drawdown.
+            </p>
+          </div>
+
+          <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-8 mb-8">
+            <h4 class="serif text-xl font-semibold mb-6">4.3.2 Forward Testing on a Demo Account</h4>
+            <p class="text-gray-700 mb-6">
+              Forward testing on demo accounts validates bot performance in live market conditions without risking real capital, bridging the gap between backtesting and live deployment.
+            </p>
+
+            <div class="grid md:grid-cols-2 gap-6 mb-6">
+              <div class="bg-blue-50 p-6 rounded-lg">
+                <h5 class="serif font-semibold text-blue-900 mb-3">Test Objectives</h5>
+                <ul class="text-sm text-blue-700 space-y-2">
+                  <li>• Real-time performance validation</li>
+                  <li>• Slippage and latency assessment</li>
+                  <li>• Order execution quality testing</li>
+                  <li>• Strategy robustness verification</li>
+                </ul>
+              </div>
+              <div class="bg-orange-50 p-6 rounded-lg">
+                <h5 class="serif font-semibold text-orange-900 mb-3">Testing Period</h5>
+                <ul class="text-sm text-orange-700 space-y-2">
+                  <li>• Minimum 1-3 months recommended</li>
+                  <li>• Various market conditions</li>
+                  <li>• Different volatility regimes</li>
+                  <li>• Economic event periods</li>
+                </ul>
+              </div>
+            </div>
+
+            <p class="text-gray-700">
+              Demo account testing verifies correct bot operation in live environments, ensuring proper handling of real-time trading challenges like slippage, latency, and market impact.
+            </p>
+          </div>
+
+          <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-8">
+            <h4 class="serif text-xl font-semibold mb-6">4.3.3 Deploying on a Live Account with Real Capital</h4>
+            <p class="text-gray-700 mb-6">
+              Live account deployment represents the final step after thorough testing, requiring careful capital management and continuous performance monitoring.
+            </p>
+
+            <div class="bg-red-50 p-6 rounded-lg mb-6">
+              <h5 class="serif font-semibold text-red-900 mb-3">Live Deployment Guidelines</h5>
+              <ul class="text-sm text-red-700 space-y-2">
+                <li>• Start with small capital allocation</li>
+                <li>• Gradually increase position sizes</li>
+                <li>• Continuous performance monitoring</li>
+                <li>• Regular strategy re-evaluation</li>
+                <li>• Maintain detailed trading records</li>
+              </ul>
+            </div>
+
+            <p class="text-gray-700">
+              The forex market constantly evolves, requiring ongoing strategy adaptation. Regular performance monitoring enables identification of changing market conditions and necessary strategy adjustments to maintain long-term profitability.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Conclusion -->
+      <section class="px-8 py-12 max-w-7xl mx-auto">
+        <div class="bg-gradient-to-r from-blue-900 to-purple-900 text-white rounded-lg p-8">
+          <h2 class="serif text-3xl font-bold mb-6">Conclusion</h2>
+          <p class="text-lg mb-6 leading-relaxed">
+            This comprehensive guide presents a systematic approach to building a profitable forex day trading bot based on pure price action principles. The strategy&#39;s focus on key support and resistance levels, combined with robust breakout detection and disciplined risk management, creates a foundation for sustainable trading success.
+          </p>
+
+          <div class="grid md:grid-cols-3 gap-6">
+            <div class="bg-white bg-opacity-10 p-4 rounded-lg">
+              <h4 class="serif font-semibold mb-2">Strategy Excellence</h4>
+              <p class="text-sm">Pure price action methodology captures market psychology through key level analysis and breakout confirmation.</p>
+            </div>
+            <div class="bg-white bg-opacity-10 p-4 rounded-lg">
+              <h4 class="serif font-semibold mb-2">Technical Robustness</h4>
+              <p class="text-sm">Modular architecture with asynchronous execution ensures reliable real-time market monitoring and trade execution.</p>
+            </div>
+            <div class="bg-white bg-opacity-10 p-4 rounded-lg">
+              <h4 class="serif font-semibold mb-2">Risk Discipline</h4>
+              <p class="text-sm">Systematic position sizing and strategic stop-loss placement protect capital while maximizing profit potential.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <script>
+        // Table of Contents Active State
+        const sections = document.querySelectorAll('section[id], div[id]');
+        const tocLinks = document.querySelectorAll('.toc-link');
+
+        function updateActiveLink() {
+            let currentSection = '';
+            
+            sections.forEach(section => {
+                const sectionTop = section.offsetTop;
+                const sectionHeight = section.clientHeight;
+                if (window.scrollY >= sectionTop - 100) {
+                    currentSection = section.getAttribute('id');
+                }
+            });
+
+            tocLinks.forEach(link => {
+                link.classList.remove('active');
+                if (link.getAttribute('href') === `#${currentSection}`) {
+                    link.classList.add('active');
+                }
+            });
+        }
+
+        window.addEventListener('scroll', updateActiveLink);
+        updateActiveLink();
+
+        // Smooth scrolling for TOC links
+        tocLinks.forEach(link => {
+            link.addEventListener('click', function(e) {
+                e.preventDefault();
+                const targetId = this.getAttribute('href');
+                const targetSection = document.querySelector(targetId);
+                if (targetSection) {
+                    targetSection.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'start'
+                    });
+                }
+            });
+        });
+        
+        // Mobile TOC toggle (if needed)
+        function toggleTOC() {
+            const sidebar = document.querySelector('.toc-sidebar');
+            sidebar.classList.toggle('open');
+        }
+    </script>  
+
+</body></html>
