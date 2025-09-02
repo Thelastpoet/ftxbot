@@ -268,3 +268,10 @@
 2025-09-02 21:46:25,439 - __main__ - INFO - Trading bot shutdown complete
 2025-09-02 21:46:25,439 - __main__ - INFO - Program terminated by user
 2025-09-02 21:46:25,440 - mt5_client - INFO - MT5 connection shut down
+2025-09-02 21:46:28,102 - __main__ - INFO - Configuration loaded successfully from config.json
+2025-09-02 21:46:28,121 - mt5_client - INFO - Connected to MT5 terminal: MetaTrader 5
+2025-09-02 21:46:28,121 - mt5_client - INFO - MT5 version: (500, 5200, '1 Aug 2025')
+2025-09-02 21:46:28,122 - trade_logger - INFO - Loaded 2 trades from file
+2025-09-02 21:46:28,122 - __main__ - INFO - Initial account balance: 211.93
+2025-09-02 21:46:28,123 - __main__ - INFO - Trading bot initialized successfully
+2025-09-02 21:46:28,123 - __main__ - INFO - Starting main trading loop
