@@ -32,7 +32,6 @@ class TradingSignal:
     confidence: float
     timestamp: datetime
 
-
 class PurePriceActionStrategy:
     """Pure price action trading strategy implementation"""
 
@@ -44,7 +43,6 @@ class PurePriceActionStrategy:
         self.min_peak_rank = config.min_peak_rank
         self.proximity_threshold = config.proximity_threshold  # in pips
         self.risk_reward_ratio = config.risk_reward_ratio
-        # optional minimum SL in pips to avoid ultra-tight stops in live trading
         self.min_stop_loss_pips = getattr(config, "min_stop_loss_pips", 10)
 
     def find_swing_points(self, data: pd.DataFrame) -> Tuple[np.ndarray, np.ndarray]:
@@ -327,16 +325,63 @@ class PurePriceActionStrategy:
 
         return float(stop_loss)
 
-    def calculate_take_profit(self, entry_price: float, stop_loss: float, breakout: Dict) -> float:
+    def calculate_take_profit(self,
+                          entry_price: float,
+                          breakout: Dict,
+                          support_levels: List[float],
+                          resistance_levels: List[float],
+                          data: pd.DataFrame,
+                          symbol: str) -> float:
         """
-        Calculate take profit based on risk-reward ratio
+        Calculate take profit:
+        - Primary: breakout range projection (measured move).
+        - Fallback: ATR-based target when range invalid.
         """
-        risk = abs(entry_price - stop_loss)
-        reward = risk * self.risk_reward_ratio
-        if breakout['type'] == 'bullish':
-            return float(entry_price + reward)
-        else:
-            return float(entry_price - reward)
+
+        symbol_info = self._get_symbol_info(symbol)
+        pip_size = get_pip_size(symbol_info)
+
+        # --- Primary method: range projection ---
+        if support_levels and resistance_levels:
+            range_high = max(resistance_levels)
+            range_low = min(support_levels)
+            range_height = range_high - range_low
+
+            min_range_pips = getattr(self.config, "min_range_pips", 5)
+            if range_height >= min_range_pips * pip_size:
+                if breakout['type'] == 'bullish':
+                    tp = entry_price + range_height
+                else:
+                    tp = entry_price - range_height
+                logger.info(
+                    f"{symbol}: TP set using range projection. "
+                    f"Range height={range_height/pip_size:.1f} pips, TP={tp:.5f}"
+                )
+                return float(tp)
+
+        # --- Fallback method: ATR projection ---
+        atr_period = getattr(self.config, "atr_period", 14)
+        atr_multiplier = getattr(self.config, "atr_tp_multiplier", 2.0)
+
+        if TALIB_AVAILABLE and len(data) >= atr_period:
+            atr = talib.ATR(data['high'].values,
+                            data['low'].values,
+                            data['close'].values,
+                            timeperiod=atr_period)[-1]
+            tp_distance = atr * atr_multiplier
+            if breakout['type'] == 'bullish':
+                tp = entry_price + tp_distance
+            else:
+                tp = entry_price - tp_distance
+            logger.info(
+                f"{symbol}: TP set using ATR fallback. "
+                f"ATR={atr/pip_size:.1f} pips, Multiplier={atr_multiplier}, TP={tp:.5f}"
+            )
+            return float(tp)
+
+        # --- Last resort: no structure, no ATR ---
+        logger.warning(f"{symbol}: No valid S/R or ATR, defaulting to entry price TP.")
+        return entry_price
 
     def generate_signal(self, data: pd.DataFrame, symbol: str) -> Optional[TradingSignal]:
         """
@@ -347,8 +392,7 @@ class PurePriceActionStrategy:
             return None
 
         try:            
-            # Get the analysis data
-            analysis_data = data.tail(self.lookback_period).copy()
+            # Get trading data
             completed_data = data.iloc[:-1].tail(self.lookback_period).copy()
             current_candle = data.iloc[-1]
             
@@ -411,7 +455,8 @@ class PurePriceActionStrategy:
                 reference_price, 
                 symbol
             )
-            take_profit = self.calculate_take_profit(reference_price, stop_loss, breakout)
+            
+            take_profit = self.calculate_take_profit(reference_price, breakout, support_levels, resistance_levels, completed_data, symbol)
 
             # Calculate stop loss in pips for position sizing
             stop_loss_pips = abs(reference_price - stop_loss) / pip_size
