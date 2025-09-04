@@ -13,8 +13,8 @@ except ImportError:
 from scipy.signal import argrelextrema
 import logging
 from typing import Dict, List, Optional, Tuple
-from dataclasses import dataclass, asdict
-from datetime import datetime
+from dataclasses import dataclass
+from datetime import datetime, timezone
 
 from utils import get_pip_size
 
@@ -113,30 +113,48 @@ class PurePriceActionStrategy:
         return sorted(consolidated_levels)
 
     def detect_breakout(self,
-                       current_candle: pd.Series,
-                       resistance_levels: List[float],
-                       support_levels: List[float],
-                       symbol: str) -> Optional[Dict]:
+                   current_candle: pd.Series,
+                   resistance_levels: List[float],
+                   support_levels: List[float],
+                   symbol: str) -> Optional[Dict]:
         """
         Detect breakout above resistance or below support
         """
         symbol_info = self._get_symbol_info(symbol)
         pip_size = get_pip_size(symbol_info)
         breakout_threshold_price = self.breakout_threshold * pip_size
+        
+        logger.debug(f"{symbol} - Checking for breakouts. Close: {current_candle['close']:.5f}")
 
-        # bullish breakout
+        # Check for bullish breakout
         for resistance in resistance_levels:
-            if (current_candle['high'] > resistance and
-                    current_candle['close'] > resistance + breakout_threshold_price):
-                strength = (current_candle['close'] - resistance) / max(resistance, 1e-9)
-                return {'type': 'bullish', 'level': resistance, 'strength': float(strength)}
+            # Check if price broke above resistance
+            if current_candle['close'] > resistance:
+                # Calculate how far above resistance we closed
+                distance_above = current_candle['close'] - resistance
+                
+                logger.debug(f"{symbol} - Close {current_candle['close']:.5f} vs Resistance {resistance:.5f}, "
+                            f"distance: {distance_above:.5f}, threshold: {breakout_threshold_price:.5f}")
+                
+                if distance_above >= breakout_threshold_price:
+                    strength = distance_above / pip_size / 10  # Normalize strength
+                    logger.info(f"Bullish breakout detected for {symbol} above {resistance:.5f}")
+                    return {'type': 'bullish', 'level': resistance, 'strength': float(strength)}
 
-        # bearish breakout
+        # Check for bearish breakout
         for support in support_levels:
-            if (current_candle['low'] < support and
-                    current_candle['close'] < support - breakout_threshold_price):
-                strength = (support - current_candle['close']) / max(support, 1e-9)
-                return {'type': 'bearish', 'level': support, 'strength': float(strength)}
+            # Check if price broke below support
+            if current_candle['close'] < support:
+                # Calculate how far below support we closed
+                distance_below = support - current_candle['close']
+                
+                logger.debug(f"{symbol} - Close {current_candle['close']:.5f} vs Support {support:.5f}, "
+                            f"distance: {distance_below:.5f}, threshold: {breakout_threshold_price:.5f}")
+                
+                if distance_below >= breakout_threshold_price:
+                    strength = distance_below / pip_size / 10  # Normalize strength
+                    logger.info(f"Bearish breakout detected for {symbol} below {support:.5f}")
+                    return {'type': 'bearish', 'level': support, 'strength': float(strength)}
 
         return None
 
@@ -269,7 +287,8 @@ class PurePriceActionStrategy:
         symbol_info = self._get_symbol_info(symbol)
         pip_size = get_pip_size(symbol_info)
 
-        buffer = 5 * pip_size  # 5 pip buffer
+        buffer_pips = getattr(self.config, 'stop_loss_buffer_pips', 15)
+        buffer = buffer_pips * pip_size
         if breakout['type'] == 'bullish':
             stop_loss = breakout['level'] - buffer
             # pick nearest support below current price
@@ -293,8 +312,8 @@ class PurePriceActionStrategy:
                 stop_loss = current_price + min_sl_price_distance
 
         # adjust for spread using live broker data
-        spread_points = symbol_info["spread"]
-        spread = spread_points * symbol_info["point"]
+        spread_points = symbol_info.spread
+        spread = spread_points * symbol_info.point
         if breakout['type'] == 'bullish':
             stop_loss -= spread
         else:
@@ -321,84 +340,81 @@ class PurePriceActionStrategy:
 
     def generate_signal(self, data: pd.DataFrame, symbol: str) -> Optional[TradingSignal]:
         """
-        Generate trading signal based on price action analysis (live, latest candle)
+        Generate trading signal based on price action analysis
         """
-        if data is None or len(data) < max(self.lookback_period, self.swing_window * 2):
+        if data is None or len(data) < max(self.lookback_period, self.swing_window * 2 + 1):
+            logger.debug(f"Insufficient data for {symbol}: {len(data) if data is not None else 0} candles")
             return None
 
-        try:
-            # Get the analysis window
+        try:            
+            # Get the analysis data
             analysis_data = data.tail(self.lookback_period).copy()
+            completed_data = data.iloc[:-1].tail(self.lookback_period).copy()
+            current_candle = data.iloc[-1]
             
-            if len(analysis_data) < 2:
-                return None
-
             # Find swing points in the analysis window
-            swing_highs, swing_lows = self.find_swing_points(analysis_data)
+            swing_highs, swing_lows = self.find_swing_points(completed_data)
+            
+            logger.debug(f"{symbol}: Found {len(swing_highs)} swing highs and {len(swing_lows)} swing lows")
+            
             if len(swing_highs) == 0 and len(swing_lows) == 0:
+                logger.debug(f"No swing points found for {symbol}")
                 return None
-
+    
             # Calculate support and resistance levels
             resistance_levels, support_levels = self.calculate_support_resistance(
-                analysis_data, swing_highs, swing_lows, symbol
+                completed_data, swing_highs, swing_lows, symbol
             )
 
+            logger.debug(f"{symbol}: {len(resistance_levels)} resistance levels, {len(support_levels)} support levels")
+            
             if not resistance_levels and not support_levels:
-                return None
-
-            # Use clear variable names
-            last_completed_candle = analysis_data.iloc[-2]  # The candle we analyze for signals
-            current_forming_candle = analysis_data.iloc[-1]  # The candle where we would enter
+                logger.debug(f"No support/resistance levels found for {symbol}")
+                return None          
+           
+            # Log resistance and support levels for debugging
+            if resistance_levels:
+                logger.debug(f"{symbol} - Resistance levels: {[f'{r:.5f}' for r in resistance_levels[:3]]}")
+            if support_levels:
+                logger.debug(f"{symbol} - Support levels: {[f'{s:.5f}' for s in support_levels[:3]]}")
             
             # Detect breakout on the last completed candle
             breakout = self.detect_breakout(
-                last_completed_candle, 
+                current_candle, 
                 resistance_levels, 
                 support_levels, 
                 symbol
             )
             
             if not breakout:
+                logger.debug(f"No breakout detected for {symbol}")
                 return None
+            
+            logger.info(f"Breakout detected for {symbol}: {breakout['type']} at level {breakout['level']:.5f}")
 
-            # Confirm signal using all completed candles (exclude current forming)
-            if not self.confirm_signal(analysis_data.iloc[:-1], breakout):
+            # Confirm signal using completed candles only
+            if not self.confirm_signal(completed_data, breakout):
+                logger.debug(f"Breakout not confirmed for {symbol}")
                 return None
             
             # Get symbol info for pip calculations
             symbol_info = self._get_symbol_info(symbol)
-            pip_size = get_pip_size(symbol_info)
-            gap_threshold = 10 * pip_size  # Could make this configurable
-
-            # Check for gap between last completed candle close and current candle open
-            current_open = current_forming_candle['open']
-            last_close = last_completed_candle['close']
-
-            if abs(current_open - last_close) > gap_threshold:
-                logger.warning(
-                    f"Large gap detected for {symbol}. "
-                    f"Last close: {last_close:.5f}, "
-                    f"Current open: {current_open:.5f}, "
-                    f"Gap: {abs(current_open - last_close):.5f} "
-                    f"(threshold: {gap_threshold:.5f})"
-                )
-                return None
-
-            # Set entry at current candle open
-            entry_price = float(current_open)
+            pip_size = get_pip_size(symbol_info)         
+            
+            reference_price = float(current_candle['close'])
             
             # Calculate stop loss and take profit
             stop_loss = self.calculate_stop_loss(
                 breakout, 
                 support_levels, 
                 resistance_levels, 
-                entry_price, 
+                reference_price, 
                 symbol
             )
-            take_profit = self.calculate_take_profit(entry_price, stop_loss, breakout)
+            take_profit = self.calculate_take_profit(reference_price, stop_loss, breakout)
 
             # Calculate stop loss in pips for position sizing
-            stop_loss_pips = abs(entry_price - stop_loss) / pip_size
+            stop_loss_pips = abs(reference_price - stop_loss) / pip_size
 
             # Normalize confidence to 0-1
             confidence = max(0.0, min(float(breakout.get('strength', 0.0)), 1.0))
@@ -406,27 +422,28 @@ class PurePriceActionStrategy:
             # Create the trading signal
             signal = TradingSignal(
                 type=0 if breakout['type'] == 'bullish' else 1,
-                entry_price=entry_price,
+                entry_price=reference_price,
                 stop_loss=stop_loss,
                 take_profit=take_profit,
                 stop_loss_pips=float(stop_loss_pips),
                 reason=f"{breakout['type']}_breakout",
                 confidence=confidence,
-                timestamp=datetime.utcnow()
+                timestamp=datetime.now(timezone.utc)
             )
 
             logger.info(
-                f"Signal generated for {symbol}: "
+                f"SIGNAL GENERATED for {symbol}: "
                 f"Type={'BUY' if signal.type == 0 else 'SELL'}, "
-                f"Entry={entry_price:.5f}, "
+                f"Entry={reference_price:.5f}, "
                 f"SL={stop_loss:.5f} ({stop_loss_pips:.1f} pips), "
-                f"TP={take_profit:.5f}"
+                f"TP={take_profit:.5f}, "
+                f"Confidence={confidence:.2f}"
             )
             
             return signal
 
         except Exception as e:
-            logger.error(f"Error generating signal for {symbol}: {e}")
+            logger.error(f"Error generating signal for {symbol}: {e}", exc_info=True)
             return None
 
     def _get_symbol_info(self, symbol: str) -> Dict:

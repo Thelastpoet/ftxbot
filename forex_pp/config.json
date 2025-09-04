@@ -8,7 +8,8 @@
     "breakout_threshold_pips": 5,
     "min_peak_rank": 2,
     "proximity_threshold_pips": 10,
-    "min_stop_loss_pips": 10
+    "min_stop_loss_pips": 20,
+    "stop_loss_buffer_pips": 15
   },
   "risk_management": {
     "risk_per_trade": 0.02,

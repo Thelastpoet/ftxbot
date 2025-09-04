@@ -5,7 +5,7 @@ Handles all interactions with the MT5 terminal
 
 import MetaTrader5 as mt5
 import logging
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Any
 from datetime import datetime
 import time
 

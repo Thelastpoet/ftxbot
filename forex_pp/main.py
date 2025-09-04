@@ -10,7 +10,7 @@ import json
 import argparse
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional
 import sys
 
 from strategy import TradingSignal
@@ -155,7 +155,6 @@ class TradingBot:
         self.session_manager = TradingSession(config)
         self.running = False
         self.initial_balance = None
-        self.last_processed_candle_time: Dict[Tuple[str, str], datetime] = {}
         
     async def initialize(self):
         """Initialize all bot components"""
@@ -223,17 +222,24 @@ class TradingBot:
                 return
 
             # Direct attribute access from dataclass
-            entry_price = float(signal.entry_price)
+            tick = self.mt5_client.get_symbol_info_tick(symbol)
+            if not tick:
+                logger.error(f"Failed to get live tick for {symbol}")
+                return
+                
+            # Use live prices based on order direction
+            live_entry_price = tick.ask if signal.type == 0 else tick.bid
+            logger.info(f"Live entry price for {symbol}: {live_entry_price:.5f} (signal was {signal.entry_price:.5f})")
             sl_price = float(signal.stop_loss)
             tp_price = float(signal.take_profit)
 
             # Use the risk manager helper to compute real pip distance
             computed_sl_pips = self.risk_manager.calculate_stop_loss_pips(
-                entry_price, sl_price, symbol_info
+                live_entry_price, sl_price, symbol_info
             )
 
             # Log both price distance and pip distance clearly
-            price_distance = abs(entry_price - sl_price)
+            price_distance = abs(live_entry_price - sl_price)
             logger.info(
                 f"Computed SL distance for {symbol}: price distance={price_distance:.8f}, "
                 f"pip distance={computed_sl_pips:.4f} pips"
@@ -318,7 +324,10 @@ class TradingBot:
         for timeframe in symbol_config['timeframes']:
             try:
                 # Fetch market data
-                num_candles_to_fetch = self.config.lookback_period + self.config.swing_window * 2 + 5
+                num_candles_to_fetch = self.config.lookback_period + self.config.swing_window * 2 + 10  # Added buffer
+                
+                logger.debug(f"Fetching {num_candles_to_fetch} candles for {symbol} {timeframe}")
+                
                 data = await self.market_data.fetch_data(
                     symbol=symbol,
                     timeframe=timeframe,
@@ -329,19 +338,16 @@ class TradingBot:
                     logger.warning(f"No data available for {symbol} {timeframe}")
                     continue
                 
-                current_completed_candle_time = data.iloc[-2].name
+                logger.debug(f"Fetched {len(data)} candles for {symbol} {timeframe}")
                 
-                tracker_key = (symbol, timeframe)
-
-                # Check if this completed candle has already been processed
-                if tracker_key in self.last_processed_candle_time and \
-                self.last_processed_candle_time[tracker_key] == current_completed_candle_time:
-                    logger.debug(f"No new completed candle for {symbol} {timeframe}. Skipping.")
+                # The second-to-last candle is the last completed one
+                if len(data) < 2:
+                    logger.debug(f"Not enough candles for {symbol} {timeframe}")
                     continue
-
-                # Update the tracker for this symbol/timeframe
-                self.last_processed_candle_time[tracker_key] = current_completed_candle_time
-                logger.debug(f"New completed candle detected for {symbol} {timeframe}: {current_completed_candle_time}")
+                    
+                # Log current price info
+                current_price = data.iloc[-1]['close']
+                logger.debug(f"{symbol} current price: {current_price:.5f}")
                 
                 # Generate trading signal - returns TradingSignal dataclass
                 signal = self.strategy.generate_signal(data, symbol)
@@ -355,9 +361,11 @@ class TradingBot:
                     
                     # Check if within trading session
                     if self.session_manager.is_trading_time():
-                        await self.execute_trade(signal, symbol)  # Pass dataclass directly
+                        await self.execute_trade(signal, symbol)
                     else:
                         logger.info("Outside trading session, signal ignored")
+                else:
+                    logger.debug(f"No signal generated for {symbol} {timeframe}")
                         
             except Exception as e:
                 logger.error(f"Error processing {symbol} {timeframe}: {e}", exc_info=True)

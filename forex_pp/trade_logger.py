@@ -1,6 +1,6 @@
 """
-Trade Logger Module
-Records trade history and performance metrics
+Trade Logger Module - Fixed Version
+Records trade history and performance metrics with proper datetime handling
 """
 
 import logging
@@ -8,9 +8,19 @@ import json
 import csv
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Any
+from typing import Dict, Any, Union
+from decimal import Decimal
 
 logger = logging.getLogger(__name__)
+
+class DateTimeEncoder(json.JSONEncoder):
+    """Custom JSON encoder for datetime objects"""
+    def default(self, obj):
+        if isinstance(obj, datetime):
+            return obj.isoformat()
+        elif isinstance(obj, Decimal):
+            return float(obj)
+        return super(DateTimeEncoder, self).default(obj)
 
 class TradeLogger:
     """Handles trade logging and performance tracking"""
@@ -32,8 +42,33 @@ class TradeLogger:
                 writer.writerow([
                     'timestamp', 'symbol', 'order_type', 'entry_price', 
                     'volume', 'stop_loss', 'take_profit', 'ticket',
-                    'exit_price', 'profit', 'duration', 'status'
+                    'exit_price', 'profit', 'duration', 'status',
+                    'reason', 'confidence', 'signal_time'
                 ])
+    
+    def _sanitize_trade_for_json(self, trade_details: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Sanitize trade details for JSON serialization
+        
+        Args:
+            trade_details: Original trade details
+            
+        Returns:
+            Sanitized trade details with all datetime objects converted to strings
+        """
+        trade_copy = {}
+        for key, value in trade_details.items():
+            if isinstance(value, datetime):
+                trade_copy[key] = value.isoformat()
+            elif isinstance(value, (Decimal, float)):
+                # Ensure numbers are JSON serializable
+                trade_copy[key] = float(value)
+            elif value is None:
+                # Handle None values
+                trade_copy[key] = None
+            else:
+                trade_copy[key] = value
+        return trade_copy
     
     def log_trade(self, trade_details: Dict[str, Any]):
         """
@@ -43,70 +78,85 @@ class TradeLogger:
             trade_details: Dictionary containing trade information
         """
         try:
-            # Add to in-memory list
-            self.trades.append(trade_details)
+            # Sanitize the trade details for JSON
+            sanitized_trade = self._sanitize_trade_for_json(trade_details)
+            
+            # Add status if not present
+            if 'status' not in sanitized_trade:
+                sanitized_trade['status'] = 'OPEN'
+            
+            # Add to in-memory list (store the sanitized version)
+            self.trades.append(sanitized_trade)
             
             # Write to CSV
-            self._write_to_csv(trade_details)
+            self._write_to_csv(sanitized_trade)
             
             # Write to JSON
-            self._write_to_json(trade_details)
+            self._write_to_json(sanitized_trade)
             
-            # Write to log file (fix JSON serialization issue)
-            trade_copy = trade_details.copy()
-            for key, value in trade_copy.items():
-                if isinstance(value, datetime):
-                    trade_copy[key] = value.isoformat()
-
+            # Write to log file
             with open(self.log_file, 'a') as f:
-                f.write(f"{datetime.now().isoformat()} - {json.dumps(trade_copy)}\n")
-            
-            logger.info(f"Trade logged: {trade_details}")
+                log_entry = f"{datetime.now().isoformat()} - {json.dumps(sanitized_trade, cls=DateTimeEncoder)}\n"
+                f.write(log_entry)
+
+            logger.info(f"Trade logged successfully: {sanitized_trade.get('symbol')} {sanitized_trade.get('order_type')} @ {sanitized_trade.get('entry_price')}")
             
         except Exception as e:
-            logger.error(f"Error logging trade: {e}")
+            logger.error(f"Error logging trade: {e}", exc_info=True)
     
     def _write_to_csv(self, trade_details: Dict[str, Any]):
         """Write trade to CSV file"""
-        with open(self.csv_file, 'a', newline='') as f:
-            writer = csv.writer(f)
-            writer.writerow([
-                trade_details.get('timestamp', datetime.now()),
-                trade_details.get('symbol', ''),
-                trade_details.get('order_type', ''),
-                trade_details.get('entry_price', 0),
-                trade_details.get('volume', 0),
-                trade_details.get('stop_loss', 0),
-                trade_details.get('take_profit', 0),
-                trade_details.get('ticket', ''),
-                trade_details.get('exit_price', ''),
-                trade_details.get('profit', ''),
-                trade_details.get('duration', ''),
-                trade_details.get('status', 'OPEN')
-            ])
+        try:
+            with open(self.csv_file, 'a', newline='') as f:
+                writer = csv.writer(f)
+                writer.writerow([
+                    trade_details.get('timestamp', datetime.now().isoformat()),
+                    trade_details.get('symbol', ''),
+                    trade_details.get('order_type', ''),
+                    trade_details.get('entry_price', 0),
+                    trade_details.get('volume', 0),
+                    trade_details.get('stop_loss', 0),
+                    trade_details.get('take_profit', 0),
+                    trade_details.get('ticket', ''),
+                    trade_details.get('exit_price', ''),
+                    trade_details.get('profit', ''),
+                    trade_details.get('duration', ''),
+                    trade_details.get('status', 'OPEN'),
+                    trade_details.get('reason', ''),
+                    trade_details.get('confidence', ''),
+                    trade_details.get('signal_time', '')
+                ])
+        except Exception as e:
+            logger.error(f"Error writing to CSV: {e}")
     
     def _write_to_json(self, trade_details: Dict[str, Any]):
         """Write trade to JSON file"""
-        # Convert datetime to string for JSON serialization
-        trade_copy = trade_details.copy()
-        if isinstance(trade_copy.get('timestamp'), datetime):
-            trade_copy['timestamp'] = trade_copy['timestamp'].isoformat()
-        
-        # Read existing trades
-        existing_trades = []
-        if self.json_file.exists():
-            try:
-                with open(self.json_file, 'r') as f:
-                    existing_trades = json.load(f)
-            except:
-                existing_trades = []
-        
-        # Append new trade
-        existing_trades.append(trade_copy)
-        
-        # Write back
-        with open(self.json_file, 'w') as f:
-            json.dump(existing_trades, f, indent=2)
+        try:
+            # Read existing trades
+            existing_trades = []
+            if self.json_file.exists():
+                try:
+                    with open(self.json_file, 'r') as f:
+                        content = f.read()
+                        if content.strip():  # Only parse if file has content
+                            existing_trades = json.loads(content)
+                except (json.JSONDecodeError, ValueError) as e:
+                    logger.warning(f"Corrupted JSON file, starting fresh: {e}")
+                    existing_trades = []
+                    # Backup the corrupted file
+                    backup_path = self.json_file.with_suffix('.json.bak')
+                    self.json_file.rename(backup_path)
+                    logger.info(f"Backed up corrupted JSON to {backup_path}")
+            
+            # Append new trade (already sanitized)
+            existing_trades.append(trade_details)
+            
+            # Write back with custom encoder
+            with open(self.json_file, 'w') as f:
+                json.dump(existing_trades, f, indent=2, cls=DateTimeEncoder)
+                
+        except Exception as e:
+            logger.error(f"Error writing to JSON: {e}", exc_info=True)
     
     def update_trade(self, ticket: int, exit_price: float, profit: float, status: str = 'CLOSED'):
         """
@@ -125,10 +175,15 @@ class TradeLogger:
                     trade['exit_price'] = exit_price
                     trade['profit'] = profit
                     trade['status'] = status
-                    trade['exit_time'] = datetime.now()
+                    trade['exit_time'] = datetime.now().isoformat()
                     
                     if 'timestamp' in trade:
-                        duration = datetime.now() - trade['timestamp']
+                        # Calculate duration
+                        if isinstance(trade['timestamp'], str):
+                            entry_time = datetime.fromisoformat(trade['timestamp'])
+                        else:
+                            entry_time = trade['timestamp']
+                        duration = datetime.now() - entry_time
                         trade['duration'] = str(duration)
                     
                     # Update JSON file
@@ -138,21 +193,16 @@ class TradeLogger:
                     break
                     
         except Exception as e:
-            logger.error(f"Error updating trade: {e}")
+            logger.error(f"Error updating trade: {e}", exc_info=True)
     
     def _update_json_file(self):
         """Update the JSON file with current trades"""
-        trades_copy = []
-        for trade in self.trades:
-            trade_copy = trade.copy()
-            # Convert datetime objects to strings
-            for key in ['timestamp', 'exit_time']:
-                if key in trade_copy and isinstance(trade_copy[key], datetime):
-                    trade_copy[key] = trade_copy[key].isoformat()
-            trades_copy.append(trade_copy)
-        
-        with open(self.json_file, 'w') as f:
-            json.dump(trades_copy, f, indent=2)
+        try:
+            # All trades should already be sanitized
+            with open(self.json_file, 'w') as f:
+                json.dump(self.trades, f, indent=2, cls=DateTimeEncoder)
+        except Exception as e:
+            logger.error(f"Error updating JSON file: {e}", exc_info=True)
     
     def get_performance_metrics(self) -> Dict[str, Any]:
         """
@@ -174,7 +224,7 @@ class TradeLogger:
             }
         
         # Calculate metrics
-        profits = [t.get('profit', 0) for t in closed_trades]
+        profits = [float(t.get('profit', 0)) for t in closed_trades]
         winning_trades = [p for p in profits if p > 0]
         losing_trades = [p for p in profits if p < 0]
         
@@ -264,15 +314,78 @@ class TradeLogger:
         if self.json_file.exists():
             try:
                 with open(self.json_file, 'r') as f:
-                    trades = json.load(f)
-                    # Convert timestamp strings back to datetime
-                    for trade in trades:
-                        if 'timestamp' in trade:
-                            trade['timestamp'] = datetime.fromisoformat(trade['timestamp'])
-                        if 'exit_time' in trade:
-                            trade['exit_time'] = datetime.fromisoformat(trade['exit_time'])
+                    content = f.read()
+                    if not content.strip():  # Empty file
+                        self.trades = []
+                        return
+                        
+                    trades = json.loads(content)
+                    # Trades should already have datetime strings, not objects
+                    # But we'll store them as strings consistently
                     self.trades = trades
                     logger.info(f"Loaded {len(trades)} trades from file")
-            except Exception as e:
-                logger.error(f"Error loading trades from file: {e}")
+            except json.JSONDecodeError as e:
+                logger.error(f"Error loading trades from file (corrupted JSON): {e}")
+                # Backup corrupted file
+                backup_path = self.json_file.with_suffix('.json.bak')
+                self.json_file.rename(backup_path)
+                logger.info(f"Backed up corrupted JSON to {backup_path}")
                 self.trades = []
+            except Exception as e:
+                logger.error(f"Unexpected error loading trades: {e}", exc_info=True)
+                self.trades = []
+                
+    def repair_json_file(self):
+        """
+        Attempt to repair a corrupted JSON file
+        This method can be called manually if the JSON file is corrupted
+        """
+        try:
+            logger.info("Attempting to repair JSON file...")
+            
+            # Try to read from the CSV as backup
+            if self.csv_file.exists():
+                trades = []
+                with open(self.csv_file, 'r') as f:
+                    reader = csv.DictReader(f)
+                    for row in reader:
+                        # Convert CSV row to trade dict
+                        trade = {
+                            'timestamp': row.get('timestamp', ''),
+                            'symbol': row.get('symbol', ''),
+                            'order_type': row.get('order_type', ''),
+                            'entry_price': float(row.get('entry_price', 0)),
+                            'volume': float(row.get('volume', 0)),
+                            'stop_loss': float(row.get('stop_loss', 0)),
+                            'take_profit': float(row.get('take_profit', 0)),
+                            'ticket': int(row.get('ticket', 0)) if row.get('ticket') else 0,
+                            'status': row.get('status', 'OPEN')
+                        }
+                        
+                        # Add optional fields if present
+                        if row.get('exit_price'):
+                            trade['exit_price'] = float(row['exit_price'])
+                        if row.get('profit'):
+                            trade['profit'] = float(row['profit'])
+                        if row.get('duration'):
+                            trade['duration'] = row['duration']
+                        if row.get('reason'):
+                            trade['reason'] = row['reason']
+                        if row.get('confidence'):
+                            trade['confidence'] = float(row['confidence'])
+                        if row.get('signal_time'):
+                            trade['signal_time'] = row['signal_time']
+                            
+                        trades.append(trade)
+                
+                # Write repaired JSON
+                with open(self.json_file, 'w') as f:
+                    json.dump(trades, f, indent=2, cls=DateTimeEncoder)
+                
+                self.trades = trades
+                logger.info(f"Successfully repaired JSON file with {len(trades)} trades from CSV")
+                return True
+                
+        except Exception as e:
+            logger.error(f"Failed to repair JSON file: {e}", exc_info=True)
+            return False
