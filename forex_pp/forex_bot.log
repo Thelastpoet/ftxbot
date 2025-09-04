@@ -5893,3 +5893,12 @@ RuntimeError: MT5 connection failed
 2025-09-04 20:15:59,885 - __main__ - INFO - Trading bot shutdown complete
 2025-09-04 20:15:59,886 - __main__ - INFO - Program terminated by user
 2025-09-04 20:15:59,887 - mt5_client - INFO - MT5 connection shut down
+2025-09-04 20:16:02,772 - __main__ - INFO - Configuration loaded successfully from config.json
+2025-09-04 20:16:02,788 - mt5_client - INFO - Connected to MT5 terminal: MetaTrader 5
+2025-09-04 20:16:02,788 - mt5_client - INFO - MT5 version: (500, 5200, '1 Aug 2025')
+2025-09-04 20:16:02,789 - trade_logger - INFO - Loaded 10 trades from file
+2025-09-04 20:16:02,790 - __main__ - INFO - Initial account balance: 196.1
+2025-09-04 20:16:02,790 - __main__ - INFO - Trading bot initialized successfully
+2025-09-04 20:16:02,790 - __main__ - INFO - Starting main trading loop
+2025-09-04 20:16:03,190 - strategy - INFO - Bullish breakout detected for USDCHF above 0.80619
+2025-09-04 20:16:03,191 - strategy - INFO - Breakout detected for USDCHF: bullish at level 0.80619
