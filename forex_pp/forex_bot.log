@@ -10671,3 +10671,1260 @@ AttributeError: 'MetaTrader5Client' object has no attribute 'connect'. Did you m
 2025-09-05 15:15:42,576 - __main__ - INFO - Trading bot shutdown complete
 2025-09-05 15:15:42,577 - __main__ - INFO - Program terminated by user
 2025-09-05 15:15:42,577 - mt5_client - INFO - MT5 connection shut down
+2025-09-05 15:15:46,021 - __main__ - INFO - Configuration loaded successfully from config.json
+2025-09-05 15:15:46,033 - mt5_client - INFO - Connected to MT5 terminal: MetaTrader 5
+2025-09-05 15:15:46,033 - mt5_client - INFO - MT5 version: (500, 5200, '1 Aug 2025')
+2025-09-05 15:15:46,034 - trade_logger - INFO - Loaded 25 trades from file
+2025-09-05 15:15:46,035 - __main__ - INFO - Initial account balance: 491.68
+2025-09-05 15:15:46,036 - __main__ - INFO - Trading bot initialized successfully
+2025-09-05 15:15:46,036 - __main__ - INFO - Starting main trading loop
+2025-09-05 15:17:46,962 - strategy - INFO - Bearish breakout detected for USDCHF below 0.80263
+2025-09-05 15:17:46,962 - strategy - INFO - Breakout detected for USDCHF: bearish at level 0.80263
+2025-09-05 15:17:46,962 - strategy - INFO - Signal confirmed with patterns: ['MARUBOZU']
+2025-09-05 15:17:46,962 - strategy - INFO - Signal confirmed with patterns: ['MARUBOZU']
+2025-09-05 15:17:46,978 - strategy - INFO - Adjusted SL for USDCHF: raw SL=0.80587, spread=0.00010, spread_points=10, pip_size=0.0001
+2025-09-05 15:17:46,986 - strategy - INFO - USDCHF: TP set using enhanced range projection. Range=16.4 pips, Multiplier=2.0, TP=0.79876
+2025-09-05 15:17:46,986 - strategy - INFO - SIGNAL GENERATED for USDCHF: Type=SELL, Entry=0.80204, SL=0.80587 (38.3 pips), TP=0.79876, Confidence=0.85
+2025-09-05 15:17:46,987 - __main__ - INFO - Signal generated for USDCHF: Type=SELL, Confidence=0.85, H1 Trend=bearish
+2025-09-05 15:17:46,988 - __main__ - INFO - Live entry price for USDCHF: 0.80204 (signal was 0.80204)
+2025-09-05 15:17:46,988 - __main__ - INFO - Computed SL distance for USDCHF: price distance=0.00383000, pip distance=38.3000 pips
+2025-09-05 15:17:46,990 - risk_manager - INFO - Calculated position size for USDCHF: 0.01 lots
+2025-09-05 15:17:47,345 - mt5_client - INFO - Order placed successfully: 1067002363
+2025-09-05 15:17:47,353 - trade_logger - INFO - Trade logged successfully: USDCHF SELL @ 0.80204
+2025-09-05 15:17:47,353 - __main__ - INFO - Trade executed successfully: USDCHF SELL @ 0.80204, Volume: 0.01, Ticket: 1067002363
+2025-09-05 15:18:47,711 - strategy - INFO - Bearish breakout detected for USDCHF below 0.80263
+2025-09-05 15:18:47,712 - strategy - INFO - Breakout detected for USDCHF: bearish at level 0.80263
+2025-09-05 15:18:47,712 - strategy - INFO - Signal confirmed with patterns: ['MARUBOZU']
+2025-09-05 15:18:47,712 - strategy - INFO - Signal confirmed with patterns: ['MARUBOZU']
+2025-09-05 15:18:47,727 - strategy - INFO - Adjusted SL for USDCHF: raw SL=0.80588, spread=0.00011, spread_points=11, pip_size=0.0001
+2025-09-05 15:18:47,736 - strategy - INFO - USDCHF: TP set using enhanced range projection. Range=16.4 pips, Multiplier=2.0, TP=0.79872
+2025-09-05 15:18:47,736 - strategy - INFO - SIGNAL GENERATED for USDCHF: Type=SELL, Entry=0.80200, SL=0.80588 (38.8 pips), TP=0.79872, Confidence=0.85
+2025-09-05 15:18:47,736 - __main__ - INFO - Signal generated for USDCHF: Type=SELL, Confidence=0.85, H1 Trend=bearish
+2025-09-05 15:18:47,736 - __main__ - INFO - Position already exists for USDCHF, skipping new signal to let it work
+2025-09-05 15:19:48,095 - strategy - INFO - Bearish breakout detected for USDCHF below 0.80263
+2025-09-05 15:19:48,095 - strategy - INFO - Breakout detected for USDCHF: bearish at level 0.80263
+2025-09-05 15:19:48,095 - strategy - INFO - Signal confirmed with patterns: ['MARUBOZU']
+2025-09-05 15:19:48,096 - strategy - INFO - Signal confirmed with patterns: ['MARUBOZU']
+2025-09-05 15:19:48,111 - strategy - INFO - Adjusted SL for USDCHF: raw SL=0.80587, spread=0.00010, spread_points=10, pip_size=0.0001
+2025-09-05 15:19:48,120 - strategy - INFO - USDCHF: TP set using enhanced range projection. Range=16.4 pips, Multiplier=2.0, TP=0.79875
+2025-09-05 15:19:48,120 - strategy - INFO - SIGNAL GENERATED for USDCHF: Type=SELL, Entry=0.80203, SL=0.80587 (38.4 pips), TP=0.79875, Confidence=0.85
+2025-09-05 15:19:48,120 - __main__ - INFO - Signal generated for USDCHF: Type=SELL, Confidence=0.85, H1 Trend=bearish
+2025-09-05 15:19:48,121 - __main__ - INFO - Position already exists for USDCHF, skipping new signal to let it work
+2025-09-05 15:22:49,174 - strategy - INFO - Bearish breakout detected for USDCHF below 0.80263
+2025-09-05 15:22:49,174 - strategy - INFO - Breakout detected for USDCHF: bearish at level 0.80263
+2025-09-05 15:22:49,175 - strategy - INFO - Signal confirmed with patterns: ['MARUBOZU']
+2025-09-05 15:22:49,175 - strategy - INFO - Signal confirmed with patterns: ['MARUBOZU']
+2025-09-05 15:22:49,191 - strategy - INFO - Adjusted SL for USDCHF: raw SL=0.80587, spread=0.00010, spread_points=10, pip_size=0.0001
+2025-09-05 15:22:49,199 - strategy - INFO - USDCHF: TP set using enhanced range projection. Range=16.4 pips, Multiplier=2.0, TP=0.79867
+2025-09-05 15:22:49,200 - strategy - INFO - SIGNAL GENERATED for USDCHF: Type=SELL, Entry=0.80195, SL=0.80587 (39.2 pips), TP=0.79867, Confidence=0.85
+2025-09-05 15:22:49,200 - __main__ - INFO - Signal generated for USDCHF: Type=SELL, Confidence=0.85, H1 Trend=bearish
+2025-09-05 15:22:49,200 - __main__ - INFO - Position already exists for USDCHF, skipping new signal to let it work
+2025-09-05 15:23:49,555 - strategy - INFO - Bearish breakout detected for USDCHF below 0.80263
+2025-09-05 15:23:49,555 - strategy - INFO - Breakout detected for USDCHF: bearish at level 0.80263
+2025-09-05 15:23:49,555 - strategy - INFO - Signal confirmed with patterns: ['MARUBOZU']
+2025-09-05 15:23:49,556 - strategy - INFO - Signal confirmed with patterns: ['MARUBOZU']
+2025-09-05 15:23:49,571 - strategy - INFO - Adjusted SL for USDCHF: raw SL=0.80589, spread=0.00012, spread_points=12, pip_size=0.0001
+2025-09-05 15:23:49,579 - strategy - INFO - USDCHF: TP set using enhanced range projection. Range=16.4 pips, Multiplier=2.0, TP=0.79869
+2025-09-05 15:23:49,580 - strategy - INFO - SIGNAL GENERATED for USDCHF: Type=SELL, Entry=0.80197, SL=0.80589 (39.2 pips), TP=0.79869, Confidence=0.85
+2025-09-05 15:23:49,580 - __main__ - INFO - Signal generated for USDCHF: Type=SELL, Confidence=0.85, H1 Trend=bearish
+2025-09-05 15:23:49,580 - __main__ - INFO - Position already exists for USDCHF, skipping new signal to let it work
+2025-09-05 15:24:49,909 - strategy - INFO - Bearish breakout detected for USDCHF below 0.80263
+2025-09-05 15:24:49,909 - strategy - INFO - Breakout detected for USDCHF: bearish at level 0.80263
+2025-09-05 15:24:49,909 - strategy - INFO - Signal confirmed with patterns: ['MARUBOZU']
+2025-09-05 15:24:49,910 - strategy - INFO - Signal confirmed with patterns: ['MARUBOZU']
+2025-09-05 15:24:49,925 - strategy - INFO - Adjusted SL for USDCHF: raw SL=0.80586, spread=0.00009, spread_points=9, pip_size=0.0001
+2025-09-05 15:24:49,933 - strategy - INFO - USDCHF: TP set using enhanced range projection. Range=16.4 pips, Multiplier=2.0, TP=0.79878
+2025-09-05 15:24:49,933 - strategy - INFO - SIGNAL GENERATED for USDCHF: Type=SELL, Entry=0.80206, SL=0.80586 (38.0 pips), TP=0.79878, Confidence=0.85
+2025-09-05 15:24:49,934 - __main__ - INFO - Signal generated for USDCHF: Type=SELL, Confidence=0.85, H1 Trend=bearish
+2025-09-05 15:24:49,934 - __main__ - INFO - Position already exists for USDCHF, skipping new signal to let it work
+2025-09-05 15:28:51,341 - strategy - INFO - Bearish breakout detected for USDCHF below 0.80263
+2025-09-05 15:28:51,342 - strategy - INFO - Breakout detected for USDCHF: bearish at level 0.80263
+2025-09-05 15:28:51,342 - strategy - INFO - Signal confirmed with patterns: ['MARUBOZU']
+2025-09-05 15:28:51,342 - strategy - INFO - Signal confirmed with patterns: ['MARUBOZU']
+2025-09-05 15:28:51,358 - strategy - INFO - Adjusted SL for USDCHF: raw SL=0.80588, spread=0.00011, spread_points=11, pip_size=0.0001
+2025-09-05 15:28:51,367 - strategy - INFO - USDCHF: TP set using enhanced range projection. Range=16.4 pips, Multiplier=2.0, TP=0.79857
+2025-09-05 15:28:51,367 - strategy - INFO - SIGNAL GENERATED for USDCHF: Type=SELL, Entry=0.80185, SL=0.80588 (40.3 pips), TP=0.79857, Confidence=0.85
+2025-09-05 15:28:51,367 - __main__ - INFO - Signal generated for USDCHF: Type=SELL, Confidence=0.85, H1 Trend=bearish
+2025-09-05 15:28:51,368 - __main__ - INFO - Position already exists for USDCHF, skipping new signal to let it work
+2025-09-05 15:29:51,752 - strategy - INFO - Bearish breakout detected for USDCHF below 0.80263
+2025-09-05 15:29:51,752 - strategy - INFO - Breakout detected for USDCHF: bearish at level 0.80263
+2025-09-05 15:29:51,753 - strategy - INFO - Signal confirmed with patterns: ['MARUBOZU']
+2025-09-05 15:29:51,753 - strategy - INFO - Signal confirmed with patterns: ['MARUBOZU']
+2025-09-05 15:29:51,768 - strategy - INFO - Adjusted SL for USDCHF: raw SL=0.80608, spread=0.00031, spread_points=31, pip_size=0.0001
+2025-09-05 15:29:51,777 - strategy - INFO - USDCHF: TP set using enhanced range projection. Range=16.4 pips, Multiplier=2.0, TP=0.79859
+2025-09-05 15:29:51,777 - strategy - INFO - SIGNAL GENERATED for USDCHF: Type=SELL, Entry=0.80187, SL=0.80608 (42.1 pips), TP=0.79859, Confidence=0.85
+2025-09-05 15:29:51,777 - __main__ - INFO - Signal generated for USDCHF: Type=SELL, Confidence=0.85, H1 Trend=bearish
+2025-09-05 15:29:51,778 - __main__ - INFO - Position already exists for USDCHF, skipping new signal to let it work
+2025-09-05 15:30:52,005 - strategy - INFO - Bullish breakout detected for GBPUSD above 1.34855
+2025-09-05 15:30:52,005 - strategy - INFO - Breakout detected for GBPUSD: bullish at level 1.34855
+2025-09-05 15:30:52,005 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:30:52,006 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:30:52,022 - strategy - INFO - Adjusted SL for GBPUSD: raw SL=1.34384, spread=0.00012, spread_points=12, pip_size=0.0001
+2025-09-05 15:30:52,030 - strategy - INFO - GBPUSD: TP set using enhanced range projection. Range=30.9 pips, Multiplier=2.0, TP=1.35791
+2025-09-05 15:30:52,030 - strategy - INFO - SIGNAL GENERATED for GBPUSD: Type=BUY, Entry=1.35173, SL=1.34384 (78.9 pips), TP=1.35791, Confidence=0.95
+2025-09-05 15:30:52,031 - __main__ - INFO - Signal generated for GBPUSD: Type=BUY, Confidence=0.95, H1 Trend=bullish
+2025-09-05 15:30:52,032 - __main__ - INFO - Live entry price for GBPUSD: 1.35186 (signal was 1.35173)
+2025-09-05 15:30:52,033 - __main__ - INFO - Computed SL distance for GBPUSD: price distance=0.00802000, pip distance=80.2000 pips
+2025-09-05 15:30:52,035 - risk_manager - INFO - Calculated position size for GBPUSD: 0.01 lots
+2025-09-05 15:30:52,442 - mt5_client - INFO - Order placed successfully: 1067093414
+2025-09-05 15:30:52,445 - trade_logger - INFO - Trade logged successfully: GBPUSD BUY @ 1.35179
+2025-09-05 15:30:52,445 - __main__ - INFO - Trade executed successfully: GBPUSD BUY @ 1.35179, Volume: 0.01, Ticket: 1067093414
+2025-09-05 15:30:52,506 - strategy - INFO - Bullish breakout detected for AUDUSD above 0.65474
+2025-09-05 15:30:52,506 - strategy - INFO - Breakout detected for AUDUSD: bullish at level 0.65474
+2025-09-05 15:30:52,507 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:30:52,507 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:30:52,523 - strategy - INFO - Adjusted SL for AUDUSD: raw SL=0.65196, spread=0.00014, spread_points=14, pip_size=0.0001
+2025-09-05 15:30:52,532 - strategy - INFO - AUDUSD: TP set using enhanced range projection. Range=11.4 pips, Multiplier=2.0, TP=0.65863
+2025-09-05 15:30:52,532 - strategy - INFO - SIGNAL GENERATED for AUDUSD: Type=BUY, Entry=0.65635, SL=0.65196 (43.9 pips), TP=0.65935, Confidence=0.95
+2025-09-05 15:30:52,532 - __main__ - INFO - Signal generated for AUDUSD: Type=BUY, Confidence=0.95, H1 Trend=bullish
+2025-09-05 15:30:52,534 - __main__ - INFO - Live entry price for AUDUSD: 0.65650 (signal was 0.65635)
+2025-09-05 15:30:52,534 - __main__ - INFO - Computed SL distance for AUDUSD: price distance=0.00454000, pip distance=45.4000 pips
+2025-09-05 15:30:52,536 - risk_manager - INFO - Calculated position size for AUDUSD: 0.01 lots
+2025-09-05 15:30:52,890 - mt5_client - INFO - Order placed successfully: 1067093598
+2025-09-05 15:30:52,894 - trade_logger - INFO - Trade logged successfully: AUDUSD BUY @ 0.65653
+2025-09-05 15:30:52,894 - __main__ - INFO - Trade executed successfully: AUDUSD BUY @ 0.65653, Volume: 0.01, Ticket: 1067093598
+2025-09-05 15:30:52,923 - strategy - INFO - Bullish breakout detected for NZDUSD above 0.58796
+2025-09-05 15:30:52,924 - strategy - INFO - Breakout detected for NZDUSD: bullish at level 0.58796
+2025-09-05 15:30:52,924 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:30:52,924 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:30:52,941 - strategy - INFO - Adjusted SL for NZDUSD: raw SL=0.58534, spread=0.00015, spread_points=15, pip_size=0.0001
+2025-09-05 15:30:52,949 - strategy - INFO - NZDUSD: TP using enhanced ATR. ATR=3.2 pips, Session=overlap, Volatility ratio=1.00, Final multiplier=5.0, TP=0.59146
+2025-09-05 15:30:52,949 - strategy - INFO - SIGNAL GENERATED for NZDUSD: Type=BUY, Entry=0.58984, SL=0.58534 (45.0 pips), TP=0.59146, Confidence=0.95
+2025-09-05 15:30:52,949 - __main__ - INFO - Signal generated for NZDUSD: Type=BUY, Confidence=0.95, H1 Trend=ranging
+2025-09-05 15:30:52,951 - __main__ - INFO - Live entry price for NZDUSD: 0.58999 (signal was 0.58984)
+2025-09-05 15:30:52,951 - __main__ - INFO - Computed SL distance for NZDUSD: price distance=0.00465000, pip distance=46.5000 pips
+2025-09-05 15:30:52,953 - risk_manager - INFO - Calculated position size for NZDUSD: 0.01 lots
+2025-09-05 15:30:53,284 - mt5_client - INFO - Order placed successfully: 1067093723
+2025-09-05 15:30:53,289 - trade_logger - INFO - Trade logged successfully: NZDUSD BUY @ 0.58996
+2025-09-05 15:30:53,289 - __main__ - INFO - Trade executed successfully: NZDUSD BUY @ 0.58996, Volume: 0.01, Ticket: 1067093723
+2025-09-05 15:30:53,442 - strategy - INFO - Bullish breakout detected for GBPCAD above 1.85996
+2025-09-05 15:30:53,443 - strategy - INFO - Breakout detected for GBPCAD: bullish at level 1.85996
+2025-09-05 15:30:53,443 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:30:53,443 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:30:53,459 - strategy - INFO - Adjusted SL for GBPCAD: raw SL=1.85424, spread=0.00043, spread_points=43, pip_size=0.0001
+2025-09-05 15:30:53,468 - strategy - INFO - GBPCAD: TP set using enhanced range projection. Range=37.9 pips, Multiplier=2.0, TP=1.87105
+2025-09-05 15:30:53,468 - strategy - INFO - SIGNAL GENERATED for GBPCAD: Type=BUY, Entry=1.86347, SL=1.85424 (92.3 pips), TP=1.87105, Confidence=0.95
+2025-09-05 15:30:53,468 - __main__ - INFO - Signal generated for GBPCAD: Type=BUY, Confidence=0.95, H1 Trend=bullish
+2025-09-05 15:30:53,470 - __main__ - INFO - Live entry price for GBPCAD: 1.86393 (signal was 1.86347)
+2025-09-05 15:30:53,470 - __main__ - INFO - Computed SL distance for GBPCAD: price distance=0.00969000, pip distance=96.9000 pips
+2025-09-05 15:30:53,472 - risk_manager - INFO - Calculated position size for GBPCAD: 0.01 lots
+2025-09-05 15:30:53,810 - mt5_client - INFO - Order placed successfully: 1067093943
+2025-09-05 15:30:53,823 - trade_logger - INFO - Trade logged successfully: GBPCAD BUY @ 1.86398
+2025-09-05 15:30:53,823 - __main__ - INFO - Trade executed successfully: GBPCAD BUY @ 1.86398, Volume: 0.01, Ticket: 1067093943
+2025-09-05 15:30:53,887 - strategy - INFO - Bullish breakout detected for EURGBP above 0.86763
+2025-09-05 15:30:53,888 - strategy - INFO - Breakout detected for EURGBP: bullish at level 0.86763
+2025-09-05 15:30:53,888 - strategy - INFO - Signal confirmed with patterns: ['BULLISH_HARAMI']
+2025-09-05 15:30:53,888 - strategy - INFO - Signal confirmed with patterns: ['BULLISH_HARAMI']
+2025-09-05 15:30:53,912 - strategy - INFO - Adjusted SL for EURGBP: raw SL=0.86599, spread=0.00014, spread_points=14, pip_size=0.0001
+2025-09-05 15:30:53,923 - strategy - INFO - EURGBP: TP using enhanced ATR. ATR=4.4 pips, Session=overlap, Volatility ratio=1.00, Final multiplier=5.0, TP=0.87051
+2025-09-05 15:30:53,923 - strategy - INFO - SIGNAL GENERATED for EURGBP: Type=BUY, Entry=0.86830, SL=0.86599 (23.1 pips), TP=0.87051, Confidence=0.85
+2025-09-05 15:30:53,923 - __main__ - INFO - Signal generated for EURGBP: Type=BUY, Confidence=0.85, H1 Trend=bullish
+2025-09-05 15:30:53,925 - __main__ - INFO - Live entry price for EURGBP: 0.86845 (signal was 0.86830)
+2025-09-05 15:30:53,926 - __main__ - INFO - Computed SL distance for EURGBP: price distance=0.00246000, pip distance=24.6000 pips
+2025-09-05 15:30:53,928 - risk_manager - INFO - Calculated position size for EURGBP: 0.01 lots
+2025-09-05 15:30:54,274 - mt5_client - INFO - Order placed successfully: 1067094144
+2025-09-05 15:30:54,290 - trade_logger - INFO - Trade logged successfully: EURGBP BUY @ 0.86844
+2025-09-05 15:30:54,291 - __main__ - INFO - Trade executed successfully: EURGBP BUY @ 0.86844, Volume: 0.01, Ticket: 1067094144
+2025-09-05 15:30:54,360 - strategy - INFO - Bearish breakout detected for EURJPY below 172.96500
+2025-09-05 15:30:54,361 - strategy - INFO - Breakout detected for EURJPY: bearish at level 172.96500
+2025-09-05 15:31:54,447 - strategy - INFO - Bullish breakout detected for GBPUSD above 1.34855
+2025-09-05 15:31:54,448 - strategy - INFO - Breakout detected for GBPUSD: bullish at level 1.34855
+2025-09-05 15:31:54,448 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:31:54,448 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:31:54,464 - strategy - INFO - Adjusted SL for GBPUSD: raw SL=1.34381, spread=0.00015, spread_points=15, pip_size=0.0001
+2025-09-05 15:31:54,472 - strategy - INFO - GBPUSD: TP set using enhanced range projection. Range=30.9 pips, Multiplier=2.0, TP=1.35745
+2025-09-05 15:31:54,473 - strategy - INFO - SIGNAL GENERATED for GBPUSD: Type=BUY, Entry=1.35127, SL=1.34381 (74.6 pips), TP=1.35745, Confidence=0.95
+2025-09-05 15:31:54,473 - __main__ - INFO - Signal generated for GBPUSD: Type=BUY, Confidence=0.95, H1 Trend=bullish
+2025-09-05 15:31:54,474 - __main__ - INFO - Position already exists for GBPUSD, skipping new signal to let it work
+2025-09-05 15:31:54,531 - strategy - INFO - Bullish breakout detected for AUDUSD above 0.65474
+2025-09-05 15:31:54,531 - strategy - INFO - Breakout detected for AUDUSD: bullish at level 0.65474
+2025-09-05 15:31:54,532 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:31:54,532 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:31:54,547 - strategy - INFO - Adjusted SL for AUDUSD: raw SL=0.65198, spread=0.00012, spread_points=12, pip_size=0.0001
+2025-09-05 15:31:54,555 - strategy - INFO - AUDUSD: TP set using enhanced range projection. Range=11.4 pips, Multiplier=2.0, TP=0.65821
+2025-09-05 15:31:54,556 - strategy - INFO - SIGNAL GENERATED for AUDUSD: Type=BUY, Entry=0.65593, SL=0.65198 (39.5 pips), TP=0.65893, Confidence=0.95
+2025-09-05 15:31:54,556 - __main__ - INFO - Signal generated for AUDUSD: Type=BUY, Confidence=0.95, H1 Trend=bullish
+2025-09-05 15:31:54,557 - __main__ - INFO - Position already exists for AUDUSD, skipping new signal to let it work
+2025-09-05 15:31:54,585 - strategy - INFO - Bullish breakout detected for NZDUSD above 0.58796
+2025-09-05 15:31:54,585 - strategy - INFO - Breakout detected for NZDUSD: bullish at level 0.58796
+2025-09-05 15:31:54,586 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:31:54,586 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:31:54,602 - strategy - INFO - Adjusted SL for NZDUSD: raw SL=0.58537, spread=0.00012, spread_points=12, pip_size=0.0001
+2025-09-05 15:31:54,611 - strategy - INFO - NZDUSD: TP using enhanced ATR. ATR=3.2 pips, Session=overlap, Volatility ratio=1.00, Final multiplier=5.0, TP=0.59102
+2025-09-05 15:31:54,611 - strategy - INFO - SIGNAL GENERATED for NZDUSD: Type=BUY, Entry=0.58940, SL=0.58537 (40.3 pips), TP=0.59102, Confidence=0.95
+2025-09-05 15:31:54,611 - __main__ - INFO - Signal generated for NZDUSD: Type=BUY, Confidence=0.95, H1 Trend=ranging
+2025-09-05 15:31:54,612 - __main__ - INFO - Position already exists for NZDUSD, skipping new signal to let it work
+2025-09-05 15:31:54,724 - strategy - INFO - Bullish breakout detected for GBPCAD above 1.85996
+2025-09-05 15:31:54,724 - strategy - INFO - Breakout detected for GBPCAD: bullish at level 1.85996
+2025-09-05 15:31:54,725 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:31:54,725 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:31:54,741 - strategy - INFO - Adjusted SL for GBPCAD: raw SL=1.85431, spread=0.00036, spread_points=36, pip_size=0.0001
+2025-09-05 15:31:54,749 - strategy - INFO - GBPCAD: TP set using enhanced range projection. Range=37.9 pips, Multiplier=2.0, TP=1.87160
+2025-09-05 15:31:54,749 - strategy - INFO - SIGNAL GENERATED for GBPCAD: Type=BUY, Entry=1.86402, SL=1.85431 (97.1 pips), TP=1.87160, Confidence=0.95
+2025-09-05 15:31:54,749 - __main__ - INFO - Signal generated for GBPCAD: Type=BUY, Confidence=0.95, H1 Trend=bullish
+2025-09-05 15:31:54,750 - __main__ - INFO - Position already exists for GBPCAD, skipping new signal to let it work
+2025-09-05 15:32:54,894 - strategy - INFO - Bullish breakout detected for GBPUSD above 1.34855
+2025-09-05 15:32:54,894 - strategy - INFO - Breakout detected for GBPUSD: bullish at level 1.34855
+2025-09-05 15:32:54,894 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:32:54,895 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:32:54,912 - strategy - INFO - Adjusted SL for GBPUSD: raw SL=1.34383, spread=0.00013, spread_points=13, pip_size=0.0001
+2025-09-05 15:32:54,922 - strategy - INFO - GBPUSD: TP set using enhanced range projection. Range=30.9 pips, Multiplier=2.0, TP=1.35886
+2025-09-05 15:32:54,922 - strategy - INFO - SIGNAL GENERATED for GBPUSD: Type=BUY, Entry=1.35268, SL=1.34383 (88.5 pips), TP=1.35886, Confidence=0.95
+2025-09-05 15:32:54,923 - __main__ - INFO - Signal generated for GBPUSD: Type=BUY, Confidence=0.95, H1 Trend=bullish
+2025-09-05 15:32:54,923 - __main__ - INFO - Position already exists for GBPUSD, skipping new signal to let it work
+2025-09-05 15:32:54,981 - strategy - INFO - Bullish breakout detected for AUDUSD above 0.65474
+2025-09-05 15:32:54,981 - strategy - INFO - Breakout detected for AUDUSD: bullish at level 0.65474
+2025-09-05 15:32:54,982 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:32:54,982 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:32:54,998 - strategy - INFO - Adjusted SL for AUDUSD: raw SL=0.65196, spread=0.00014, spread_points=14, pip_size=0.0001
+2025-09-05 15:32:55,006 - strategy - INFO - AUDUSD: TP set using enhanced range projection. Range=11.4 pips, Multiplier=2.0, TP=0.65889
+2025-09-05 15:32:55,006 - strategy - INFO - SIGNAL GENERATED for AUDUSD: Type=BUY, Entry=0.65661, SL=0.65196 (46.5 pips), TP=0.65961, Confidence=0.95
+2025-09-05 15:32:55,007 - __main__ - INFO - Signal generated for AUDUSD: Type=BUY, Confidence=0.95, H1 Trend=bullish
+2025-09-05 15:32:55,007 - __main__ - INFO - Position already exists for AUDUSD, skipping new signal to let it work
+2025-09-05 15:32:55,037 - strategy - INFO - Bullish breakout detected for NZDUSD above 0.58796
+2025-09-05 15:32:55,037 - strategy - INFO - Breakout detected for NZDUSD: bullish at level 0.58796
+2025-09-05 15:32:55,037 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:32:55,038 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:32:55,054 - strategy - INFO - Adjusted SL for NZDUSD: raw SL=0.58535, spread=0.00014, spread_points=14, pip_size=0.0001
+2025-09-05 15:32:55,062 - strategy - INFO - NZDUSD: TP using enhanced ATR. ATR=3.2 pips, Session=overlap, Volatility ratio=1.00, Final multiplier=5.0, TP=0.59163
+2025-09-05 15:32:55,063 - strategy - INFO - SIGNAL GENERATED for NZDUSD: Type=BUY, Entry=0.59001, SL=0.58535 (46.6 pips), TP=0.59163, Confidence=0.95
+2025-09-05 15:32:55,063 - __main__ - INFO - Signal generated for NZDUSD: Type=BUY, Confidence=0.95, H1 Trend=ranging
+2025-09-05 15:32:55,064 - __main__ - INFO - Position already exists for NZDUSD, skipping new signal to let it work
+2025-09-05 15:32:55,182 - strategy - INFO - Bullish breakout detected for GBPCAD above 1.85996
+2025-09-05 15:32:55,182 - strategy - INFO - Breakout detected for GBPCAD: bullish at level 1.85996
+2025-09-05 15:32:55,182 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:32:55,182 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:32:55,198 - strategy - INFO - Adjusted SL for GBPCAD: raw SL=1.85444, spread=0.00023, spread_points=23, pip_size=0.0001
+2025-09-05 15:32:55,207 - strategy - INFO - GBPCAD: TP set using enhanced range projection. Range=37.9 pips, Multiplier=2.0, TP=1.87256
+2025-09-05 15:32:55,207 - strategy - INFO - SIGNAL GENERATED for GBPCAD: Type=BUY, Entry=1.86498, SL=1.85444 (105.4 pips), TP=1.87256, Confidence=0.95
+2025-09-05 15:32:55,208 - __main__ - INFO - Signal generated for GBPCAD: Type=BUY, Confidence=0.95, H1 Trend=bullish
+2025-09-05 15:32:55,208 - __main__ - INFO - Position already exists for GBPCAD, skipping new signal to let it work
+2025-09-05 15:33:55,377 - strategy - INFO - Bullish breakout detected for GBPUSD above 1.34855
+2025-09-05 15:33:55,377 - strategy - INFO - Breakout detected for GBPUSD: bullish at level 1.34855
+2025-09-05 15:33:55,378 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:33:55,378 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:33:55,395 - strategy - INFO - Adjusted SL for GBPUSD: raw SL=1.34383, spread=0.00013, spread_points=13, pip_size=0.0001
+2025-09-05 15:33:55,403 - strategy - INFO - GBPUSD: TP set using enhanced range projection. Range=30.9 pips, Multiplier=2.0, TP=1.35904
+2025-09-05 15:33:55,403 - strategy - INFO - SIGNAL GENERATED for GBPUSD: Type=BUY, Entry=1.35286, SL=1.34383 (90.3 pips), TP=1.35904, Confidence=0.95
+2025-09-05 15:33:55,403 - __main__ - INFO - Signal generated for GBPUSD: Type=BUY, Confidence=0.95, H1 Trend=bullish
+2025-09-05 15:33:55,404 - __main__ - INFO - Position already exists for GBPUSD, skipping new signal to let it work
+2025-09-05 15:33:55,461 - strategy - INFO - Bullish breakout detected for AUDUSD above 0.65474
+2025-09-05 15:33:55,461 - strategy - INFO - Breakout detected for AUDUSD: bullish at level 0.65474
+2025-09-05 15:33:55,461 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:33:55,462 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:33:55,477 - strategy - INFO - Adjusted SL for AUDUSD: raw SL=0.65199, spread=0.00011, spread_points=11, pip_size=0.0001
+2025-09-05 15:33:55,485 - strategy - INFO - AUDUSD: TP set using enhanced range projection. Range=11.4 pips, Multiplier=2.0, TP=0.65872
+2025-09-05 15:33:55,485 - strategy - INFO - SIGNAL GENERATED for AUDUSD: Type=BUY, Entry=0.65644, SL=0.65199 (44.5 pips), TP=0.65944, Confidence=0.95
+2025-09-05 15:33:55,486 - __main__ - INFO - Signal generated for AUDUSD: Type=BUY, Confidence=0.95, H1 Trend=bullish
+2025-09-05 15:33:55,486 - __main__ - INFO - Position already exists for AUDUSD, skipping new signal to let it work
+2025-09-05 15:33:55,515 - strategy - INFO - Bullish breakout detected for NZDUSD above 0.58796
+2025-09-05 15:33:55,516 - strategy - INFO - Breakout detected for NZDUSD: bullish at level 0.58796
+2025-09-05 15:33:55,516 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:33:55,516 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:33:55,532 - strategy - INFO - Adjusted SL for NZDUSD: raw SL=0.58537, spread=0.00012, spread_points=12, pip_size=0.0001
+2025-09-05 15:33:55,541 - strategy - INFO - NZDUSD: TP using enhanced ATR. ATR=3.2 pips, Session=overlap, Volatility ratio=1.00, Final multiplier=5.0, TP=0.59148
+2025-09-05 15:33:55,541 - strategy - INFO - SIGNAL GENERATED for NZDUSD: Type=BUY, Entry=0.58986, SL=0.58537 (44.9 pips), TP=0.59148, Confidence=0.95
+2025-09-05 15:33:55,541 - __main__ - INFO - Signal generated for NZDUSD: Type=BUY, Confidence=0.95, H1 Trend=ranging
+2025-09-05 15:33:55,542 - __main__ - INFO - Position already exists for NZDUSD, skipping new signal to let it work
+2025-09-05 15:33:55,656 - strategy - INFO - Bullish breakout detected for GBPCAD above 1.85996
+2025-09-05 15:33:55,656 - strategy - INFO - Breakout detected for GBPCAD: bullish at level 1.85996
+2025-09-05 15:33:55,656 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:33:55,657 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:33:55,672 - strategy - INFO - Adjusted SL for GBPCAD: raw SL=1.85446, spread=0.00021, spread_points=21, pip_size=0.0001
+2025-09-05 15:33:55,681 - strategy - INFO - GBPCAD: TP set using enhanced range projection. Range=37.9 pips, Multiplier=2.0, TP=1.87357
+2025-09-05 15:33:55,681 - strategy - INFO - SIGNAL GENERATED for GBPCAD: Type=BUY, Entry=1.86599, SL=1.85446 (115.3 pips), TP=1.87357, Confidence=0.95
+2025-09-05 15:33:55,681 - __main__ - INFO - Signal generated for GBPCAD: Type=BUY, Confidence=0.95, H1 Trend=bullish
+2025-09-05 15:33:55,682 - __main__ - INFO - Position already exists for GBPCAD, skipping new signal to let it work
+2025-09-05 15:34:55,839 - strategy - INFO - Bullish breakout detected for GBPUSD above 1.34855
+2025-09-05 15:34:55,839 - strategy - INFO - Breakout detected for GBPUSD: bullish at level 1.34855
+2025-09-05 15:34:55,839 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:34:55,840 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:34:55,856 - strategy - INFO - Adjusted SL for GBPUSD: raw SL=1.34383, spread=0.00013, spread_points=13, pip_size=0.0001
+2025-09-05 15:34:55,865 - strategy - INFO - GBPUSD: TP set using enhanced range projection. Range=30.9 pips, Multiplier=2.0, TP=1.35795
+2025-09-05 15:34:55,865 - strategy - INFO - SIGNAL GENERATED for GBPUSD: Type=BUY, Entry=1.35177, SL=1.34383 (79.4 pips), TP=1.35795, Confidence=0.95
+2025-09-05 15:34:55,865 - __main__ - INFO - Signal generated for GBPUSD: Type=BUY, Confidence=0.95, H1 Trend=bullish
+2025-09-05 15:34:55,866 - __main__ - INFO - Position already exists for GBPUSD, skipping new signal to let it work
+2025-09-05 15:34:55,929 - strategy - INFO - Bullish breakout detected for AUDUSD above 0.65474
+2025-09-05 15:34:55,929 - strategy - INFO - Breakout detected for AUDUSD: bullish at level 0.65474
+2025-09-05 15:34:55,929 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:34:55,929 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:34:55,953 - strategy - INFO - Adjusted SL for AUDUSD: raw SL=0.65197, spread=0.00013, spread_points=13, pip_size=0.0001
+2025-09-05 15:34:55,964 - strategy - INFO - AUDUSD: TP set using enhanced range projection. Range=11.4 pips, Multiplier=2.0, TP=0.65841
+2025-09-05 15:34:55,965 - strategy - INFO - SIGNAL GENERATED for AUDUSD: Type=BUY, Entry=0.65613, SL=0.65197 (41.6 pips), TP=0.65913, Confidence=0.95
+2025-09-05 15:34:55,965 - __main__ - INFO - Signal generated for AUDUSD: Type=BUY, Confidence=0.95, H1 Trend=bullish
+2025-09-05 15:34:55,966 - __main__ - INFO - Position already exists for AUDUSD, skipping new signal to let it work
+2025-09-05 15:34:55,996 - strategy - INFO - Bullish breakout detected for NZDUSD above 0.58796
+2025-09-05 15:34:55,996 - strategy - INFO - Breakout detected for NZDUSD: bullish at level 0.58796
+2025-09-05 15:34:55,996 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:34:55,996 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:34:56,013 - strategy - INFO - Adjusted SL for NZDUSD: raw SL=0.58537, spread=0.00012, spread_points=12, pip_size=0.0001
+2025-09-05 15:34:56,021 - strategy - INFO - NZDUSD: TP using enhanced ATR. ATR=3.2 pips, Session=overlap, Volatility ratio=1.00, Final multiplier=5.0, TP=0.59113
+2025-09-05 15:34:56,021 - strategy - INFO - SIGNAL GENERATED for NZDUSD: Type=BUY, Entry=0.58951, SL=0.58537 (41.4 pips), TP=0.59113, Confidence=0.95
+2025-09-05 15:34:56,021 - __main__ - INFO - Signal generated for NZDUSD: Type=BUY, Confidence=0.95, H1 Trend=ranging
+2025-09-05 15:34:56,022 - __main__ - INFO - Position already exists for NZDUSD, skipping new signal to let it work
+2025-09-05 15:34:56,139 - strategy - INFO - Bullish breakout detected for GBPCAD above 1.85996
+2025-09-05 15:34:56,140 - strategy - INFO - Breakout detected for GBPCAD: bullish at level 1.85996
+2025-09-05 15:34:56,140 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:34:56,140 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:34:56,156 - strategy - INFO - Adjusted SL for GBPCAD: raw SL=1.85441, spread=0.00026, spread_points=26, pip_size=0.0001
+2025-09-05 15:34:56,164 - strategy - INFO - GBPCAD: TP set using enhanced range projection. Range=37.9 pips, Multiplier=2.0, TP=1.87312
+2025-09-05 15:34:56,164 - strategy - INFO - SIGNAL GENERATED for GBPCAD: Type=BUY, Entry=1.86554, SL=1.85441 (111.3 pips), TP=1.87312, Confidence=0.95
+2025-09-05 15:34:56,165 - __main__ - INFO - Signal generated for GBPCAD: Type=BUY, Confidence=0.95, H1 Trend=bullish
+2025-09-05 15:34:56,165 - __main__ - INFO - Position already exists for GBPCAD, skipping new signal to let it work
+2025-09-05 15:35:56,341 - strategy - INFO - Bullish breakout detected for GBPUSD above 1.34855
+2025-09-05 15:35:56,342 - strategy - INFO - Breakout detected for GBPUSD: bullish at level 1.34855
+2025-09-05 15:35:56,342 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:35:56,342 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:35:56,358 - strategy - INFO - Adjusted SL for GBPUSD: raw SL=1.34382, spread=0.00014, spread_points=14, pip_size=0.0001
+2025-09-05 15:35:56,366 - strategy - INFO - GBPUSD: TP set using enhanced range projection. Range=30.9 pips, Multiplier=2.0, TP=1.35761
+2025-09-05 15:35:56,367 - strategy - INFO - SIGNAL GENERATED for GBPUSD: Type=BUY, Entry=1.35143, SL=1.34382 (76.1 pips), TP=1.35761, Confidence=0.95
+2025-09-05 15:35:56,367 - __main__ - INFO - Signal generated for GBPUSD: Type=BUY, Confidence=0.95, H1 Trend=bullish
+2025-09-05 15:35:56,368 - __main__ - INFO - Position already exists for GBPUSD, skipping new signal to let it work
+2025-09-05 15:35:56,426 - strategy - INFO - Bullish breakout detected for AUDUSD above 0.65474
+2025-09-05 15:35:56,426 - strategy - INFO - Breakout detected for AUDUSD: bullish at level 0.65474
+2025-09-05 15:35:56,426 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:35:56,426 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:35:56,442 - strategy - INFO - Adjusted SL for AUDUSD: raw SL=0.65197, spread=0.00013, spread_points=13, pip_size=0.0001
+2025-09-05 15:35:56,450 - strategy - INFO - AUDUSD: TP set using enhanced range projection. Range=11.4 pips, Multiplier=2.0, TP=0.65828
+2025-09-05 15:35:56,450 - strategy - INFO - SIGNAL GENERATED for AUDUSD: Type=BUY, Entry=0.65600, SL=0.65197 (40.3 pips), TP=0.65900, Confidence=0.95
+2025-09-05 15:35:56,451 - __main__ - INFO - Signal generated for AUDUSD: Type=BUY, Confidence=0.95, H1 Trend=bullish
+2025-09-05 15:35:56,451 - __main__ - INFO - Position already exists for AUDUSD, skipping new signal to let it work
+2025-09-05 15:35:56,480 - strategy - INFO - Bullish breakout detected for NZDUSD above 0.58796
+2025-09-05 15:35:56,480 - strategy - INFO - Breakout detected for NZDUSD: bullish at level 0.58796
+2025-09-05 15:35:56,480 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:35:56,481 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:35:56,497 - strategy - INFO - Adjusted SL for NZDUSD: raw SL=0.58536, spread=0.00013, spread_points=13, pip_size=0.0001
+2025-09-05 15:35:56,505 - strategy - INFO - NZDUSD: TP using enhanced ATR. ATR=3.2 pips, Session=overlap, Volatility ratio=1.00, Final multiplier=5.0, TP=0.59094
+2025-09-05 15:35:56,506 - strategy - INFO - SIGNAL GENERATED for NZDUSD: Type=BUY, Entry=0.58932, SL=0.58536 (39.6 pips), TP=0.59094, Confidence=0.95
+2025-09-05 15:35:56,506 - __main__ - INFO - Signal generated for NZDUSD: Type=BUY, Confidence=0.95, H1 Trend=ranging
+2025-09-05 15:35:56,507 - __main__ - INFO - Position already exists for NZDUSD, skipping new signal to let it work
+2025-09-05 15:35:56,635 - strategy - INFO - Bullish breakout detected for GBPCAD above 1.85996
+2025-09-05 15:35:56,636 - strategy - INFO - Breakout detected for GBPCAD: bullish at level 1.85996
+2025-09-05 15:35:56,636 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:35:56,636 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:35:56,652 - strategy - INFO - Adjusted SL for GBPCAD: raw SL=1.85446, spread=0.00021, spread_points=21, pip_size=0.0001
+2025-09-05 15:35:56,660 - strategy - INFO - GBPCAD: TP set using enhanced range projection. Range=37.9 pips, Multiplier=2.0, TP=1.87286
+2025-09-05 15:35:56,660 - strategy - INFO - SIGNAL GENERATED for GBPCAD: Type=BUY, Entry=1.86528, SL=1.85446 (108.2 pips), TP=1.87286, Confidence=0.95
+2025-09-05 15:35:56,661 - __main__ - INFO - Signal generated for GBPCAD: Type=BUY, Confidence=0.95, H1 Trend=bullish
+2025-09-05 15:35:56,661 - __main__ - INFO - Position already exists for GBPCAD, skipping new signal to let it work
+2025-09-05 15:36:56,803 - strategy - INFO - Bullish breakout detected for GBPUSD above 1.34855
+2025-09-05 15:36:56,803 - strategy - INFO - Breakout detected for GBPUSD: bullish at level 1.34855
+2025-09-05 15:36:56,804 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:36:56,804 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:36:56,820 - strategy - INFO - Adjusted SL for GBPUSD: raw SL=1.34382, spread=0.00014, spread_points=14, pip_size=0.0001
+2025-09-05 15:36:56,829 - strategy - INFO - GBPUSD: TP set using enhanced range projection. Range=30.9 pips, Multiplier=2.0, TP=1.35795
+2025-09-05 15:36:56,829 - strategy - INFO - SIGNAL GENERATED for GBPUSD: Type=BUY, Entry=1.35177, SL=1.34382 (79.5 pips), TP=1.35795, Confidence=0.95
+2025-09-05 15:36:56,829 - __main__ - INFO - Signal generated for GBPUSD: Type=BUY, Confidence=0.95, H1 Trend=bullish
+2025-09-05 15:36:56,830 - __main__ - INFO - Position already exists for GBPUSD, skipping new signal to let it work
+2025-09-05 15:36:56,890 - strategy - INFO - Bullish breakout detected for AUDUSD above 0.65474
+2025-09-05 15:36:56,890 - strategy - INFO - Breakout detected for AUDUSD: bullish at level 0.65474
+2025-09-05 15:36:56,891 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:36:56,891 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:36:56,908 - strategy - INFO - Adjusted SL for AUDUSD: raw SL=0.65197, spread=0.00013, spread_points=13, pip_size=0.0001
+2025-09-05 15:36:56,917 - strategy - INFO - AUDUSD: TP set using enhanced range projection. Range=11.4 pips, Multiplier=2.0, TP=0.65857
+2025-09-05 15:36:56,917 - strategy - INFO - SIGNAL GENERATED for AUDUSD: Type=BUY, Entry=0.65629, SL=0.65197 (43.2 pips), TP=0.65929, Confidence=0.95
+2025-09-05 15:36:56,917 - __main__ - INFO - Signal generated for AUDUSD: Type=BUY, Confidence=0.95, H1 Trend=bullish
+2025-09-05 15:36:56,918 - __main__ - INFO - Position already exists for AUDUSD, skipping new signal to let it work
+2025-09-05 15:36:56,948 - strategy - INFO - Bullish breakout detected for NZDUSD above 0.58796
+2025-09-05 15:36:56,948 - strategy - INFO - Breakout detected for NZDUSD: bullish at level 0.58796
+2025-09-05 15:36:56,949 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:36:56,949 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:36:56,966 - strategy - INFO - Adjusted SL for NZDUSD: raw SL=0.58537, spread=0.00012, spread_points=12, pip_size=0.0001
+2025-09-05 15:36:56,974 - strategy - INFO - NZDUSD: TP using enhanced ATR. ATR=3.2 pips, Session=overlap, Volatility ratio=1.00, Final multiplier=5.0, TP=0.59117
+2025-09-05 15:36:56,975 - strategy - INFO - SIGNAL GENERATED for NZDUSD: Type=BUY, Entry=0.58955, SL=0.58537 (41.8 pips), TP=0.59117, Confidence=0.95
+2025-09-05 15:36:56,975 - __main__ - INFO - Signal generated for NZDUSD: Type=BUY, Confidence=0.95, H1 Trend=ranging
+2025-09-05 15:36:56,976 - __main__ - INFO - Position already exists for NZDUSD, skipping new signal to let it work
+2025-09-05 15:36:57,096 - strategy - INFO - Bullish breakout detected for GBPCAD above 1.85996
+2025-09-05 15:36:57,096 - strategy - INFO - Breakout detected for GBPCAD: bullish at level 1.85996
+2025-09-05 15:36:57,096 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:36:57,097 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:36:57,115 - strategy - INFO - Adjusted SL for GBPCAD: raw SL=1.85448, spread=0.00019, spread_points=19, pip_size=0.0001
+2025-09-05 15:36:57,123 - strategy - INFO - GBPCAD: TP set using enhanced range projection. Range=37.9 pips, Multiplier=2.0, TP=1.87326
+2025-09-05 15:36:57,124 - strategy - INFO - SIGNAL GENERATED for GBPCAD: Type=BUY, Entry=1.86568, SL=1.85448 (112.0 pips), TP=1.87326, Confidence=0.95
+2025-09-05 15:36:57,124 - __main__ - INFO - Signal generated for GBPCAD: Type=BUY, Confidence=0.95, H1 Trend=bullish
+2025-09-05 15:36:57,125 - __main__ - INFO - Position already exists for GBPCAD, skipping new signal to let it work
+2025-09-05 15:37:57,307 - strategy - INFO - Bullish breakout detected for GBPUSD above 1.34855
+2025-09-05 15:37:57,308 - strategy - INFO - Breakout detected for GBPUSD: bullish at level 1.34855
+2025-09-05 15:37:57,308 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:37:57,308 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:37:57,324 - strategy - INFO - Adjusted SL for GBPUSD: raw SL=1.34383, spread=0.00013, spread_points=13, pip_size=0.0001
+2025-09-05 15:37:57,332 - strategy - INFO - GBPUSD: TP set using enhanced range projection. Range=30.9 pips, Multiplier=2.0, TP=1.35783
+2025-09-05 15:37:57,333 - strategy - INFO - SIGNAL GENERATED for GBPUSD: Type=BUY, Entry=1.35165, SL=1.34383 (78.2 pips), TP=1.35783, Confidence=0.95
+2025-09-05 15:37:57,333 - __main__ - INFO - Signal generated for GBPUSD: Type=BUY, Confidence=0.95, H1 Trend=bullish
+2025-09-05 15:37:57,334 - __main__ - INFO - Position already exists for GBPUSD, skipping new signal to let it work
+2025-09-05 15:37:57,391 - strategy - INFO - Bullish breakout detected for AUDUSD above 0.65474
+2025-09-05 15:37:57,391 - strategy - INFO - Breakout detected for AUDUSD: bullish at level 0.65474
+2025-09-05 15:37:57,391 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:37:57,392 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:37:57,407 - strategy - INFO - Adjusted SL for AUDUSD: raw SL=0.65198, spread=0.00012, spread_points=12, pip_size=0.0001
+2025-09-05 15:37:57,416 - strategy - INFO - AUDUSD: TP set using enhanced range projection. Range=11.4 pips, Multiplier=2.0, TP=0.65861
+2025-09-05 15:37:57,416 - strategy - INFO - SIGNAL GENERATED for AUDUSD: Type=BUY, Entry=0.65633, SL=0.65198 (43.5 pips), TP=0.65933, Confidence=0.95
+2025-09-05 15:37:57,416 - __main__ - INFO - Signal generated for AUDUSD: Type=BUY, Confidence=0.95, H1 Trend=bullish
+2025-09-05 15:37:57,417 - __main__ - INFO - Position already exists for AUDUSD, skipping new signal to let it work
+2025-09-05 15:37:57,445 - strategy - INFO - Bullish breakout detected for NZDUSD above 0.58796
+2025-09-05 15:37:57,446 - strategy - INFO - Breakout detected for NZDUSD: bullish at level 0.58796
+2025-09-05 15:37:57,446 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:37:57,446 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:37:57,462 - strategy - INFO - Adjusted SL for NZDUSD: raw SL=0.58537, spread=0.00012, spread_points=12, pip_size=0.0001
+2025-09-05 15:37:57,470 - strategy - INFO - NZDUSD: TP using enhanced ATR. ATR=3.2 pips, Session=overlap, Volatility ratio=1.00, Final multiplier=5.0, TP=0.59132
+2025-09-05 15:37:57,470 - strategy - INFO - SIGNAL GENERATED for NZDUSD: Type=BUY, Entry=0.58970, SL=0.58537 (43.3 pips), TP=0.59132, Confidence=0.95
+2025-09-05 15:37:57,470 - __main__ - INFO - Signal generated for NZDUSD: Type=BUY, Confidence=0.95, H1 Trend=ranging
+2025-09-05 15:37:57,471 - __main__ - INFO - Position already exists for NZDUSD, skipping new signal to let it work
+2025-09-05 15:37:57,500 - strategy - INFO - Bullish breakout detected for USDCAD above 1.38009
+2025-09-05 15:37:57,500 - strategy - INFO - Breakout detected for USDCAD: bullish at level 1.38009
+2025-09-05 15:37:57,500 - strategy - INFO - Breakout bullish against bearish trend for USDCAD - SKIPPING
+2025-09-05 15:37:57,585 - strategy - INFO - Bullish breakout detected for GBPCAD above 1.85996
+2025-09-05 15:37:57,586 - strategy - INFO - Breakout detected for GBPCAD: bullish at level 1.85996
+2025-09-05 15:37:57,586 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:37:57,586 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:37:57,602 - strategy - INFO - Adjusted SL for GBPCAD: raw SL=1.85440, spread=0.00027, spread_points=27, pip_size=0.0001
+2025-09-05 15:37:57,610 - strategy - INFO - GBPCAD: TP set using enhanced range projection. Range=37.9 pips, Multiplier=2.0, TP=1.87366
+2025-09-05 15:37:57,610 - strategy - INFO - SIGNAL GENERATED for GBPCAD: Type=BUY, Entry=1.86608, SL=1.85440 (116.8 pips), TP=1.87366, Confidence=0.95
+2025-09-05 15:37:57,611 - __main__ - INFO - Signal generated for GBPCAD: Type=BUY, Confidence=0.95, H1 Trend=bullish
+2025-09-05 15:37:57,611 - __main__ - INFO - Position already exists for GBPCAD, skipping new signal to let it work
+2025-09-05 15:38:57,761 - strategy - INFO - Bullish breakout detected for GBPUSD above 1.34855
+2025-09-05 15:38:57,761 - strategy - INFO - Breakout detected for GBPUSD: bullish at level 1.34855
+2025-09-05 15:38:57,762 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:38:57,762 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:38:57,778 - strategy - INFO - Adjusted SL for GBPUSD: raw SL=1.34386, spread=0.00010, spread_points=10, pip_size=0.0001
+2025-09-05 15:38:57,789 - strategy - INFO - GBPUSD: TP set using enhanced range projection. Range=30.9 pips, Multiplier=2.0, TP=1.35712
+2025-09-05 15:38:57,789 - strategy - INFO - SIGNAL GENERATED for GBPUSD: Type=BUY, Entry=1.35094, SL=1.34386 (70.8 pips), TP=1.35712, Confidence=0.95
+2025-09-05 15:38:57,790 - __main__ - INFO - Signal generated for GBPUSD: Type=BUY, Confidence=0.95, H1 Trend=bullish
+2025-09-05 15:38:57,790 - __main__ - INFO - Position already exists for GBPUSD, skipping new signal to let it work
+2025-09-05 15:38:57,848 - strategy - INFO - Bullish breakout detected for AUDUSD above 0.65474
+2025-09-05 15:38:57,849 - strategy - INFO - Breakout detected for AUDUSD: bullish at level 0.65474
+2025-09-05 15:38:57,849 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:38:57,849 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:38:57,865 - strategy - INFO - Adjusted SL for AUDUSD: raw SL=0.65197, spread=0.00013, spread_points=13, pip_size=0.0001
+2025-09-05 15:38:57,873 - strategy - INFO - AUDUSD: TP set using enhanced range projection. Range=11.4 pips, Multiplier=2.0, TP=0.65838
+2025-09-05 15:38:57,873 - strategy - INFO - SIGNAL GENERATED for AUDUSD: Type=BUY, Entry=0.65610, SL=0.65197 (41.3 pips), TP=0.65910, Confidence=0.95
+2025-09-05 15:38:57,874 - __main__ - INFO - Signal generated for AUDUSD: Type=BUY, Confidence=0.95, H1 Trend=bullish
+2025-09-05 15:38:57,874 - __main__ - INFO - Position already exists for AUDUSD, skipping new signal to let it work
+2025-09-05 15:38:57,904 - strategy - INFO - Bullish breakout detected for NZDUSD above 0.58796
+2025-09-05 15:38:57,904 - strategy - INFO - Breakout detected for NZDUSD: bullish at level 0.58796
+2025-09-05 15:38:57,905 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:38:57,905 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:38:57,921 - strategy - INFO - Adjusted SL for NZDUSD: raw SL=0.58536, spread=0.00013, spread_points=13, pip_size=0.0001
+2025-09-05 15:38:57,929 - strategy - INFO - NZDUSD: TP using enhanced ATR. ATR=3.2 pips, Session=overlap, Volatility ratio=1.00, Final multiplier=5.0, TP=0.59103
+2025-09-05 15:38:57,929 - strategy - INFO - SIGNAL GENERATED for NZDUSD: Type=BUY, Entry=0.58941, SL=0.58536 (40.5 pips), TP=0.59103, Confidence=0.95
+2025-09-05 15:38:57,930 - __main__ - INFO - Signal generated for NZDUSD: Type=BUY, Confidence=0.95, H1 Trend=ranging
+2025-09-05 15:38:57,930 - __main__ - INFO - Position already exists for NZDUSD, skipping new signal to let it work
+2025-09-05 15:38:57,960 - strategy - INFO - Bullish breakout detected for USDCAD above 1.38009
+2025-09-05 15:38:57,960 - strategy - INFO - Breakout detected for USDCAD: bullish at level 1.38009
+2025-09-05 15:38:58,045 - strategy - INFO - Bullish breakout detected for GBPCAD above 1.85996
+2025-09-05 15:38:58,046 - strategy - INFO - Breakout detected for GBPCAD: bullish at level 1.85996
+2025-09-05 15:38:58,046 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:38:58,046 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:38:58,061 - strategy - INFO - Adjusted SL for GBPCAD: raw SL=1.85443, spread=0.00024, spread_points=24, pip_size=0.0001
+2025-09-05 15:38:58,070 - strategy - INFO - GBPCAD: TP set using enhanced range projection. Range=37.9 pips, Multiplier=2.0, TP=1.87300
+2025-09-05 15:38:58,070 - strategy - INFO - SIGNAL GENERATED for GBPCAD: Type=BUY, Entry=1.86542, SL=1.85443 (109.9 pips), TP=1.87300, Confidence=0.95
+2025-09-05 15:38:58,070 - __main__ - INFO - Signal generated for GBPCAD: Type=BUY, Confidence=0.95, H1 Trend=bullish
+2025-09-05 15:38:58,071 - __main__ - INFO - Position already exists for GBPCAD, skipping new signal to let it work
+2025-09-05 15:39:58,218 - strategy - INFO - Bullish breakout detected for GBPUSD above 1.34855
+2025-09-05 15:39:58,219 - strategy - INFO - Breakout detected for GBPUSD: bullish at level 1.34855
+2025-09-05 15:39:58,219 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:39:58,219 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:39:58,234 - strategy - INFO - Adjusted SL for GBPUSD: raw SL=1.34381, spread=0.00015, spread_points=15, pip_size=0.0001
+2025-09-05 15:39:58,244 - strategy - INFO - GBPUSD: TP set using enhanced range projection. Range=30.9 pips, Multiplier=2.0, TP=1.35732
+2025-09-05 15:39:58,244 - strategy - INFO - SIGNAL GENERATED for GBPUSD: Type=BUY, Entry=1.35114, SL=1.34381 (73.3 pips), TP=1.35732, Confidence=0.95
+2025-09-05 15:39:58,244 - __main__ - INFO - Signal generated for GBPUSD: Type=BUY, Confidence=0.95, H1 Trend=bullish
+2025-09-05 15:39:58,245 - __main__ - INFO - Position already exists for GBPUSD, skipping new signal to let it work
+2025-09-05 15:39:58,303 - strategy - INFO - Bullish breakout detected for AUDUSD above 0.65474
+2025-09-05 15:39:58,303 - strategy - INFO - Breakout detected for AUDUSD: bullish at level 0.65474
+2025-09-05 15:39:58,303 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:39:58,303 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:39:58,319 - strategy - INFO - Adjusted SL for AUDUSD: raw SL=0.65197, spread=0.00013, spread_points=13, pip_size=0.0001
+2025-09-05 15:39:58,327 - strategy - INFO - AUDUSD: TP set using enhanced range projection. Range=11.4 pips, Multiplier=2.0, TP=0.65837
+2025-09-05 15:39:58,327 - strategy - INFO - SIGNAL GENERATED for AUDUSD: Type=BUY, Entry=0.65609, SL=0.65197 (41.2 pips), TP=0.65909, Confidence=0.95
+2025-09-05 15:39:58,327 - __main__ - INFO - Signal generated for AUDUSD: Type=BUY, Confidence=0.95, H1 Trend=bullish
+2025-09-05 15:39:58,328 - __main__ - INFO - Position already exists for AUDUSD, skipping new signal to let it work
+2025-09-05 15:39:58,357 - strategy - INFO - Bullish breakout detected for NZDUSD above 0.58796
+2025-09-05 15:39:58,357 - strategy - INFO - Breakout detected for NZDUSD: bullish at level 0.58796
+2025-09-05 15:39:58,358 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:39:58,358 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:39:58,374 - strategy - INFO - Adjusted SL for NZDUSD: raw SL=0.58537, spread=0.00012, spread_points=12, pip_size=0.0001
+2025-09-05 15:39:58,382 - strategy - INFO - NZDUSD: TP using enhanced ATR. ATR=3.2 pips, Session=overlap, Volatility ratio=1.00, Final multiplier=5.0, TP=0.59097
+2025-09-05 15:39:58,382 - strategy - INFO - SIGNAL GENERATED for NZDUSD: Type=BUY, Entry=0.58935, SL=0.58537 (39.8 pips), TP=0.59097, Confidence=0.95
+2025-09-05 15:39:58,383 - __main__ - INFO - Signal generated for NZDUSD: Type=BUY, Confidence=0.95, H1 Trend=ranging
+2025-09-05 15:39:58,383 - __main__ - INFO - Position already exists for NZDUSD, skipping new signal to let it work
+2025-09-05 15:39:58,413 - strategy - INFO - Bullish breakout detected for USDCAD above 1.38009
+2025-09-05 15:39:58,413 - strategy - INFO - Breakout detected for USDCAD: bullish at level 1.38009
+2025-09-05 15:39:58,413 - strategy - INFO - Breakout bullish against bearish trend for USDCAD - SKIPPING
+2025-09-05 15:39:58,498 - strategy - INFO - Bullish breakout detected for GBPCAD above 1.85996
+2025-09-05 15:39:58,498 - strategy - INFO - Breakout detected for GBPCAD: bullish at level 1.85996
+2025-09-05 15:39:58,499 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:39:58,499 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:39:58,514 - strategy - INFO - Adjusted SL for GBPCAD: raw SL=1.85442, spread=0.00025, spread_points=25, pip_size=0.0001
+2025-09-05 15:39:58,523 - strategy - INFO - GBPCAD: TP set using enhanced range projection. Range=37.9 pips, Multiplier=2.0, TP=1.87310
+2025-09-05 15:39:58,523 - strategy - INFO - SIGNAL GENERATED for GBPCAD: Type=BUY, Entry=1.86552, SL=1.85442 (111.0 pips), TP=1.87310, Confidence=0.95
+2025-09-05 15:39:58,523 - __main__ - INFO - Signal generated for GBPCAD: Type=BUY, Confidence=0.95, H1 Trend=bullish
+2025-09-05 15:39:58,524 - __main__ - INFO - Position already exists for GBPCAD, skipping new signal to let it work
+2025-09-05 15:40:58,676 - strategy - INFO - Bullish breakout detected for GBPUSD above 1.34855
+2025-09-05 15:40:58,676 - strategy - INFO - Breakout detected for GBPUSD: bullish at level 1.34855
+2025-09-05 15:40:58,677 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:40:58,677 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:40:58,692 - strategy - INFO - Adjusted SL for GBPUSD: raw SL=1.34385, spread=0.00011, spread_points=11, pip_size=0.0001
+2025-09-05 15:40:58,701 - strategy - INFO - GBPUSD: TP set using enhanced range projection. Range=30.9 pips, Multiplier=2.0, TP=1.35737
+2025-09-05 15:40:58,701 - strategy - INFO - SIGNAL GENERATED for GBPUSD: Type=BUY, Entry=1.35119, SL=1.34385 (73.4 pips), TP=1.35737, Confidence=0.95
+2025-09-05 15:40:58,702 - __main__ - INFO - Signal generated for GBPUSD: Type=BUY, Confidence=0.95, H1 Trend=bullish
+2025-09-05 15:40:58,702 - __main__ - INFO - Position already exists for GBPUSD, skipping new signal to let it work
+2025-09-05 15:40:58,760 - strategy - INFO - Bullish breakout detected for AUDUSD above 0.65474
+2025-09-05 15:40:58,760 - strategy - INFO - Breakout detected for AUDUSD: bullish at level 0.65474
+2025-09-05 15:40:58,761 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:40:58,761 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:40:58,777 - strategy - INFO - Adjusted SL for AUDUSD: raw SL=0.65197, spread=0.00013, spread_points=13, pip_size=0.0001
+2025-09-05 15:40:58,785 - strategy - INFO - AUDUSD: TP set using enhanced range projection. Range=11.4 pips, Multiplier=2.0, TP=0.65839
+2025-09-05 15:40:58,785 - strategy - INFO - SIGNAL GENERATED for AUDUSD: Type=BUY, Entry=0.65611, SL=0.65197 (41.4 pips), TP=0.65911, Confidence=0.95
+2025-09-05 15:40:58,786 - __main__ - INFO - Signal generated for AUDUSD: Type=BUY, Confidence=0.95, H1 Trend=bullish
+2025-09-05 15:40:58,786 - __main__ - INFO - Position already exists for AUDUSD, skipping new signal to let it work
+2025-09-05 15:40:58,815 - strategy - INFO - Bullish breakout detected for NZDUSD above 0.58796
+2025-09-05 15:40:58,815 - strategy - INFO - Breakout detected for NZDUSD: bullish at level 0.58796
+2025-09-05 15:40:58,815 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:40:58,816 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:40:58,832 - strategy - INFO - Adjusted SL for NZDUSD: raw SL=0.58537, spread=0.00012, spread_points=12, pip_size=0.0001
+2025-09-05 15:40:58,840 - strategy - INFO - NZDUSD: TP using enhanced ATR. ATR=3.2 pips, Session=overlap, Volatility ratio=1.00, Final multiplier=5.0, TP=0.59100
+2025-09-05 15:40:58,841 - strategy - INFO - SIGNAL GENERATED for NZDUSD: Type=BUY, Entry=0.58938, SL=0.58537 (40.1 pips), TP=0.59100, Confidence=0.95
+2025-09-05 15:40:58,841 - __main__ - INFO - Signal generated for NZDUSD: Type=BUY, Confidence=0.95, H1 Trend=ranging
+2025-09-05 15:40:58,842 - __main__ - INFO - Position already exists for NZDUSD, skipping new signal to let it work
+2025-09-05 15:40:58,871 - strategy - INFO - Bullish breakout detected for USDCAD above 1.38009
+2025-09-05 15:40:58,872 - strategy - INFO - Breakout detected for USDCAD: bullish at level 1.38009
+2025-09-05 15:40:58,956 - strategy - INFO - Bullish breakout detected for GBPCAD above 1.85996
+2025-09-05 15:40:58,956 - strategy - INFO - Breakout detected for GBPCAD: bullish at level 1.85996
+2025-09-05 15:40:58,956 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:40:58,957 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:40:58,973 - strategy - INFO - Adjusted SL for GBPCAD: raw SL=1.85443, spread=0.00024, spread_points=24, pip_size=0.0001
+2025-09-05 15:40:58,981 - strategy - INFO - GBPCAD: TP set using enhanced range projection. Range=37.9 pips, Multiplier=2.0, TP=1.87347
+2025-09-05 15:40:58,981 - strategy - INFO - SIGNAL GENERATED for GBPCAD: Type=BUY, Entry=1.86589, SL=1.85443 (114.6 pips), TP=1.87347, Confidence=0.95
+2025-09-05 15:40:58,981 - __main__ - INFO - Signal generated for GBPCAD: Type=BUY, Confidence=0.95, H1 Trend=bullish
+2025-09-05 15:40:58,982 - __main__ - INFO - Position already exists for GBPCAD, skipping new signal to let it work
+2025-09-05 15:40:59,040 - strategy - INFO - Bearish breakout detected for EURJPY below 172.96500
+2025-09-05 15:40:59,040 - strategy - INFO - Breakout detected for EURJPY: bearish at level 172.96500
+2025-09-05 15:41:59,143 - strategy - INFO - Bullish breakout detected for GBPUSD above 1.34855
+2025-09-05 15:41:59,143 - strategy - INFO - Breakout detected for GBPUSD: bullish at level 1.34855
+2025-09-05 15:41:59,143 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:41:59,144 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:41:59,161 - strategy - INFO - Adjusted SL for GBPUSD: raw SL=1.34383, spread=0.00013, spread_points=13, pip_size=0.0001
+2025-09-05 15:41:59,169 - strategy - INFO - GBPUSD: TP set using enhanced range projection. Range=30.9 pips, Multiplier=2.0, TP=1.35686
+2025-09-05 15:41:59,169 - strategy - INFO - SIGNAL GENERATED for GBPUSD: Type=BUY, Entry=1.35068, SL=1.34383 (68.5 pips), TP=1.35686, Confidence=0.95
+2025-09-05 15:41:59,170 - __main__ - INFO - Signal generated for GBPUSD: Type=BUY, Confidence=0.95, H1 Trend=bullish
+2025-09-05 15:41:59,171 - __main__ - INFO - Position already exists for GBPUSD, skipping new signal to let it work
+2025-09-05 15:41:59,228 - strategy - INFO - Bullish breakout detected for AUDUSD above 0.65474
+2025-09-05 15:41:59,228 - strategy - INFO - Breakout detected for AUDUSD: bullish at level 0.65474
+2025-09-05 15:41:59,229 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:41:59,229 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:41:59,244 - strategy - INFO - Adjusted SL for AUDUSD: raw SL=0.65197, spread=0.00013, spread_points=13, pip_size=0.0001
+2025-09-05 15:41:59,252 - strategy - INFO - AUDUSD: TP set using enhanced range projection. Range=11.4 pips, Multiplier=2.0, TP=0.65797
+2025-09-05 15:41:59,253 - strategy - INFO - SIGNAL GENERATED for AUDUSD: Type=BUY, Entry=0.65569, SL=0.65197 (37.2 pips), TP=0.65869, Confidence=0.95
+2025-09-05 15:41:59,253 - __main__ - INFO - Signal generated for AUDUSD: Type=BUY, Confidence=0.95, H1 Trend=bullish
+2025-09-05 15:41:59,254 - __main__ - INFO - Position already exists for AUDUSD, skipping new signal to let it work
+2025-09-05 15:41:59,282 - strategy - INFO - Bullish breakout detected for NZDUSD above 0.58796
+2025-09-05 15:41:59,283 - strategy - INFO - Breakout detected for NZDUSD: bullish at level 0.58796
+2025-09-05 15:41:59,283 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:41:59,283 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:41:59,299 - strategy - INFO - Adjusted SL for NZDUSD: raw SL=0.58537, spread=0.00012, spread_points=12, pip_size=0.0001
+2025-09-05 15:41:59,308 - strategy - INFO - NZDUSD: TP using enhanced ATR. ATR=3.2 pips, Session=overlap, Volatility ratio=1.00, Final multiplier=5.0, TP=0.59054
+2025-09-05 15:41:59,308 - strategy - INFO - SIGNAL GENERATED for NZDUSD: Type=BUY, Entry=0.58892, SL=0.58537 (35.5 pips), TP=0.59054, Confidence=0.95
+2025-09-05 15:41:59,309 - __main__ - INFO - Signal generated for NZDUSD: Type=BUY, Confidence=0.95, H1 Trend=ranging
+2025-09-05 15:41:59,309 - __main__ - INFO - Position already exists for NZDUSD, skipping new signal to let it work
+2025-09-05 15:41:59,339 - strategy - INFO - Bullish breakout detected for USDCAD above 1.38009
+2025-09-05 15:41:59,340 - strategy - INFO - Breakout detected for USDCAD: bullish at level 1.38009
+2025-09-05 15:41:59,427 - strategy - INFO - Bullish breakout detected for GBPCAD above 1.85996
+2025-09-05 15:41:59,427 - strategy - INFO - Breakout detected for GBPCAD: bullish at level 1.85996
+2025-09-05 15:41:59,428 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:41:59,428 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:41:59,444 - strategy - INFO - Adjusted SL for GBPCAD: raw SL=1.85444, spread=0.00023, spread_points=23, pip_size=0.0001
+2025-09-05 15:41:59,452 - strategy - INFO - GBPCAD: TP set using enhanced range projection. Range=37.9 pips, Multiplier=2.0, TP=1.87320
+2025-09-05 15:41:59,452 - strategy - INFO - SIGNAL GENERATED for GBPCAD: Type=BUY, Entry=1.86562, SL=1.85444 (111.8 pips), TP=1.87320, Confidence=0.95
+2025-09-05 15:41:59,453 - __main__ - INFO - Signal generated for GBPCAD: Type=BUY, Confidence=0.95, H1 Trend=bullish
+2025-09-05 15:41:59,453 - __main__ - INFO - Position already exists for GBPCAD, skipping new signal to let it work
+2025-09-05 15:42:59,601 - strategy - INFO - Bullish breakout detected for GBPUSD above 1.34855
+2025-09-05 15:42:59,601 - strategy - INFO - Breakout detected for GBPUSD: bullish at level 1.34855
+2025-09-05 15:42:59,602 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:42:59,602 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:42:59,620 - strategy - INFO - Adjusted SL for GBPUSD: raw SL=1.34382, spread=0.00014, spread_points=14, pip_size=0.0001
+2025-09-05 15:42:59,628 - strategy - INFO - GBPUSD: TP set using enhanced range projection. Range=30.9 pips, Multiplier=2.0, TP=1.35764
+2025-09-05 15:42:59,628 - strategy - INFO - SIGNAL GENERATED for GBPUSD: Type=BUY, Entry=1.35146, SL=1.34382 (76.4 pips), TP=1.35764, Confidence=0.95
+2025-09-05 15:42:59,629 - __main__ - INFO - Signal generated for GBPUSD: Type=BUY, Confidence=0.95, H1 Trend=bullish
+2025-09-05 15:42:59,629 - __main__ - INFO - Position already exists for GBPUSD, skipping new signal to let it work
+2025-09-05 15:42:59,687 - strategy - INFO - Bullish breakout detected for AUDUSD above 0.65474
+2025-09-05 15:42:59,687 - strategy - INFO - Breakout detected for AUDUSD: bullish at level 0.65474
+2025-09-05 15:42:59,687 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:42:59,688 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:42:59,703 - strategy - INFO - Adjusted SL for AUDUSD: raw SL=0.65197, spread=0.00013, spread_points=13, pip_size=0.0001
+2025-09-05 15:42:59,711 - strategy - INFO - AUDUSD: TP set using enhanced range projection. Range=11.4 pips, Multiplier=2.0, TP=0.65831
+2025-09-05 15:42:59,712 - strategy - INFO - SIGNAL GENERATED for AUDUSD: Type=BUY, Entry=0.65603, SL=0.65197 (40.6 pips), TP=0.65903, Confidence=0.95
+2025-09-05 15:42:59,712 - __main__ - INFO - Signal generated for AUDUSD: Type=BUY, Confidence=0.95, H1 Trend=bullish
+2025-09-05 15:42:59,712 - __main__ - INFO - Position already exists for AUDUSD, skipping new signal to let it work
+2025-09-05 15:42:59,741 - strategy - INFO - Bullish breakout detected for NZDUSD above 0.58796
+2025-09-05 15:42:59,741 - strategy - INFO - Breakout detected for NZDUSD: bullish at level 0.58796
+2025-09-05 15:42:59,742 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:42:59,742 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:42:59,758 - strategy - INFO - Adjusted SL for NZDUSD: raw SL=0.58537, spread=0.00012, spread_points=12, pip_size=0.0001
+2025-09-05 15:42:59,765 - strategy - INFO - NZDUSD: TP using enhanced ATR. ATR=3.2 pips, Session=overlap, Volatility ratio=1.00, Final multiplier=5.0, TP=0.59085
+2025-09-05 15:42:59,766 - strategy - INFO - SIGNAL GENERATED for NZDUSD: Type=BUY, Entry=0.58923, SL=0.58537 (38.6 pips), TP=0.59085, Confidence=0.95
+2025-09-05 15:42:59,766 - __main__ - INFO - Signal generated for NZDUSD: Type=BUY, Confidence=0.95, H1 Trend=ranging
+2025-09-05 15:42:59,767 - __main__ - INFO - Position already exists for NZDUSD, skipping new signal to let it work
+2025-09-05 15:42:59,795 - strategy - INFO - Bullish breakout detected for USDCAD above 1.38009
+2025-09-05 15:42:59,795 - strategy - INFO - Breakout detected for USDCAD: bullish at level 1.38009
+2025-09-05 15:42:59,795 - strategy - INFO - Breakout bullish against bearish trend for USDCAD - SKIPPING
+2025-09-05 15:42:59,879 - strategy - INFO - Bullish breakout detected for GBPCAD above 1.85996
+2025-09-05 15:42:59,880 - strategy - INFO - Breakout detected for GBPCAD: bullish at level 1.85996
+2025-09-05 15:42:59,880 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:42:59,880 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:42:59,895 - strategy - INFO - Adjusted SL for GBPCAD: raw SL=1.85441, spread=0.00026, spread_points=26, pip_size=0.0001
+2025-09-05 15:42:59,904 - strategy - INFO - GBPCAD: TP set using enhanced range projection. Range=37.9 pips, Multiplier=2.0, TP=1.87367
+2025-09-05 15:42:59,904 - strategy - INFO - SIGNAL GENERATED for GBPCAD: Type=BUY, Entry=1.86609, SL=1.85441 (116.8 pips), TP=1.87367, Confidence=0.95
+2025-09-05 15:42:59,904 - __main__ - INFO - Signal generated for GBPCAD: Type=BUY, Confidence=0.95, H1 Trend=bullish
+2025-09-05 15:42:59,905 - __main__ - INFO - Position already exists for GBPCAD, skipping new signal to let it work
+2025-09-05 15:44:00,043 - strategy - INFO - Bullish breakout detected for GBPUSD above 1.34855
+2025-09-05 15:44:00,043 - strategy - INFO - Breakout detected for GBPUSD: bullish at level 1.34855
+2025-09-05 15:44:00,044 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:44:00,044 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:44:00,061 - strategy - INFO - Adjusted SL for GBPUSD: raw SL=1.34384, spread=0.00012, spread_points=12, pip_size=0.0001
+2025-09-05 15:44:00,069 - strategy - INFO - GBPUSD: TP set using enhanced range projection. Range=30.9 pips, Multiplier=2.0, TP=1.35749
+2025-09-05 15:44:00,069 - strategy - INFO - SIGNAL GENERATED for GBPUSD: Type=BUY, Entry=1.35131, SL=1.34384 (74.7 pips), TP=1.35749, Confidence=0.95
+2025-09-05 15:44:00,069 - __main__ - INFO - Signal generated for GBPUSD: Type=BUY, Confidence=0.95, H1 Trend=bullish
+2025-09-05 15:44:00,070 - __main__ - INFO - Position already exists for GBPUSD, skipping new signal to let it work
+2025-09-05 15:44:00,131 - strategy - INFO - Bullish breakout detected for AUDUSD above 0.65474
+2025-09-05 15:44:00,131 - strategy - INFO - Breakout detected for AUDUSD: bullish at level 0.65474
+2025-09-05 15:44:00,131 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:44:00,132 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:44:00,147 - strategy - INFO - Adjusted SL for AUDUSD: raw SL=0.65199, spread=0.00011, spread_points=11, pip_size=0.0001
+2025-09-05 15:44:00,155 - strategy - INFO - AUDUSD: TP set using enhanced range projection. Range=11.4 pips, Multiplier=2.0, TP=0.65862
+2025-09-05 15:44:00,156 - strategy - INFO - SIGNAL GENERATED for AUDUSD: Type=BUY, Entry=0.65634, SL=0.65199 (43.5 pips), TP=0.65934, Confidence=0.95
+2025-09-05 15:44:00,156 - __main__ - INFO - Signal generated for AUDUSD: Type=BUY, Confidence=0.95, H1 Trend=bullish
+2025-09-05 15:44:00,157 - __main__ - INFO - Position already exists for AUDUSD, skipping new signal to let it work
+2025-09-05 15:44:00,186 - strategy - INFO - Bullish breakout detected for NZDUSD above 0.58796
+2025-09-05 15:44:00,186 - strategy - INFO - Breakout detected for NZDUSD: bullish at level 0.58796
+2025-09-05 15:44:00,186 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:44:00,186 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:44:00,203 - strategy - INFO - Adjusted SL for NZDUSD: raw SL=0.58537, spread=0.00012, spread_points=12, pip_size=0.0001
+2025-09-05 15:44:00,211 - strategy - INFO - NZDUSD: TP using enhanced ATR. ATR=3.2 pips, Session=overlap, Volatility ratio=1.00, Final multiplier=5.0, TP=0.59106
+2025-09-05 15:44:00,211 - strategy - INFO - SIGNAL GENERATED for NZDUSD: Type=BUY, Entry=0.58944, SL=0.58537 (40.7 pips), TP=0.59106, Confidence=0.95
+2025-09-05 15:44:00,212 - __main__ - INFO - Signal generated for NZDUSD: Type=BUY, Confidence=0.95, H1 Trend=ranging
+2025-09-05 15:44:00,212 - __main__ - INFO - Position already exists for NZDUSD, skipping new signal to let it work
+2025-09-05 15:44:00,241 - strategy - INFO - Bullish breakout detected for USDCAD above 1.38009
+2025-09-05 15:44:00,241 - strategy - INFO - Breakout detected for USDCAD: bullish at level 1.38009
+2025-09-05 15:44:00,241 - strategy - INFO - Breakout bullish against bearish trend for USDCAD - SKIPPING
+2025-09-05 15:44:00,337 - strategy - INFO - Bullish breakout detected for GBPCAD above 1.85996
+2025-09-05 15:44:00,337 - strategy - INFO - Breakout detected for GBPCAD: bullish at level 1.85996
+2025-09-05 15:44:00,337 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:44:00,338 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:44:00,353 - strategy - INFO - Adjusted SL for GBPCAD: raw SL=1.85449, spread=0.00018, spread_points=18, pip_size=0.0001
+2025-09-05 15:44:00,362 - strategy - INFO - GBPCAD: TP set using enhanced range projection. Range=37.9 pips, Multiplier=2.0, TP=1.87330
+2025-09-05 15:44:00,362 - strategy - INFO - SIGNAL GENERATED for GBPCAD: Type=BUY, Entry=1.86572, SL=1.85449 (112.3 pips), TP=1.87330, Confidence=0.95
+2025-09-05 15:44:00,362 - __main__ - INFO - Signal generated for GBPCAD: Type=BUY, Confidence=0.95, H1 Trend=bullish
+2025-09-05 15:44:00,363 - __main__ - INFO - Position already exists for GBPCAD, skipping new signal to let it work
+2025-09-05 15:44:00,392 - strategy - INFO - Bullish breakout detected for EURGBP above 0.86763
+2025-09-05 15:44:00,392 - strategy - INFO - Breakout detected for EURGBP: bullish at level 0.86763
+2025-09-05 15:44:00,392 - strategy - INFO - Signal confirmed with patterns: ['BULLISH_HARAMI']
+2025-09-05 15:44:00,392 - strategy - INFO - Signal confirmed with patterns: ['BULLISH_HARAMI']
+2025-09-05 15:44:00,409 - strategy - INFO - Adjusted SL for EURGBP: raw SL=0.86603, spread=0.00010, spread_points=10, pip_size=0.0001
+2025-09-05 15:44:00,417 - strategy - INFO - EURGBP: TP using enhanced ATR. ATR=4.4 pips, Session=overlap, Volatility ratio=1.00, Final multiplier=5.0, TP=0.87046
+2025-09-05 15:44:00,417 - strategy - INFO - SIGNAL GENERATED for EURGBP: Type=BUY, Entry=0.86825, SL=0.86603 (22.2 pips), TP=0.87046, Confidence=0.85
+2025-09-05 15:44:00,417 - __main__ - INFO - Signal generated for EURGBP: Type=BUY, Confidence=0.85, H1 Trend=bullish
+2025-09-05 15:44:00,418 - __main__ - INFO - Position already exists for EURGBP, skipping new signal to let it work
+2025-09-05 15:45:00,573 - strategy - INFO - Bullish breakout detected for GBPUSD above 1.34855
+2025-09-05 15:45:00,573 - strategy - INFO - Breakout detected for GBPUSD: bullish at level 1.34855
+2025-09-05 15:45:00,574 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:45:00,574 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:45:00,589 - strategy - INFO - Adjusted SL for GBPUSD: raw SL=1.34384, spread=0.00012, spread_points=12, pip_size=0.0001
+2025-09-05 15:45:00,597 - strategy - INFO - GBPUSD: TP set using enhanced range projection. Range=30.9 pips, Multiplier=2.0, TP=1.35765
+2025-09-05 15:45:00,598 - strategy - INFO - SIGNAL GENERATED for GBPUSD: Type=BUY, Entry=1.35147, SL=1.34384 (76.3 pips), TP=1.35765, Confidence=0.95
+2025-09-05 15:45:00,598 - __main__ - INFO - Signal generated for GBPUSD: Type=BUY, Confidence=0.95, H1 Trend=bullish
+2025-09-05 15:45:00,599 - __main__ - INFO - Position already exists for GBPUSD, skipping new signal to let it work
+2025-09-05 15:45:00,657 - strategy - INFO - Bullish breakout detected for AUDUSD above 0.65474
+2025-09-05 15:45:00,657 - strategy - INFO - Breakout detected for AUDUSD: bullish at level 0.65474
+2025-09-05 15:45:00,657 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:45:00,658 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:45:00,673 - strategy - INFO - Adjusted SL for AUDUSD: raw SL=0.65199, spread=0.00011, spread_points=11, pip_size=0.0001
+2025-09-05 15:45:00,681 - strategy - INFO - AUDUSD: TP set using enhanced range projection. Range=11.4 pips, Multiplier=2.0, TP=0.65884
+2025-09-05 15:45:00,681 - strategy - INFO - SIGNAL GENERATED for AUDUSD: Type=BUY, Entry=0.65656, SL=0.65199 (45.7 pips), TP=0.65956, Confidence=0.95
+2025-09-05 15:45:00,681 - __main__ - INFO - Signal generated for AUDUSD: Type=BUY, Confidence=0.95, H1 Trend=bullish
+2025-09-05 15:45:00,682 - __main__ - INFO - Position already exists for AUDUSD, skipping new signal to let it work
+2025-09-05 15:45:00,712 - strategy - INFO - Bullish breakout detected for NZDUSD above 0.58796
+2025-09-05 15:45:00,713 - strategy - INFO - Breakout detected for NZDUSD: bullish at level 0.58796
+2025-09-05 15:45:00,713 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:45:00,713 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:45:00,729 - strategy - INFO - Adjusted SL for NZDUSD: raw SL=0.58537, spread=0.00012, spread_points=12, pip_size=0.0001
+2025-09-05 15:45:00,737 - strategy - INFO - NZDUSD: TP using enhanced ATR. ATR=3.2 pips, Session=overlap, Volatility ratio=1.00, Final multiplier=5.0, TP=0.59123
+2025-09-05 15:45:00,737 - strategy - INFO - SIGNAL GENERATED for NZDUSD: Type=BUY, Entry=0.58961, SL=0.58537 (42.4 pips), TP=0.59123, Confidence=0.95
+2025-09-05 15:45:00,737 - __main__ - INFO - Signal generated for NZDUSD: Type=BUY, Confidence=0.95, H1 Trend=ranging
+2025-09-05 15:45:00,738 - __main__ - INFO - Position already exists for NZDUSD, skipping new signal to let it work
+2025-09-05 15:45:00,766 - strategy - INFO - Bullish breakout detected for USDCAD above 1.37980
+2025-09-05 15:45:00,767 - strategy - INFO - Breakout detected for USDCAD: bullish at level 1.37980
+2025-09-05 15:45:00,767 - strategy - INFO - Breakout bullish against bearish trend for USDCAD - SKIPPING
+2025-09-05 15:46:01,045 - strategy - INFO - Bullish breakout detected for AUDUSD above 0.65474
+2025-09-05 15:46:01,046 - strategy - INFO - Breakout detected for AUDUSD: bullish at level 0.65474
+2025-09-05 15:46:01,046 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:46:01,046 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:46:01,063 - strategy - INFO - Adjusted SL for AUDUSD: raw SL=0.65220, spread=0.00013, spread_points=13, pip_size=0.0001
+2025-09-05 15:46:01,071 - strategy - INFO - AUDUSD: TP using enhanced ATR. ATR=5.1 pips, Session=overlap, Volatility ratio=1.00, Final multiplier=5.0, TP=0.65913
+2025-09-05 15:46:01,071 - strategy - INFO - SIGNAL GENERATED for AUDUSD: Type=BUY, Entry=0.65657, SL=0.65220 (43.7 pips), TP=0.65913, Confidence=0.95
+2025-09-05 15:46:01,072 - __main__ - INFO - Signal generated for AUDUSD: Type=BUY, Confidence=0.95, H1 Trend=bullish
+2025-09-05 15:46:01,072 - __main__ - INFO - Position already exists for AUDUSD, skipping new signal to let it work
+2025-09-05 15:46:01,132 - strategy - INFO - Bullish breakout detected for USDCAD above 1.37980
+2025-09-05 15:46:01,132 - strategy - INFO - Breakout detected for USDCAD: bullish at level 1.37980
+2025-09-05 15:46:01,133 - strategy - INFO - Breakout bullish against bearish trend for USDCAD - SKIPPING
+2025-09-05 15:47:01,456 - strategy - INFO - Bullish breakout detected for AUDUSD above 0.65474
+2025-09-05 15:47:01,457 - strategy - INFO - Breakout detected for AUDUSD: bullish at level 0.65474
+2025-09-05 15:47:01,457 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:47:01,457 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:47:01,474 - strategy - INFO - Adjusted SL for AUDUSD: raw SL=0.65222, spread=0.00011, spread_points=11, pip_size=0.0001
+2025-09-05 15:47:01,482 - strategy - INFO - AUDUSD: TP using enhanced ATR. ATR=5.1 pips, Session=overlap, Volatility ratio=1.00, Final multiplier=5.0, TP=0.65914
+2025-09-05 15:47:01,483 - strategy - INFO - SIGNAL GENERATED for AUDUSD: Type=BUY, Entry=0.65658, SL=0.65222 (43.6 pips), TP=0.65914, Confidence=0.95
+2025-09-05 15:47:01,483 - __main__ - INFO - Signal generated for AUDUSD: Type=BUY, Confidence=0.95, H1 Trend=bullish
+2025-09-05 15:47:01,483 - __main__ - INFO - Position already exists for AUDUSD, skipping new signal to let it work
+2025-09-05 15:47:01,540 - strategy - INFO - Bullish breakout detected for USDCAD above 1.37980
+2025-09-05 15:47:01,540 - strategy - INFO - Breakout detected for USDCAD: bullish at level 1.37980
+2025-09-05 15:47:01,540 - strategy - INFO - Breakout bullish against bearish trend for USDCAD - SKIPPING
+2025-09-05 15:48:01,849 - strategy - INFO - Bullish breakout detected for AUDUSD above 0.65474
+2025-09-05 15:48:01,850 - strategy - INFO - Breakout detected for AUDUSD: bullish at level 0.65474
+2025-09-05 15:48:01,850 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:48:01,850 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:48:01,868 - strategy - INFO - Adjusted SL for AUDUSD: raw SL=0.65221, spread=0.00012, spread_points=12, pip_size=0.0001
+2025-09-05 15:48:01,876 - strategy - INFO - AUDUSD: TP using enhanced ATR. ATR=5.1 pips, Session=overlap, Volatility ratio=1.00, Final multiplier=5.0, TP=0.65893
+2025-09-05 15:48:01,876 - strategy - INFO - SIGNAL GENERATED for AUDUSD: Type=BUY, Entry=0.65637, SL=0.65221 (41.6 pips), TP=0.65893, Confidence=0.95
+2025-09-05 15:48:01,876 - __main__ - INFO - Signal generated for AUDUSD: Type=BUY, Confidence=0.95, H1 Trend=bullish
+2025-09-05 15:48:01,877 - __main__ - INFO - Position already exists for AUDUSD, skipping new signal to let it work
+2025-09-05 15:48:01,935 - strategy - INFO - Bullish breakout detected for USDCAD above 1.37980
+2025-09-05 15:48:01,935 - strategy - INFO - Breakout detected for USDCAD: bullish at level 1.37980
+2025-09-05 15:48:01,936 - strategy - INFO - Breakout bullish against bearish trend for USDCAD - SKIPPING
+2025-09-05 15:49:02,233 - strategy - INFO - Bullish breakout detected for AUDUSD above 0.65474
+2025-09-05 15:49:02,234 - strategy - INFO - Breakout detected for AUDUSD: bullish at level 0.65474
+2025-09-05 15:49:02,234 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:49:02,234 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:49:02,250 - strategy - INFO - Adjusted SL for AUDUSD: raw SL=0.65222, spread=0.00011, spread_points=11, pip_size=0.0001
+2025-09-05 15:49:02,259 - strategy - INFO - AUDUSD: TP using enhanced ATR. ATR=5.1 pips, Session=overlap, Volatility ratio=1.00, Final multiplier=5.0, TP=0.65917
+2025-09-05 15:49:02,259 - strategy - INFO - SIGNAL GENERATED for AUDUSD: Type=BUY, Entry=0.65661, SL=0.65222 (43.9 pips), TP=0.65917, Confidence=0.95
+2025-09-05 15:49:02,259 - __main__ - INFO - Signal generated for AUDUSD: Type=BUY, Confidence=0.95, H1 Trend=bullish
+2025-09-05 15:49:02,260 - __main__ - INFO - Position already exists for AUDUSD, skipping new signal to let it work
+2025-09-05 15:49:02,319 - strategy - INFO - Bullish breakout detected for USDCAD above 1.37980
+2025-09-05 15:49:02,320 - strategy - INFO - Breakout detected for USDCAD: bullish at level 1.37980
+2025-09-05 15:49:02,320 - strategy - INFO - Breakout bullish against bearish trend for USDCAD - SKIPPING
+2025-09-05 15:50:02,612 - strategy - INFO - Bullish breakout detected for AUDUSD above 0.65474
+2025-09-05 15:50:02,612 - strategy - INFO - Breakout detected for AUDUSD: bullish at level 0.65474
+2025-09-05 15:50:02,612 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:50:02,612 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:50:02,628 - strategy - INFO - Adjusted SL for AUDUSD: raw SL=0.65222, spread=0.00011, spread_points=11, pip_size=0.0001
+2025-09-05 15:50:02,637 - strategy - INFO - AUDUSD: TP using enhanced ATR. ATR=5.1 pips, Session=overlap, Volatility ratio=1.00, Final multiplier=5.0, TP=0.65947
+2025-09-05 15:50:02,637 - strategy - INFO - SIGNAL GENERATED for AUDUSD: Type=BUY, Entry=0.65691, SL=0.65222 (46.9 pips), TP=0.65947, Confidence=0.95
+2025-09-05 15:50:02,637 - __main__ - INFO - Signal generated for AUDUSD: Type=BUY, Confidence=0.95, H1 Trend=bullish
+2025-09-05 15:50:02,638 - __main__ - INFO - Position already exists for AUDUSD, skipping new signal to let it work
+2025-09-05 15:50:02,695 - strategy - INFO - Bullish breakout detected for USDCAD above 1.37980
+2025-09-05 15:50:02,695 - strategy - INFO - Breakout detected for USDCAD: bullish at level 1.37980
+2025-09-05 15:50:02,695 - strategy - INFO - Breakout bullish against bearish trend for USDCAD - SKIPPING
+2025-09-05 15:51:02,983 - strategy - INFO - Bullish breakout detected for AUDUSD above 0.65474
+2025-09-05 15:51:02,983 - strategy - INFO - Breakout detected for AUDUSD: bullish at level 0.65474
+2025-09-05 15:51:02,983 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:51:02,984 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:51:02,999 - strategy - INFO - Adjusted SL for AUDUSD: raw SL=0.65222, spread=0.00011, spread_points=11, pip_size=0.0001
+2025-09-05 15:51:03,008 - strategy - INFO - AUDUSD: TP using enhanced ATR. ATR=5.1 pips, Session=overlap, Volatility ratio=1.00, Final multiplier=5.0, TP=0.65911
+2025-09-05 15:51:03,008 - strategy - INFO - SIGNAL GENERATED for AUDUSD: Type=BUY, Entry=0.65655, SL=0.65222 (43.3 pips), TP=0.65911, Confidence=0.95
+2025-09-05 15:51:03,008 - __main__ - INFO - Signal generated for AUDUSD: Type=BUY, Confidence=0.95, H1 Trend=bullish
+2025-09-05 15:51:03,009 - __main__ - INFO - Position already exists for AUDUSD, skipping new signal to let it work
+2025-09-05 15:51:03,067 - strategy - INFO - Bullish breakout detected for USDCAD above 1.37980
+2025-09-05 15:51:03,068 - strategy - INFO - Breakout detected for USDCAD: bullish at level 1.37980
+2025-09-05 15:51:03,068 - strategy - INFO - Breakout bullish against bearish trend for USDCAD - SKIPPING
+2025-09-05 15:52:03,364 - strategy - INFO - Bullish breakout detected for AUDUSD above 0.65474
+2025-09-05 15:52:03,364 - strategy - INFO - Breakout detected for AUDUSD: bullish at level 0.65474
+2025-09-05 15:52:03,364 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:52:03,365 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:52:03,380 - strategy - INFO - Adjusted SL for AUDUSD: raw SL=0.65221, spread=0.00012, spread_points=12, pip_size=0.0001
+2025-09-05 15:52:03,389 - strategy - INFO - AUDUSD: TP using enhanced ATR. ATR=5.1 pips, Session=overlap, Volatility ratio=1.00, Final multiplier=5.0, TP=0.65935
+2025-09-05 15:52:03,389 - strategy - INFO - SIGNAL GENERATED for AUDUSD: Type=BUY, Entry=0.65679, SL=0.65221 (45.8 pips), TP=0.65935, Confidence=0.95
+2025-09-05 15:52:03,390 - __main__ - INFO - Signal generated for AUDUSD: Type=BUY, Confidence=0.95, H1 Trend=bullish
+2025-09-05 15:52:03,390 - __main__ - INFO - Position already exists for AUDUSD, skipping new signal to let it work
+2025-09-05 15:53:03,757 - strategy - INFO - Bullish breakout detected for AUDUSD above 0.65474
+2025-09-05 15:53:03,757 - strategy - INFO - Breakout detected for AUDUSD: bullish at level 0.65474
+2025-09-05 15:53:03,757 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:53:03,757 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:53:03,773 - strategy - INFO - Adjusted SL for AUDUSD: raw SL=0.65222, spread=0.00011, spread_points=11, pip_size=0.0001
+2025-09-05 15:53:03,781 - strategy - INFO - AUDUSD: TP using enhanced ATR. ATR=5.1 pips, Session=overlap, Volatility ratio=1.00, Final multiplier=5.0, TP=0.65957
+2025-09-05 15:53:03,782 - strategy - INFO - SIGNAL GENERATED for AUDUSD: Type=BUY, Entry=0.65701, SL=0.65222 (47.9 pips), TP=0.65957, Confidence=0.95
+2025-09-05 15:53:03,782 - __main__ - INFO - Signal generated for AUDUSD: Type=BUY, Confidence=0.95, H1 Trend=bullish
+2025-09-05 15:53:03,782 - __main__ - INFO - Position already exists for AUDUSD, skipping new signal to let it work
+2025-09-05 15:54:04,162 - strategy - INFO - Bullish breakout detected for AUDUSD above 0.65474
+2025-09-05 15:54:04,162 - strategy - INFO - Breakout detected for AUDUSD: bullish at level 0.65474
+2025-09-05 15:54:04,163 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:54:04,163 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:54:04,180 - strategy - INFO - Adjusted SL for AUDUSD: raw SL=0.65221, spread=0.00012, spread_points=12, pip_size=0.0001
+2025-09-05 15:54:04,189 - strategy - INFO - AUDUSD: TP using enhanced ATR. ATR=5.1 pips, Session=overlap, Volatility ratio=1.00, Final multiplier=5.0, TP=0.65937
+2025-09-05 15:54:04,189 - strategy - INFO - SIGNAL GENERATED for AUDUSD: Type=BUY, Entry=0.65681, SL=0.65221 (46.0 pips), TP=0.65937, Confidence=0.95
+2025-09-05 15:54:04,189 - __main__ - INFO - Signal generated for AUDUSD: Type=BUY, Confidence=0.95, H1 Trend=bullish
+2025-09-05 15:54:04,190 - __main__ - INFO - Position already exists for AUDUSD, skipping new signal to let it work
+2025-09-05 15:54:04,250 - strategy - INFO - Bullish breakout detected for USDCAD above 1.37980
+2025-09-05 15:54:04,250 - strategy - INFO - Breakout detected for USDCAD: bullish at level 1.37980
+2025-09-05 15:54:04,250 - strategy - INFO - Breakout bullish against bearish trend for USDCAD - SKIPPING
+2025-09-05 15:55:04,538 - strategy - INFO - Bullish breakout detected for AUDUSD above 0.65474
+2025-09-05 15:55:04,538 - strategy - INFO - Breakout detected for AUDUSD: bullish at level 0.65474
+2025-09-05 15:55:04,539 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:55:04,539 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:55:04,555 - strategy - INFO - Adjusted SL for AUDUSD: raw SL=0.65220, spread=0.00013, spread_points=13, pip_size=0.0001
+2025-09-05 15:55:04,564 - strategy - INFO - AUDUSD: TP using enhanced ATR. ATR=5.1 pips, Session=overlap, Volatility ratio=1.00, Final multiplier=5.0, TP=0.65963
+2025-09-05 15:55:04,564 - strategy - INFO - SIGNAL GENERATED for AUDUSD: Type=BUY, Entry=0.65707, SL=0.65220 (48.7 pips), TP=0.65963, Confidence=0.95
+2025-09-05 15:55:04,564 - __main__ - INFO - Signal generated for AUDUSD: Type=BUY, Confidence=0.95, H1 Trend=bullish
+2025-09-05 15:55:04,565 - __main__ - INFO - Position already exists for AUDUSD, skipping new signal to let it work
+2025-09-05 15:55:04,622 - strategy - INFO - Bullish breakout detected for USDCAD above 1.37980
+2025-09-05 15:55:04,622 - strategy - INFO - Breakout detected for USDCAD: bullish at level 1.37980
+2025-09-05 15:55:04,622 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:55:04,622 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:55:04,638 - strategy - INFO - Adjusted SL for USDCAD: raw SL=1.37732, spread=0.00014, spread_points=14, pip_size=0.0001
+2025-09-05 15:55:04,646 - strategy - INFO - USDCAD: TP using enhanced ATR. ATR=8.3 pips, Session=overlap, Volatility ratio=1.00, Final multiplier=5.0, TP=1.38523
+2025-09-05 15:55:04,647 - strategy - INFO - SIGNAL GENERATED for USDCAD: Type=BUY, Entry=1.38108, SL=1.37732 (37.6 pips), TP=1.38523, Confidence=0.95
+2025-09-05 15:55:04,647 - __main__ - INFO - Signal generated for USDCAD: Type=BUY, Confidence=0.95, H1 Trend=ranging
+2025-09-05 15:55:04,648 - __main__ - INFO - Live entry price for USDCAD: 1.38122 (signal was 1.38108)
+2025-09-05 15:55:04,649 - __main__ - INFO - Computed SL distance for USDCAD: price distance=0.00390000, pip distance=39.0000 pips
+2025-09-05 15:55:04,650 - risk_manager - INFO - Calculated position size for USDCAD: 0.01 lots
+2025-09-05 15:55:05,173 - mt5_client - INFO - Order placed successfully: 1067308544
+2025-09-05 15:55:05,176 - trade_logger - INFO - Trade logged successfully: USDCAD BUY @ 1.38123
+2025-09-05 15:55:05,177 - __main__ - INFO - Trade executed successfully: USDCAD BUY @ 1.38123, Volume: 0.01, Ticket: 1067308544
+2025-09-05 15:56:05,488 - strategy - INFO - Bullish breakout detected for AUDUSD above 0.65474
+2025-09-05 15:56:05,489 - strategy - INFO - Breakout detected for AUDUSD: bullish at level 0.65474
+2025-09-05 15:56:05,489 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:56:05,489 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:56:05,506 - strategy - INFO - Adjusted SL for AUDUSD: raw SL=0.65222, spread=0.00011, spread_points=11, pip_size=0.0001
+2025-09-05 15:56:05,515 - strategy - INFO - AUDUSD: TP using enhanced ATR. ATR=5.1 pips, Session=overlap, Volatility ratio=1.00, Final multiplier=5.0, TP=0.65945
+2025-09-05 15:56:05,515 - strategy - INFO - SIGNAL GENERATED for AUDUSD: Type=BUY, Entry=0.65689, SL=0.65222 (46.7 pips), TP=0.65945, Confidence=0.95
+2025-09-05 15:56:05,516 - __main__ - INFO - Signal generated for AUDUSD: Type=BUY, Confidence=0.95, H1 Trend=bullish
+2025-09-05 15:56:05,516 - __main__ - INFO - Position already exists for AUDUSD, skipping new signal to let it work
+2025-09-05 15:56:05,575 - strategy - INFO - Bullish breakout detected for USDCAD above 1.37980
+2025-09-05 15:56:05,575 - strategy - INFO - Breakout detected for USDCAD: bullish at level 1.37980
+2025-09-05 15:56:05,576 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:56:05,576 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:56:05,592 - strategy - INFO - Adjusted SL for USDCAD: raw SL=1.37732, spread=0.00014, spread_points=14, pip_size=0.0001
+2025-09-05 15:56:05,600 - strategy - INFO - USDCAD: TP using enhanced ATR. ATR=8.3 pips, Session=overlap, Volatility ratio=1.00, Final multiplier=5.0, TP=1.38531
+2025-09-05 15:56:05,600 - strategy - INFO - SIGNAL GENERATED for USDCAD: Type=BUY, Entry=1.38116, SL=1.37732 (38.4 pips), TP=1.38531, Confidence=0.95
+2025-09-05 15:56:05,600 - __main__ - INFO - Signal generated for USDCAD: Type=BUY, Confidence=0.95, H1 Trend=ranging
+2025-09-05 15:56:05,601 - __main__ - INFO - Position already exists for USDCAD, skipping new signal to let it work
+2025-09-05 15:57:05,930 - strategy - INFO - Bullish breakout detected for AUDUSD above 0.65474
+2025-09-05 15:57:05,930 - strategy - INFO - Breakout detected for AUDUSD: bullish at level 0.65474
+2025-09-05 15:57:05,931 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:57:05,931 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:57:05,947 - strategy - INFO - Adjusted SL for AUDUSD: raw SL=0.65223, spread=0.00010, spread_points=10, pip_size=0.0001
+2025-09-05 15:57:05,955 - strategy - INFO - AUDUSD: TP using enhanced ATR. ATR=5.1 pips, Session=overlap, Volatility ratio=1.00, Final multiplier=5.0, TP=0.65941
+2025-09-05 15:57:05,956 - strategy - INFO - SIGNAL GENERATED for AUDUSD: Type=BUY, Entry=0.65685, SL=0.65223 (46.2 pips), TP=0.65941, Confidence=0.95
+2025-09-05 15:57:05,956 - __main__ - INFO - Signal generated for AUDUSD: Type=BUY, Confidence=0.95, H1 Trend=bullish
+2025-09-05 15:57:05,957 - __main__ - INFO - Position already exists for AUDUSD, skipping new signal to let it work
+2025-09-05 15:57:06,016 - strategy - INFO - Bullish breakout detected for USDCAD above 1.37980
+2025-09-05 15:57:06,016 - strategy - INFO - Breakout detected for USDCAD: bullish at level 1.37980
+2025-09-05 15:57:06,016 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:57:06,016 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:57:06,034 - strategy - INFO - Adjusted SL for USDCAD: raw SL=1.37732, spread=0.00014, spread_points=14, pip_size=0.0001
+2025-09-05 15:57:06,042 - strategy - INFO - USDCAD: TP using enhanced ATR. ATR=8.3 pips, Session=overlap, Volatility ratio=1.00, Final multiplier=5.0, TP=1.38531
+2025-09-05 15:57:06,042 - strategy - INFO - SIGNAL GENERATED for USDCAD: Type=BUY, Entry=1.38116, SL=1.37732 (38.4 pips), TP=1.38531, Confidence=0.95
+2025-09-05 15:57:06,042 - __main__ - INFO - Signal generated for USDCAD: Type=BUY, Confidence=0.95, H1 Trend=ranging
+2025-09-05 15:57:06,043 - __main__ - INFO - Position already exists for USDCAD, skipping new signal to let it work
+2025-09-05 15:58:06,392 - strategy - INFO - Bullish breakout detected for AUDUSD above 0.65474
+2025-09-05 15:58:06,393 - strategy - INFO - Breakout detected for AUDUSD: bullish at level 0.65474
+2025-09-05 15:58:06,393 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:58:06,393 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:58:06,409 - strategy - INFO - Adjusted SL for AUDUSD: raw SL=0.65222, spread=0.00011, spread_points=11, pip_size=0.0001
+2025-09-05 15:58:06,418 - strategy - INFO - AUDUSD: TP using enhanced ATR. ATR=5.1 pips, Session=overlap, Volatility ratio=1.00, Final multiplier=5.0, TP=0.65950
+2025-09-05 15:58:06,419 - strategy - INFO - SIGNAL GENERATED for AUDUSD: Type=BUY, Entry=0.65694, SL=0.65222 (47.2 pips), TP=0.65950, Confidence=0.95
+2025-09-05 15:58:06,419 - __main__ - INFO - Signal generated for AUDUSD: Type=BUY, Confidence=0.95, H1 Trend=bullish
+2025-09-05 15:58:06,420 - __main__ - INFO - Position already exists for AUDUSD, skipping new signal to let it work
+2025-09-05 15:58:06,479 - strategy - INFO - Bullish breakout detected for USDCAD above 1.37980
+2025-09-05 15:58:06,479 - strategy - INFO - Breakout detected for USDCAD: bullish at level 1.37980
+2025-09-05 15:58:06,479 - strategy - INFO - Breakout bullish against bearish trend for USDCAD - SKIPPING
+2025-09-05 15:59:06,838 - strategy - INFO - Bullish breakout detected for AUDUSD above 0.65474
+2025-09-05 15:59:06,838 - strategy - INFO - Breakout detected for AUDUSD: bullish at level 0.65474
+2025-09-05 15:59:06,838 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:59:06,838 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 15:59:06,854 - strategy - INFO - Adjusted SL for AUDUSD: raw SL=0.65222, spread=0.00011, spread_points=11, pip_size=0.0001
+2025-09-05 15:59:06,863 - strategy - INFO - AUDUSD: TP using enhanced ATR. ATR=5.1 pips, Session=overlap, Volatility ratio=1.00, Final multiplier=5.0, TP=0.65955
+2025-09-05 15:59:06,863 - strategy - INFO - SIGNAL GENERATED for AUDUSD: Type=BUY, Entry=0.65699, SL=0.65222 (47.7 pips), TP=0.65955, Confidence=0.95
+2025-09-05 15:59:06,863 - __main__ - INFO - Signal generated for AUDUSD: Type=BUY, Confidence=0.95, H1 Trend=bullish
+2025-09-05 15:59:06,864 - __main__ - INFO - Position already exists for AUDUSD, skipping new signal to let it work
+2025-09-05 15:59:06,920 - strategy - INFO - Bullish breakout detected for USDCAD above 1.37980
+2025-09-05 15:59:06,920 - strategy - INFO - Breakout detected for USDCAD: bullish at level 1.37980
+2025-09-05 15:59:06,921 - strategy - INFO - Breakout bullish against bearish trend for USDCAD - SKIPPING
+2025-09-05 16:00:07,241 - strategy - INFO - Bullish breakout detected for AUDUSD above 0.65474
+2025-09-05 16:00:07,241 - strategy - INFO - Breakout detected for AUDUSD: bullish at level 0.65474
+2025-09-05 16:00:07,241 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 16:00:07,241 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 16:00:07,258 - strategy - INFO - Adjusted SL for AUDUSD: raw SL=0.65259, spread=0.00010, spread_points=10, pip_size=0.0001
+2025-09-05 16:00:07,267 - strategy - INFO - AUDUSD: TP using enhanced ATR. ATR=5.4 pips, Session=overlap, Volatility ratio=1.00, Final multiplier=5.0, TP=0.65992
+2025-09-05 16:00:07,267 - strategy - INFO - SIGNAL GENERATED for AUDUSD: Type=BUY, Entry=0.65721, SL=0.65259 (46.2 pips), TP=0.65992, Confidence=0.95
+2025-09-05 16:00:07,268 - __main__ - INFO - Signal generated for AUDUSD: Type=BUY, Confidence=0.95, H1 Trend=bullish
+2025-09-05 16:00:07,268 - __main__ - INFO - Position already exists for AUDUSD, skipping new signal to let it work
+2025-09-05 16:01:07,618 - strategy - INFO - Bullish breakout detected for AUDUSD above 0.65474
+2025-09-05 16:01:07,618 - strategy - INFO - Breakout detected for AUDUSD: bullish at level 0.65474
+2025-09-05 16:01:07,618 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 16:01:07,619 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 16:01:07,636 - strategy - INFO - Adjusted SL for AUDUSD: raw SL=0.65258, spread=0.00011, spread_points=11, pip_size=0.0001
+2025-09-05 16:01:07,644 - strategy - INFO - AUDUSD: TP using enhanced ATR. ATR=5.4 pips, Session=overlap, Volatility ratio=1.00, Final multiplier=5.0, TP=0.66011
+2025-09-05 16:01:07,644 - strategy - INFO - SIGNAL GENERATED for AUDUSD: Type=BUY, Entry=0.65740, SL=0.65258 (48.2 pips), TP=0.66011, Confidence=0.95
+2025-09-05 16:01:07,644 - __main__ - INFO - Signal generated for AUDUSD: Type=BUY, Confidence=0.95, H1 Trend=bullish
+2025-09-05 16:01:07,645 - __main__ - INFO - Position already exists for AUDUSD, skipping new signal to let it work
+2025-09-05 16:02:08,014 - strategy - INFO - Bullish breakout detected for AUDUSD above 0.65474
+2025-09-05 16:02:08,014 - strategy - INFO - Breakout detected for AUDUSD: bullish at level 0.65474
+2025-09-05 16:02:08,014 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 16:02:08,015 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 16:02:08,031 - strategy - INFO - Adjusted SL for AUDUSD: raw SL=0.65258, spread=0.00011, spread_points=11, pip_size=0.0001
+2025-09-05 16:02:08,039 - strategy - INFO - AUDUSD: TP using enhanced ATR. ATR=5.4 pips, Session=overlap, Volatility ratio=1.00, Final multiplier=5.0, TP=0.66009
+2025-09-05 16:02:08,040 - strategy - INFO - SIGNAL GENERATED for AUDUSD: Type=BUY, Entry=0.65738, SL=0.65258 (48.0 pips), TP=0.66009, Confidence=0.95
+2025-09-05 16:02:08,040 - __main__ - INFO - Signal generated for AUDUSD: Type=BUY, Confidence=0.95, H1 Trend=bullish
+2025-09-05 16:02:08,041 - __main__ - INFO - Position already exists for AUDUSD, skipping new signal to let it work
+2025-09-05 16:03:08,433 - strategy - INFO - Bullish breakout detected for AUDUSD above 0.65474
+2025-09-05 16:03:08,433 - strategy - INFO - Breakout detected for AUDUSD: bullish at level 0.65474
+2025-09-05 16:03:08,433 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 16:03:08,434 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 16:03:08,449 - strategy - INFO - Adjusted SL for AUDUSD: raw SL=0.65259, spread=0.00010, spread_points=10, pip_size=0.0001
+2025-09-05 16:03:08,457 - strategy - INFO - AUDUSD: TP using enhanced ATR. ATR=5.4 pips, Session=overlap, Volatility ratio=1.00, Final multiplier=5.0, TP=0.66007
+2025-09-05 16:03:08,458 - strategy - INFO - SIGNAL GENERATED for AUDUSD: Type=BUY, Entry=0.65736, SL=0.65259 (47.7 pips), TP=0.66007, Confidence=0.95
+2025-09-05 16:03:08,458 - __main__ - INFO - Signal generated for AUDUSD: Type=BUY, Confidence=0.95, H1 Trend=bullish
+2025-09-05 16:03:08,458 - __main__ - INFO - Position already exists for AUDUSD, skipping new signal to let it work
+2025-09-05 16:04:08,814 - strategy - INFO - Bullish breakout detected for AUDUSD above 0.65474
+2025-09-05 16:04:08,814 - strategy - INFO - Breakout detected for AUDUSD: bullish at level 0.65474
+2025-09-05 16:04:08,814 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 16:04:08,815 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 16:04:08,831 - strategy - INFO - Adjusted SL for AUDUSD: raw SL=0.65258, spread=0.00011, spread_points=11, pip_size=0.0001
+2025-09-05 16:04:08,842 - strategy - INFO - AUDUSD: TP using enhanced ATR. ATR=5.4 pips, Session=overlap, Volatility ratio=1.00, Final multiplier=5.0, TP=0.65995
+2025-09-05 16:04:08,843 - strategy - INFO - SIGNAL GENERATED for AUDUSD: Type=BUY, Entry=0.65724, SL=0.65258 (46.6 pips), TP=0.65995, Confidence=0.95
+2025-09-05 16:04:08,843 - __main__ - INFO - Signal generated for AUDUSD: Type=BUY, Confidence=0.95, H1 Trend=bullish
+2025-09-05 16:04:08,844 - __main__ - INFO - Position already exists for AUDUSD, skipping new signal to let it work
+2025-09-05 16:05:09,290 - strategy - INFO - Bullish breakout detected for AUDUSD above 0.65474
+2025-09-05 16:05:09,290 - strategy - INFO - Breakout detected for AUDUSD: bullish at level 0.65474
+2025-09-05 16:05:09,291 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 16:05:09,291 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 16:05:09,307 - strategy - INFO - Adjusted SL for AUDUSD: raw SL=0.65258, spread=0.00011, spread_points=11, pip_size=0.0001
+2025-09-05 16:05:09,315 - strategy - INFO - AUDUSD: TP using enhanced ATR. ATR=5.4 pips, Session=overlap, Volatility ratio=1.00, Final multiplier=5.0, TP=0.65995
+2025-09-05 16:05:09,316 - strategy - INFO - SIGNAL GENERATED for AUDUSD: Type=BUY, Entry=0.65724, SL=0.65258 (46.6 pips), TP=0.65995, Confidence=0.95
+2025-09-05 16:05:09,316 - __main__ - INFO - Signal generated for AUDUSD: Type=BUY, Confidence=0.95, H1 Trend=bullish
+2025-09-05 16:05:09,317 - __main__ - INFO - Position already exists for AUDUSD, skipping new signal to let it work
+2025-09-05 16:06:09,726 - strategy - INFO - Bullish breakout detected for AUDUSD above 0.65474
+2025-09-05 16:06:09,727 - strategy - INFO - Breakout detected for AUDUSD: bullish at level 0.65474
+2025-09-05 16:06:09,727 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 16:06:09,727 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 16:06:09,749 - strategy - INFO - Adjusted SL for AUDUSD: raw SL=0.65258, spread=0.00011, spread_points=11, pip_size=0.0001
+2025-09-05 16:06:09,759 - strategy - INFO - AUDUSD: TP using enhanced ATR. ATR=5.4 pips, Session=overlap, Volatility ratio=1.00, Final multiplier=5.0, TP=0.66008
+2025-09-05 16:06:09,759 - strategy - INFO - SIGNAL GENERATED for AUDUSD: Type=BUY, Entry=0.65737, SL=0.65258 (47.9 pips), TP=0.66008, Confidence=0.95
+2025-09-05 16:06:09,759 - __main__ - INFO - Signal generated for AUDUSD: Type=BUY, Confidence=0.95, H1 Trend=bullish
+2025-09-05 16:06:09,760 - __main__ - INFO - Position already exists for AUDUSD, skipping new signal to let it work
+2025-09-05 16:07:10,125 - strategy - INFO - Bullish breakout detected for AUDUSD above 0.65474
+2025-09-05 16:07:10,125 - strategy - INFO - Breakout detected for AUDUSD: bullish at level 0.65474
+2025-09-05 16:07:10,126 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 16:07:10,126 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 16:07:10,142 - strategy - INFO - Adjusted SL for AUDUSD: raw SL=0.65258, spread=0.00011, spread_points=11, pip_size=0.0001
+2025-09-05 16:07:10,150 - strategy - INFO - AUDUSD: TP using enhanced ATR. ATR=5.4 pips, Session=overlap, Volatility ratio=1.00, Final multiplier=5.0, TP=0.65993
+2025-09-05 16:07:10,150 - strategy - INFO - SIGNAL GENERATED for AUDUSD: Type=BUY, Entry=0.65722, SL=0.65258 (46.4 pips), TP=0.65993, Confidence=0.95
+2025-09-05 16:07:10,151 - __main__ - INFO - Signal generated for AUDUSD: Type=BUY, Confidence=0.95, H1 Trend=bullish
+2025-09-05 16:07:10,151 - __main__ - INFO - Position already exists for AUDUSD, skipping new signal to let it work
+2025-09-05 16:08:10,523 - strategy - INFO - Bullish breakout detected for AUDUSD above 0.65474
+2025-09-05 16:08:10,523 - strategy - INFO - Breakout detected for AUDUSD: bullish at level 0.65474
+2025-09-05 16:08:10,524 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 16:08:10,524 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 16:08:10,541 - strategy - INFO - Adjusted SL for AUDUSD: raw SL=0.65258, spread=0.00011, spread_points=11, pip_size=0.0001
+2025-09-05 16:08:10,551 - strategy - INFO - AUDUSD: TP using enhanced ATR. ATR=5.4 pips, Session=overlap, Volatility ratio=1.00, Final multiplier=5.0, TP=0.66015
+2025-09-05 16:08:10,551 - strategy - INFO - SIGNAL GENERATED for AUDUSD: Type=BUY, Entry=0.65744, SL=0.65258 (48.6 pips), TP=0.66015, Confidence=0.95
+2025-09-05 16:08:10,551 - __main__ - INFO - Signal generated for AUDUSD: Type=BUY, Confidence=0.95, H1 Trend=bullish
+2025-09-05 16:08:10,552 - __main__ - INFO - Position already exists for AUDUSD, skipping new signal to let it work
+2025-09-05 16:09:10,910 - strategy - INFO - Bullish breakout detected for AUDUSD above 0.65474
+2025-09-05 16:09:10,910 - strategy - INFO - Breakout detected for AUDUSD: bullish at level 0.65474
+2025-09-05 16:09:10,910 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 16:09:10,911 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 16:09:10,927 - strategy - INFO - Adjusted SL for AUDUSD: raw SL=0.65258, spread=0.00011, spread_points=11, pip_size=0.0001
+2025-09-05 16:09:10,936 - strategy - INFO - AUDUSD: TP using enhanced ATR. ATR=5.4 pips, Session=overlap, Volatility ratio=1.00, Final multiplier=5.0, TP=0.66008
+2025-09-05 16:09:10,936 - strategy - INFO - SIGNAL GENERATED for AUDUSD: Type=BUY, Entry=0.65737, SL=0.65258 (47.9 pips), TP=0.66008, Confidence=0.95
+2025-09-05 16:09:10,937 - __main__ - INFO - Signal generated for AUDUSD: Type=BUY, Confidence=0.95, H1 Trend=bullish
+2025-09-05 16:09:10,937 - __main__ - INFO - Position already exists for AUDUSD, skipping new signal to let it work
+2025-09-05 16:10:11,301 - strategy - INFO - Bullish breakout detected for AUDUSD above 0.65474
+2025-09-05 16:10:11,301 - strategy - INFO - Breakout detected for AUDUSD: bullish at level 0.65474
+2025-09-05 16:10:11,302 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 16:10:11,302 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 16:10:11,318 - strategy - INFO - Adjusted SL for AUDUSD: raw SL=0.65258, spread=0.00011, spread_points=11, pip_size=0.0001
+2025-09-05 16:10:11,327 - strategy - INFO - AUDUSD: TP using enhanced ATR. ATR=5.4 pips, Session=overlap, Volatility ratio=1.00, Final multiplier=5.0, TP=0.66014
+2025-09-05 16:10:11,327 - strategy - INFO - SIGNAL GENERATED for AUDUSD: Type=BUY, Entry=0.65743, SL=0.65258 (48.5 pips), TP=0.66014, Confidence=0.95
+2025-09-05 16:10:11,327 - __main__ - INFO - Signal generated for AUDUSD: Type=BUY, Confidence=0.95, H1 Trend=bullish
+2025-09-05 16:10:11,328 - __main__ - INFO - Position already exists for AUDUSD, skipping new signal to let it work
+2025-09-05 16:11:11,718 - strategy - INFO - Bullish breakout detected for AUDUSD above 0.65474
+2025-09-05 16:11:11,719 - strategy - INFO - Breakout detected for AUDUSD: bullish at level 0.65474
+2025-09-05 16:11:11,719 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 16:11:11,719 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 16:11:11,736 - strategy - INFO - Adjusted SL for AUDUSD: raw SL=0.65258, spread=0.00011, spread_points=11, pip_size=0.0001
+2025-09-05 16:11:11,745 - strategy - INFO - AUDUSD: TP using enhanced ATR. ATR=5.4 pips, Session=overlap, Volatility ratio=1.00, Final multiplier=5.0, TP=0.66026
+2025-09-05 16:11:11,745 - strategy - INFO - SIGNAL GENERATED for AUDUSD: Type=BUY, Entry=0.65755, SL=0.65258 (49.7 pips), TP=0.66026, Confidence=0.95
+2025-09-05 16:11:11,745 - __main__ - INFO - Signal generated for AUDUSD: Type=BUY, Confidence=0.95, H1 Trend=bullish
+2025-09-05 16:11:11,746 - __main__ - INFO - Position already exists for AUDUSD, skipping new signal to let it work
+2025-09-05 16:12:12,105 - strategy - INFO - Bullish breakout detected for AUDUSD above 0.65474
+2025-09-05 16:12:12,105 - strategy - INFO - Breakout detected for AUDUSD: bullish at level 0.65474
+2025-09-05 16:12:12,106 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 16:12:12,106 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 16:12:12,123 - strategy - INFO - Adjusted SL for AUDUSD: raw SL=0.65259, spread=0.00010, spread_points=10, pip_size=0.0001
+2025-09-05 16:12:12,131 - strategy - INFO - AUDUSD: TP using enhanced ATR. ATR=5.4 pips, Session=overlap, Volatility ratio=1.00, Final multiplier=5.0, TP=0.66032
+2025-09-05 16:12:12,132 - strategy - INFO - SIGNAL GENERATED for AUDUSD: Type=BUY, Entry=0.65761, SL=0.65259 (50.2 pips), TP=0.66032, Confidence=0.95
+2025-09-05 16:12:12,132 - __main__ - INFO - Signal generated for AUDUSD: Type=BUY, Confidence=0.95, H1 Trend=bullish
+2025-09-05 16:12:12,133 - __main__ - INFO - Position already exists for AUDUSD, skipping new signal to let it work
+2025-09-05 16:13:12,386 - __main__ - INFO - Detected externally closed position: 1067002363 for USDCHF
+2025-09-05 16:13:12,394 - trade_logger - INFO - Trade 1067002363 updated: profit=0, status=CLOSED_EXTERNAL
+2025-09-05 16:13:12,540 - strategy - INFO - Bullish breakout detected for AUDUSD above 0.65474
+2025-09-05 16:13:12,541 - strategy - INFO - Breakout detected for AUDUSD: bullish at level 0.65474
+2025-09-05 16:13:12,541 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 16:13:12,541 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 16:13:12,558 - strategy - INFO - Adjusted SL for AUDUSD: raw SL=0.65259, spread=0.00010, spread_points=10, pip_size=0.0001
+2025-09-05 16:13:12,566 - strategy - INFO - AUDUSD: TP using enhanced ATR. ATR=5.4 pips, Session=overlap, Volatility ratio=1.00, Final multiplier=5.0, TP=0.66050
+2025-09-05 16:13:12,567 - strategy - INFO - SIGNAL GENERATED for AUDUSD: Type=BUY, Entry=0.65779, SL=0.65259 (52.0 pips), TP=0.66050, Confidence=0.95
+2025-09-05 16:13:12,567 - __main__ - INFO - Signal generated for AUDUSD: Type=BUY, Confidence=0.95, H1 Trend=bullish
+2025-09-05 16:13:12,568 - __main__ - INFO - Position already exists for AUDUSD, skipping new signal to let it work
+2025-09-05 16:14:12,919 - strategy - INFO - Bullish breakout detected for AUDUSD above 0.65474
+2025-09-05 16:14:12,919 - strategy - INFO - Breakout detected for AUDUSD: bullish at level 0.65474
+2025-09-05 16:14:12,919 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 16:14:12,919 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 16:14:12,938 - strategy - INFO - Adjusted SL for AUDUSD: raw SL=0.65258, spread=0.00011, spread_points=11, pip_size=0.0001
+2025-09-05 16:14:12,947 - strategy - INFO - AUDUSD: TP using enhanced ATR. ATR=5.4 pips, Session=overlap, Volatility ratio=1.00, Final multiplier=5.0, TP=0.66048
+2025-09-05 16:14:12,947 - strategy - INFO - SIGNAL GENERATED for AUDUSD: Type=BUY, Entry=0.65777, SL=0.65258 (51.9 pips), TP=0.66048, Confidence=0.95
+2025-09-05 16:14:12,948 - __main__ - INFO - Signal generated for AUDUSD: Type=BUY, Confidence=0.95, H1 Trend=bullish
+2025-09-05 16:14:12,948 - __main__ - INFO - Position already exists for AUDUSD, skipping new signal to let it work
+2025-09-05 16:15:13,336 - strategy - INFO - Bullish breakout detected for AUDUSD above 0.65474
+2025-09-05 16:15:13,336 - strategy - INFO - Breakout detected for AUDUSD: bullish at level 0.65474
+2025-09-05 16:15:13,337 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 16:15:13,337 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 16:15:13,353 - strategy - INFO - Adjusted SL for AUDUSD: raw SL=0.65255, spread=0.00011, spread_points=11, pip_size=0.0001
+2025-09-05 16:15:13,362 - strategy - INFO - AUDUSD: TP using enhanced ATR. ATR=5.6 pips, Session=overlap, Volatility ratio=1.00, Final multiplier=5.0, TP=0.66053
+2025-09-05 16:15:13,363 - strategy - INFO - SIGNAL GENERATED for AUDUSD: Type=BUY, Entry=0.65773, SL=0.65255 (51.8 pips), TP=0.66053, Confidence=0.95
+2025-09-05 16:15:13,363 - __main__ - INFO - Signal generated for AUDUSD: Type=BUY, Confidence=0.95, H1 Trend=bullish
+2025-09-05 16:15:13,364 - __main__ - INFO - Position already exists for AUDUSD, skipping new signal to let it work
+2025-09-05 16:16:13,787 - strategy - INFO - Bullish breakout detected for AUDUSD above 0.65474
+2025-09-05 16:16:13,787 - strategy - INFO - Breakout detected for AUDUSD: bullish at level 0.65474
+2025-09-05 16:16:13,788 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 16:16:13,788 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 16:16:13,805 - strategy - INFO - Adjusted SL for AUDUSD: raw SL=0.65255, spread=0.00011, spread_points=11, pip_size=0.0001
+2025-09-05 16:16:13,814 - strategy - INFO - AUDUSD: TP using enhanced ATR. ATR=5.6 pips, Session=overlap, Volatility ratio=1.00, Final multiplier=5.0, TP=0.66057
+2025-09-05 16:16:13,814 - strategy - INFO - SIGNAL GENERATED for AUDUSD: Type=BUY, Entry=0.65777, SL=0.65255 (52.2 pips), TP=0.66057, Confidence=0.95
+2025-09-05 16:16:13,814 - __main__ - INFO - Signal generated for AUDUSD: Type=BUY, Confidence=0.95, H1 Trend=bullish
+2025-09-05 16:16:13,815 - __main__ - INFO - Position already exists for AUDUSD, skipping new signal to let it work
+2025-09-05 16:17:14,244 - strategy - INFO - Bullish breakout detected for AUDUSD above 0.65474
+2025-09-05 16:17:14,244 - strategy - INFO - Breakout detected for AUDUSD: bullish at level 0.65474
+2025-09-05 16:17:14,245 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 16:17:14,245 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 16:17:14,261 - strategy - INFO - Adjusted SL for AUDUSD: raw SL=0.65255, spread=0.00011, spread_points=11, pip_size=0.0001
+2025-09-05 16:17:14,270 - strategy - INFO - AUDUSD: TP using enhanced ATR. ATR=5.6 pips, Session=overlap, Volatility ratio=1.00, Final multiplier=5.0, TP=0.66035
+2025-09-05 16:17:14,270 - strategy - INFO - SIGNAL GENERATED for AUDUSD: Type=BUY, Entry=0.65755, SL=0.65255 (50.0 pips), TP=0.66035, Confidence=0.95
+2025-09-05 16:17:14,270 - __main__ - INFO - Signal generated for AUDUSD: Type=BUY, Confidence=0.95, H1 Trend=bullish
+2025-09-05 16:17:14,271 - __main__ - INFO - Position already exists for AUDUSD, skipping new signal to let it work
+2025-09-05 16:18:14,760 - strategy - INFO - Bullish breakout detected for AUDUSD above 0.65474
+2025-09-05 16:18:14,761 - strategy - INFO - Breakout detected for AUDUSD: bullish at level 0.65474
+2025-09-05 16:18:14,761 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 16:18:14,761 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 16:18:14,776 - strategy - INFO - Adjusted SL for AUDUSD: raw SL=0.65255, spread=0.00011, spread_points=11, pip_size=0.0001
+2025-09-05 16:18:14,785 - strategy - INFO - AUDUSD: TP using enhanced ATR. ATR=5.6 pips, Session=overlap, Volatility ratio=1.00, Final multiplier=5.0, TP=0.66059
+2025-09-05 16:18:14,785 - strategy - INFO - SIGNAL GENERATED for AUDUSD: Type=BUY, Entry=0.65779, SL=0.65255 (52.4 pips), TP=0.66059, Confidence=0.95
+2025-09-05 16:18:14,786 - __main__ - INFO - Signal generated for AUDUSD: Type=BUY, Confidence=0.95, H1 Trend=bullish
+2025-09-05 16:18:14,786 - __main__ - INFO - Position already exists for AUDUSD, skipping new signal to let it work
+2025-09-05 16:19:15,141 - strategy - INFO - Bullish breakout detected for AUDUSD above 0.65474
+2025-09-05 16:19:15,141 - strategy - INFO - Breakout detected for AUDUSD: bullish at level 0.65474
+2025-09-05 16:19:15,142 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 16:19:15,142 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 16:19:15,157 - strategy - INFO - Adjusted SL for AUDUSD: raw SL=0.65256, spread=0.00010, spread_points=10, pip_size=0.0001
+2025-09-05 16:19:15,167 - strategy - INFO - AUDUSD: TP using enhanced ATR. ATR=5.6 pips, Session=overlap, Volatility ratio=1.00, Final multiplier=5.0, TP=0.66069
+2025-09-05 16:19:15,167 - strategy - INFO - SIGNAL GENERATED for AUDUSD: Type=BUY, Entry=0.65789, SL=0.65256 (53.3 pips), TP=0.66069, Confidence=0.95
+2025-09-05 16:19:15,167 - __main__ - INFO - Signal generated for AUDUSD: Type=BUY, Confidence=0.95, H1 Trend=bullish
+2025-09-05 16:19:15,168 - __main__ - INFO - Position already exists for AUDUSD, skipping new signal to let it work
+2025-09-05 16:20:15,552 - strategy - INFO - Bullish breakout detected for AUDUSD above 0.65474
+2025-09-05 16:20:15,553 - strategy - INFO - Breakout detected for AUDUSD: bullish at level 0.65474
+2025-09-05 16:20:15,553 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 16:20:15,553 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 16:20:15,570 - strategy - INFO - Adjusted SL for AUDUSD: raw SL=0.65255, spread=0.00011, spread_points=11, pip_size=0.0001
+2025-09-05 16:20:15,578 - strategy - INFO - AUDUSD: TP using enhanced ATR. ATR=5.6 pips, Session=overlap, Volatility ratio=1.00, Final multiplier=5.0, TP=0.66067
+2025-09-05 16:20:15,578 - strategy - INFO - SIGNAL GENERATED for AUDUSD: Type=BUY, Entry=0.65787, SL=0.65255 (53.2 pips), TP=0.66067, Confidence=0.95
+2025-09-05 16:20:15,579 - __main__ - INFO - Signal generated for AUDUSD: Type=BUY, Confidence=0.95, H1 Trend=bullish
+2025-09-05 16:20:15,580 - __main__ - INFO - Position already exists for AUDUSD, skipping new signal to let it work
+2025-09-05 16:21:15,951 - strategy - INFO - Bullish breakout detected for AUDUSD above 0.65474
+2025-09-05 16:21:15,951 - strategy - INFO - Breakout detected for AUDUSD: bullish at level 0.65474
+2025-09-05 16:21:15,951 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 16:21:15,951 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 16:21:15,968 - strategy - INFO - Adjusted SL for AUDUSD: raw SL=0.65255, spread=0.00011, spread_points=11, pip_size=0.0001
+2025-09-05 16:21:15,977 - strategy - INFO - AUDUSD: TP using enhanced ATR. ATR=5.6 pips, Session=overlap, Volatility ratio=1.00, Final multiplier=5.0, TP=0.65995
+2025-09-05 16:21:15,977 - strategy - INFO - SIGNAL GENERATED for AUDUSD: Type=BUY, Entry=0.65715, SL=0.65255 (46.0 pips), TP=0.65995, Confidence=0.95
+2025-09-05 16:21:15,977 - __main__ - INFO - Signal generated for AUDUSD: Type=BUY, Confidence=0.95, H1 Trend=bullish
+2025-09-05 16:21:15,978 - __main__ - INFO - Position already exists for AUDUSD, skipping new signal to let it work
+2025-09-05 16:22:16,354 - strategy - INFO - Bullish breakout detected for AUDUSD above 0.65474
+2025-09-05 16:22:16,355 - strategy - INFO - Breakout detected for AUDUSD: bullish at level 0.65474
+2025-09-05 16:22:16,355 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 16:22:16,355 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 16:22:16,371 - strategy - INFO - Adjusted SL for AUDUSD: raw SL=0.65255, spread=0.00011, spread_points=11, pip_size=0.0001
+2025-09-05 16:22:16,379 - strategy - INFO - AUDUSD: TP using enhanced ATR. ATR=5.6 pips, Session=overlap, Volatility ratio=1.00, Final multiplier=5.0, TP=0.66004
+2025-09-05 16:22:16,379 - strategy - INFO - SIGNAL GENERATED for AUDUSD: Type=BUY, Entry=0.65724, SL=0.65255 (46.9 pips), TP=0.66004, Confidence=0.95
+2025-09-05 16:22:16,380 - __main__ - INFO - Signal generated for AUDUSD: Type=BUY, Confidence=0.95, H1 Trend=bullish
+2025-09-05 16:22:16,380 - __main__ - INFO - Position already exists for AUDUSD, skipping new signal to let it work
+2025-09-05 16:23:16,754 - strategy - INFO - Bullish breakout detected for AUDUSD above 0.65474
+2025-09-05 16:23:16,755 - strategy - INFO - Breakout detected for AUDUSD: bullish at level 0.65474
+2025-09-05 16:23:16,755 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 16:23:16,755 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 16:23:16,771 - strategy - INFO - Adjusted SL for AUDUSD: raw SL=0.65255, spread=0.00011, spread_points=11, pip_size=0.0001
+2025-09-05 16:23:16,779 - strategy - INFO - AUDUSD: TP using enhanced ATR. ATR=5.6 pips, Session=overlap, Volatility ratio=1.00, Final multiplier=5.0, TP=0.66020
+2025-09-05 16:23:16,780 - strategy - INFO - SIGNAL GENERATED for AUDUSD: Type=BUY, Entry=0.65740, SL=0.65255 (48.5 pips), TP=0.66020, Confidence=0.95
+2025-09-05 16:23:16,780 - __main__ - INFO - Signal generated for AUDUSD: Type=BUY, Confidence=0.95, H1 Trend=bullish
+2025-09-05 16:23:16,780 - __main__ - INFO - Position already exists for AUDUSD, skipping new signal to let it work
+2025-09-05 16:24:17,147 - strategy - INFO - Bullish breakout detected for AUDUSD above 0.65474
+2025-09-05 16:24:17,147 - strategy - INFO - Breakout detected for AUDUSD: bullish at level 0.65474
+2025-09-05 16:24:17,147 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 16:24:17,147 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 16:24:17,164 - strategy - INFO - Adjusted SL for AUDUSD: raw SL=0.65254, spread=0.00012, spread_points=12, pip_size=0.0001
+2025-09-05 16:24:17,172 - strategy - INFO - AUDUSD: TP using enhanced ATR. ATR=5.6 pips, Session=overlap, Volatility ratio=1.00, Final multiplier=5.0, TP=0.66038
+2025-09-05 16:24:17,172 - strategy - INFO - SIGNAL GENERATED for AUDUSD: Type=BUY, Entry=0.65758, SL=0.65254 (50.4 pips), TP=0.66038, Confidence=0.95
+2025-09-05 16:24:17,172 - __main__ - INFO - Signal generated for AUDUSD: Type=BUY, Confidence=0.95, H1 Trend=bullish
+2025-09-05 16:24:17,173 - __main__ - INFO - Position already exists for AUDUSD, skipping new signal to let it work
+2025-09-05 16:25:17,592 - strategy - INFO - Bullish breakout detected for AUDUSD above 0.65474
+2025-09-05 16:25:17,592 - strategy - INFO - Breakout detected for AUDUSD: bullish at level 0.65474
+2025-09-05 16:25:17,592 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 16:25:17,593 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 16:25:17,609 - strategy - INFO - Adjusted SL for AUDUSD: raw SL=0.65254, spread=0.00012, spread_points=12, pip_size=0.0001
+2025-09-05 16:25:17,617 - strategy - INFO - AUDUSD: TP using enhanced ATR. ATR=5.6 pips, Session=overlap, Volatility ratio=1.00, Final multiplier=5.0, TP=0.66034
+2025-09-05 16:25:17,617 - strategy - INFO - SIGNAL GENERATED for AUDUSD: Type=BUY, Entry=0.65754, SL=0.65254 (50.0 pips), TP=0.66034, Confidence=0.95
+2025-09-05 16:25:17,618 - __main__ - INFO - Signal generated for AUDUSD: Type=BUY, Confidence=0.95, H1 Trend=bullish
+2025-09-05 16:25:17,618 - __main__ - INFO - Position already exists for AUDUSD, skipping new signal to let it work
+2025-09-05 16:26:18,002 - strategy - INFO - Bullish breakout detected for AUDUSD above 0.65474
+2025-09-05 16:26:18,003 - strategy - INFO - Breakout detected for AUDUSD: bullish at level 0.65474
+2025-09-05 16:26:18,003 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 16:26:18,003 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 16:26:18,019 - strategy - INFO - Adjusted SL for AUDUSD: raw SL=0.65254, spread=0.00012, spread_points=12, pip_size=0.0001
+2025-09-05 16:26:18,028 - strategy - INFO - AUDUSD: TP using enhanced ATR. ATR=5.6 pips, Session=overlap, Volatility ratio=1.00, Final multiplier=5.0, TP=0.66055
+2025-09-05 16:26:18,028 - strategy - INFO - SIGNAL GENERATED for AUDUSD: Type=BUY, Entry=0.65775, SL=0.65254 (52.1 pips), TP=0.66055, Confidence=0.95
+2025-09-05 16:26:18,028 - __main__ - INFO - Signal generated for AUDUSD: Type=BUY, Confidence=0.95, H1 Trend=bullish
+2025-09-05 16:26:18,029 - __main__ - INFO - Position already exists for AUDUSD, skipping new signal to let it work
+2025-09-05 16:27:18,401 - strategy - INFO - Bullish breakout detected for AUDUSD above 0.65474
+2025-09-05 16:27:18,401 - strategy - INFO - Breakout detected for AUDUSD: bullish at level 0.65474
+2025-09-05 16:27:18,402 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 16:27:18,402 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 16:27:18,418 - strategy - INFO - Adjusted SL for AUDUSD: raw SL=0.65256, spread=0.00010, spread_points=10, pip_size=0.0001
+2025-09-05 16:27:18,427 - strategy - INFO - AUDUSD: TP using enhanced ATR. ATR=5.6 pips, Session=overlap, Volatility ratio=1.00, Final multiplier=5.0, TP=0.66070
+2025-09-05 16:27:18,427 - strategy - INFO - SIGNAL GENERATED for AUDUSD: Type=BUY, Entry=0.65790, SL=0.65256 (53.4 pips), TP=0.66070, Confidence=0.95
+2025-09-05 16:27:18,427 - __main__ - INFO - Signal generated for AUDUSD: Type=BUY, Confidence=0.95, H1 Trend=bullish
+2025-09-05 16:27:18,428 - __main__ - INFO - Position already exists for AUDUSD, skipping new signal to let it work
+2025-09-05 16:28:18,808 - strategy - INFO - Bullish breakout detected for AUDUSD above 0.65474
+2025-09-05 16:28:18,808 - strategy - INFO - Breakout detected for AUDUSD: bullish at level 0.65474
+2025-09-05 16:28:18,808 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 16:28:18,808 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 16:28:18,825 - strategy - INFO - Adjusted SL for AUDUSD: raw SL=0.65255, spread=0.00011, spread_points=11, pip_size=0.0001
+2025-09-05 16:28:18,833 - strategy - INFO - AUDUSD: TP using enhanced ATR. ATR=5.6 pips, Session=overlap, Volatility ratio=1.00, Final multiplier=5.0, TP=0.66049
+2025-09-05 16:28:18,834 - strategy - INFO - SIGNAL GENERATED for AUDUSD: Type=BUY, Entry=0.65769, SL=0.65255 (51.4 pips), TP=0.66049, Confidence=0.95
+2025-09-05 16:28:18,834 - __main__ - INFO - Signal generated for AUDUSD: Type=BUY, Confidence=0.95, H1 Trend=bullish
+2025-09-05 16:28:18,835 - __main__ - INFO - Position already exists for AUDUSD, skipping new signal to let it work
+2025-09-05 16:29:19,206 - strategy - INFO - Bullish breakout detected for AUDUSD above 0.65474
+2025-09-05 16:29:19,206 - strategy - INFO - Breakout detected for AUDUSD: bullish at level 0.65474
+2025-09-05 16:29:19,206 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 16:29:19,207 - strategy - INFO - Signal confirmed with patterns: ['ENGULFING']
+2025-09-05 16:29:19,223 - strategy - INFO - Adjusted SL for AUDUSD: raw SL=0.65255, spread=0.00011, spread_points=11, pip_size=0.0001
+2025-09-05 16:29:19,232 - strategy - INFO - AUDUSD: TP using enhanced ATR. ATR=5.6 pips, Session=overlap, Volatility ratio=1.00, Final multiplier=5.0, TP=0.66044
+2025-09-05 16:29:19,232 - strategy - INFO - SIGNAL GENERATED for AUDUSD: Type=BUY, Entry=0.65764, SL=0.65255 (50.9 pips), TP=0.66044, Confidence=0.95
+2025-09-05 16:29:19,232 - __main__ - INFO - Signal generated for AUDUSD: Type=BUY, Confidence=0.95, H1 Trend=bullish
+2025-09-05 16:29:19,233 - __main__ - INFO - Position already exists for AUDUSD, skipping new signal to let it work
+2025-09-05 16:50:26,534 - __main__ - INFO - Detected externally closed position: 1067093723 for NZDUSD
+2025-09-05 16:50:26,538 - trade_logger - INFO - Trade 1067093723 updated: profit=0, status=CLOSED_EXTERNAL
+2025-09-05 17:02:30,931 - __main__ - INFO - Detected externally closed position: 1067093943 for GBPCAD
+2025-09-05 17:02:30,937 - trade_logger - INFO - Trade 1067093943 updated: profit=0, status=CLOSED_EXTERNAL
+2025-09-05 17:19:37,324 - strategy - INFO - Bullish breakout detected for USDCAD above 1.38172
+2025-09-05 17:19:37,325 - strategy - INFO - Breakout detected for USDCAD: bullish at level 1.38172
+2025-09-05 17:19:37,325 - strategy - INFO - Signal confirmed with patterns: ['MARUBOZU', 'ENGULFING']
+2025-09-05 17:19:37,325 - strategy - INFO - Signal confirmed with patterns: ['MARUBOZU', 'ENGULFING']
+2025-09-05 17:19:37,342 - strategy - INFO - Adjusted SL for USDCAD: raw SL=1.37736, spread=0.00013, spread_points=13, pip_size=0.0001
+2025-09-05 17:19:37,351 - strategy - INFO - USDCAD: TP set using enhanced range projection. Range=27.3 pips, Multiplier=2.0, TP=1.38777
+2025-09-05 17:19:37,351 - strategy - INFO - SIGNAL GENERATED for USDCAD: Type=BUY, Entry=1.38231, SL=1.37736 (49.5 pips), TP=1.38777, Confidence=1.00
+2025-09-05 17:19:37,351 - __main__ - INFO - Signal generated for USDCAD: Type=BUY, Confidence=1.00, H1 Trend=ranging
+2025-09-05 17:19:37,352 - __main__ - INFO - Position already exists for USDCAD, skipping new signal to let it work
+2025-09-05 17:20:37,717 - strategy - INFO - Bullish breakout detected for USDCAD above 1.38172
+2025-09-05 17:20:37,717 - strategy - INFO - Breakout detected for USDCAD: bullish at level 1.38172
+2025-09-05 17:20:37,717 - strategy - INFO - Signal confirmed with patterns: ['MARUBOZU', 'ENGULFING']
+2025-09-05 17:20:37,717 - strategy - INFO - Signal confirmed with patterns: ['MARUBOZU', 'ENGULFING']
+2025-09-05 17:20:37,735 - strategy - INFO - Adjusted SL for USDCAD: raw SL=1.37736, spread=0.00013, spread_points=13, pip_size=0.0001
+2025-09-05 17:20:37,744 - strategy - INFO - USDCAD: TP set using enhanced range projection. Range=27.3 pips, Multiplier=2.0, TP=1.38806
+2025-09-05 17:20:37,744 - strategy - INFO - SIGNAL GENERATED for USDCAD: Type=BUY, Entry=1.38260, SL=1.37736 (52.4 pips), TP=1.38806, Confidence=1.00
+2025-09-05 17:20:37,744 - __main__ - INFO - Signal generated for USDCAD: Type=BUY, Confidence=1.00, H1 Trend=ranging
+2025-09-05 17:20:37,745 - __main__ - INFO - Position already exists for USDCAD, skipping new signal to let it work
+2025-09-05 17:21:38,111 - strategy - INFO - Bullish breakout detected for USDCAD above 1.38172
+2025-09-05 17:21:38,111 - strategy - INFO - Breakout detected for USDCAD: bullish at level 1.38172
+2025-09-05 17:21:38,111 - strategy - INFO - Signal confirmed with patterns: ['MARUBOZU', 'ENGULFING']
+2025-09-05 17:21:38,112 - strategy - INFO - Signal confirmed with patterns: ['MARUBOZU', 'ENGULFING']
+2025-09-05 17:21:38,128 - strategy - INFO - Adjusted SL for USDCAD: raw SL=1.37737, spread=0.00012, spread_points=12, pip_size=0.0001
+2025-09-05 17:21:38,137 - strategy - INFO - USDCAD: TP set using enhanced range projection. Range=27.3 pips, Multiplier=2.0, TP=1.38798
+2025-09-05 17:21:38,137 - strategy - INFO - SIGNAL GENERATED for USDCAD: Type=BUY, Entry=1.38252, SL=1.37737 (51.5 pips), TP=1.38798, Confidence=1.00
+2025-09-05 17:21:38,137 - __main__ - INFO - Signal generated for USDCAD: Type=BUY, Confidence=1.00, H1 Trend=ranging
+2025-09-05 17:21:38,138 - __main__ - INFO - Position already exists for USDCAD, skipping new signal to let it work
+2025-09-05 17:22:38,528 - strategy - INFO - Bullish breakout detected for USDCAD above 1.38172
+2025-09-05 17:22:38,529 - strategy - INFO - Breakout detected for USDCAD: bullish at level 1.38172
+2025-09-05 17:22:38,529 - strategy - INFO - Signal confirmed with patterns: ['MARUBOZU', 'ENGULFING']
+2025-09-05 17:22:38,529 - strategy - INFO - Signal confirmed with patterns: ['MARUBOZU', 'ENGULFING']
+2025-09-05 17:22:38,546 - strategy - INFO - Adjusted SL for USDCAD: raw SL=1.37736, spread=0.00013, spread_points=13, pip_size=0.0001
+2025-09-05 17:22:38,555 - strategy - INFO - USDCAD: TP set using enhanced range projection. Range=27.3 pips, Multiplier=2.0, TP=1.38836
+2025-09-05 17:22:38,555 - strategy - INFO - SIGNAL GENERATED for USDCAD: Type=BUY, Entry=1.38290, SL=1.37736 (55.4 pips), TP=1.38836, Confidence=1.00
+2025-09-05 17:22:38,556 - __main__ - INFO - Signal generated for USDCAD: Type=BUY, Confidence=1.00, H1 Trend=ranging
+2025-09-05 17:22:38,556 - __main__ - INFO - Position already exists for USDCAD, skipping new signal to let it work
+2025-09-05 17:23:38,917 - strategy - INFO - Bullish breakout detected for USDCAD above 1.38172
+2025-09-05 17:23:38,917 - strategy - INFO - Breakout detected for USDCAD: bullish at level 1.38172
+2025-09-05 17:23:38,917 - strategy - INFO - Signal confirmed with patterns: ['MARUBOZU', 'ENGULFING']
+2025-09-05 17:23:38,917 - strategy - INFO - Signal confirmed with patterns: ['MARUBOZU', 'ENGULFING']
+2025-09-05 17:23:38,935 - strategy - INFO - Adjusted SL for USDCAD: raw SL=1.37736, spread=0.00013, spread_points=13, pip_size=0.0001
+2025-09-05 17:23:38,944 - strategy - INFO - USDCAD: TP set using enhanced range projection. Range=27.3 pips, Multiplier=2.0, TP=1.38850
+2025-09-05 17:23:38,944 - strategy - INFO - SIGNAL GENERATED for USDCAD: Type=BUY, Entry=1.38304, SL=1.37736 (56.8 pips), TP=1.38850, Confidence=1.00
+2025-09-05 17:23:38,944 - __main__ - INFO - Signal generated for USDCAD: Type=BUY, Confidence=1.00, H1 Trend=ranging
+2025-09-05 17:23:38,945 - __main__ - INFO - Position already exists for USDCAD, skipping new signal to let it work
+2025-09-05 17:24:39,351 - strategy - INFO - Bullish breakout detected for USDCAD above 1.38172
+2025-09-05 17:24:39,352 - strategy - INFO - Breakout detected for USDCAD: bullish at level 1.38172
+2025-09-05 17:24:39,352 - strategy - INFO - Signal confirmed with patterns: ['MARUBOZU', 'ENGULFING']
+2025-09-05 17:24:39,352 - strategy - INFO - Signal confirmed with patterns: ['MARUBOZU', 'ENGULFING']
+2025-09-05 17:24:39,369 - strategy - INFO - Adjusted SL for USDCAD: raw SL=1.37736, spread=0.00013, spread_points=13, pip_size=0.0001
+2025-09-05 17:24:39,378 - strategy - INFO - USDCAD: TP set using enhanced range projection. Range=27.3 pips, Multiplier=2.0, TP=1.38863
+2025-09-05 17:24:39,378 - strategy - INFO - SIGNAL GENERATED for USDCAD: Type=BUY, Entry=1.38317, SL=1.37736 (58.1 pips), TP=1.38863, Confidence=1.00
+2025-09-05 17:24:39,378 - __main__ - INFO - Signal generated for USDCAD: Type=BUY, Confidence=1.00, H1 Trend=ranging
+2025-09-05 17:24:39,379 - __main__ - INFO - Position already exists for USDCAD, skipping new signal to let it work
+2025-09-05 17:25:39,733 - strategy - INFO - Bullish breakout detected for USDCAD above 1.38172
+2025-09-05 17:25:39,733 - strategy - INFO - Breakout detected for USDCAD: bullish at level 1.38172
+2025-09-05 17:25:39,733 - strategy - INFO - Signal confirmed with patterns: ['MARUBOZU', 'ENGULFING']
+2025-09-05 17:25:39,733 - strategy - INFO - Signal confirmed with patterns: ['MARUBOZU', 'ENGULFING']
+2025-09-05 17:25:39,749 - strategy - INFO - Adjusted SL for USDCAD: raw SL=1.37736, spread=0.00013, spread_points=13, pip_size=0.0001
+2025-09-05 17:25:39,759 - strategy - INFO - USDCAD: TP set using enhanced range projection. Range=27.3 pips, Multiplier=2.0, TP=1.38834
+2025-09-05 17:25:39,759 - strategy - INFO - SIGNAL GENERATED for USDCAD: Type=BUY, Entry=1.38288, SL=1.37736 (55.2 pips), TP=1.38834, Confidence=1.00
+2025-09-05 17:25:39,759 - __main__ - INFO - Signal generated for USDCAD: Type=BUY, Confidence=1.00, H1 Trend=ranging
+2025-09-05 17:25:39,760 - __main__ - INFO - Position already exists for USDCAD, skipping new signal to let it work
+2025-09-05 17:26:40,115 - strategy - INFO - Bullish breakout detected for USDCAD above 1.38172
+2025-09-05 17:26:40,115 - strategy - INFO - Breakout detected for USDCAD: bullish at level 1.38172
+2025-09-05 17:26:40,115 - strategy - INFO - Signal confirmed with patterns: ['MARUBOZU', 'ENGULFING']
+2025-09-05 17:26:40,116 - strategy - INFO - Signal confirmed with patterns: ['MARUBOZU', 'ENGULFING']
+2025-09-05 17:26:40,132 - strategy - INFO - Adjusted SL for USDCAD: raw SL=1.37736, spread=0.00013, spread_points=13, pip_size=0.0001
+2025-09-05 17:26:40,145 - strategy - INFO - USDCAD: TP set using enhanced range projection. Range=27.3 pips, Multiplier=2.0, TP=1.38854
+2025-09-05 17:26:40,145 - strategy - INFO - SIGNAL GENERATED for USDCAD: Type=BUY, Entry=1.38308, SL=1.37736 (57.2 pips), TP=1.38854, Confidence=1.00
+2025-09-05 17:26:40,145 - __main__ - INFO - Signal generated for USDCAD: Type=BUY, Confidence=1.00, H1 Trend=ranging
+2025-09-05 17:26:40,146 - __main__ - INFO - Position already exists for USDCAD, skipping new signal to let it work
+2025-09-05 17:27:40,502 - strategy - INFO - Bullish breakout detected for USDCAD above 1.38172
+2025-09-05 17:27:40,502 - strategy - INFO - Breakout detected for USDCAD: bullish at level 1.38172
+2025-09-05 17:27:40,503 - strategy - INFO - Signal confirmed with patterns: ['MARUBOZU', 'ENGULFING']
+2025-09-05 17:27:40,503 - strategy - INFO - Signal confirmed with patterns: ['MARUBOZU', 'ENGULFING']
+2025-09-05 17:27:40,520 - strategy - INFO - Adjusted SL for USDCAD: raw SL=1.37738, spread=0.00011, spread_points=11, pip_size=0.0001
+2025-09-05 17:27:40,529 - strategy - INFO - USDCAD: TP set using enhanced range projection. Range=27.3 pips, Multiplier=2.0, TP=1.38855
+2025-09-05 17:27:40,529 - strategy - INFO - SIGNAL GENERATED for USDCAD: Type=BUY, Entry=1.38309, SL=1.37738 (57.1 pips), TP=1.38855, Confidence=1.00
+2025-09-05 17:27:40,529 - __main__ - INFO - Signal generated for USDCAD: Type=BUY, Confidence=1.00, H1 Trend=ranging
+2025-09-05 17:27:40,530 - __main__ - INFO - Position already exists for USDCAD, skipping new signal to let it work
+2025-09-05 17:28:40,893 - strategy - INFO - Bullish breakout detected for USDCAD above 1.38172
+2025-09-05 17:28:40,893 - strategy - INFO - Breakout detected for USDCAD: bullish at level 1.38172
+2025-09-05 17:28:40,893 - strategy - INFO - Signal confirmed with patterns: ['MARUBOZU', 'ENGULFING']
+2025-09-05 17:28:40,893 - strategy - INFO - Signal confirmed with patterns: ['MARUBOZU', 'ENGULFING']
+2025-09-05 17:28:40,911 - strategy - INFO - Adjusted SL for USDCAD: raw SL=1.37735, spread=0.00014, spread_points=14, pip_size=0.0001
+2025-09-05 17:28:40,919 - strategy - INFO - USDCAD: TP set using enhanced range projection. Range=27.3 pips, Multiplier=2.0, TP=1.38851
+2025-09-05 17:28:40,920 - strategy - INFO - SIGNAL GENERATED for USDCAD: Type=BUY, Entry=1.38305, SL=1.37735 (57.0 pips), TP=1.38851, Confidence=1.00
+2025-09-05 17:28:40,920 - __main__ - INFO - Signal generated for USDCAD: Type=BUY, Confidence=1.00, H1 Trend=ranging
+2025-09-05 17:28:40,921 - __main__ - INFO - Position already exists for USDCAD, skipping new signal to let it work
+2025-09-05 17:29:41,271 - strategy - INFO - Bullish breakout detected for USDCAD above 1.38172
+2025-09-05 17:29:41,271 - strategy - INFO - Breakout detected for USDCAD: bullish at level 1.38172
+2025-09-05 17:29:41,271 - strategy - INFO - Signal confirmed with patterns: ['MARUBOZU', 'ENGULFING']
+2025-09-05 17:29:41,271 - strategy - INFO - Signal confirmed with patterns: ['MARUBOZU', 'ENGULFING']
+2025-09-05 17:29:41,288 - strategy - INFO - Adjusted SL for USDCAD: raw SL=1.37737, spread=0.00012, spread_points=12, pip_size=0.0001
+2025-09-05 17:29:41,298 - strategy - INFO - USDCAD: TP set using enhanced range projection. Range=27.3 pips, Multiplier=2.0, TP=1.38843
+2025-09-05 17:29:41,298 - strategy - INFO - SIGNAL GENERATED for USDCAD: Type=BUY, Entry=1.38297, SL=1.37737 (56.0 pips), TP=1.38843, Confidence=1.00
+2025-09-05 17:29:41,298 - __main__ - INFO - Signal generated for USDCAD: Type=BUY, Confidence=1.00, H1 Trend=ranging
+2025-09-05 17:29:41,299 - __main__ - INFO - Position already exists for USDCAD, skipping new signal to let it work
+2025-09-05 17:30:41,641 - strategy - INFO - Bullish breakout detected for NZDUSD above 0.58779
+2025-09-05 17:30:41,641 - strategy - INFO - Breakout detected for NZDUSD: bullish at level 0.58779
+2025-09-05 17:31:41,975 - strategy - INFO - Bullish breakout detected for NZDUSD above 0.58779
+2025-09-05 17:31:41,975 - strategy - INFO - Breakout detected for NZDUSD: bullish at level 0.58779
+2025-09-05 17:32:42,324 - strategy - INFO - Bullish breakout detected for NZDUSD above 0.58779
+2025-09-05 17:32:42,325 - strategy - INFO - Breakout detected for NZDUSD: bullish at level 0.58779
+2025-09-05 17:33:42,676 - strategy - INFO - Bullish breakout detected for NZDUSD above 0.58779
+2025-09-05 17:33:42,676 - strategy - INFO - Breakout detected for NZDUSD: bullish at level 0.58779
+2025-09-05 17:34:43,019 - strategy - INFO - Bullish breakout detected for NZDUSD above 0.58779
+2025-09-05 17:34:43,020 - strategy - INFO - Breakout detected for NZDUSD: bullish at level 0.58779
+2025-09-05 17:35:43,392 - strategy - INFO - Bullish breakout detected for NZDUSD above 0.58779
+2025-09-05 17:35:43,392 - strategy - INFO - Breakout detected for NZDUSD: bullish at level 0.58779
+2025-09-05 17:36:43,725 - strategy - INFO - Bullish breakout detected for NZDUSD above 0.58779
+2025-09-05 17:36:43,726 - strategy - INFO - Breakout detected for NZDUSD: bullish at level 0.58779
