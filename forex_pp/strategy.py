@@ -114,13 +114,20 @@ class PurePriceActionStrategy:
                    current_candle: pd.Series,
                    resistance_levels: List[float],
                    support_levels: List[float],
-                   symbol: str) -> Optional[Dict]:
+                   symbol: str,
+                   data: pd.DataFrame = None) -> Optional[Dict]:
         """
         Detect breakout above resistance or below support
         """
         symbol_info = self._get_symbol_info(symbol)
-        pip_size = get_pip_size(symbol_info)
-        breakout_threshold_price = self.breakout_threshold * pip_size
+        pip_size = get_pip_size(symbol_info)        
+        
+        if TALIB_AVAILABLE and data is not None and len(data) >= 14:
+            atr = talib.ATR(data['high'].values, data['low'].values, data['close'].values, timeperiod=14)[-1]
+            dynamic_threshold = max(self.breakout_threshold * pip_size, atr * 0.3)  # Min 5 pips or 30% of ATR
+            logger.debug(f"{symbol} - Using dynamic threshold: {dynamic_threshold/pip_size:.1f} pips (ATR: {atr/pip_size:.1f} pips)")
+        else:
+            dynamic_threshold = self.breakout_threshold * pip_size
         
         logger.debug(f"{symbol} - Checking for breakouts. Close: {current_candle['close']:.5f}")
 
@@ -132,9 +139,9 @@ class PurePriceActionStrategy:
                 distance_above = current_candle['close'] - resistance
                 
                 logger.debug(f"{symbol} - Close {current_candle['close']:.5f} vs Resistance {resistance:.5f}, "
-                            f"distance: {distance_above:.5f}, threshold: {breakout_threshold_price:.5f}")
-                
-                if distance_above >= breakout_threshold_price:
+                            f"distance: {distance_above:.5f}, threshold: {dynamic_threshold:.5f}")
+
+                if distance_above >= dynamic_threshold:
                     strength = distance_above / pip_size / 10  # Normalize strength
                     logger.info(f"Bullish breakout detected for {symbol} above {resistance:.5f}")
                     return {'type': 'bullish', 'level': resistance, 'strength': float(strength)}
@@ -147,9 +154,9 @@ class PurePriceActionStrategy:
                 distance_below = support - current_candle['close']
                 
                 logger.debug(f"{symbol} - Close {current_candle['close']:.5f} vs Support {support:.5f}, "
-                            f"distance: {distance_below:.5f}, threshold: {breakout_threshold_price:.5f}")
-                
-                if distance_below >= breakout_threshold_price:
+                            f"distance: {distance_below:.5f}, threshold: {dynamic_threshold:.5f}")
+
+                if distance_below >= dynamic_threshold:
                     strength = distance_below / pip_size / 10  # Normalize strength
                     logger.info(f"Bearish breakout detected for {symbol} below {support:.5f}")
                     return {'type': 'bearish', 'level': support, 'strength': float(strength)}
@@ -228,7 +235,7 @@ class PurePriceActionStrategy:
 
             if patterns_found:
                 logger.info(f"Signal confirmed with patterns: {list(set(patterns_found))}")
-                return True
+                return True, patterns_found
             else:
                 logger.debug("No confirming candlestick patterns found")
                 return False
@@ -273,6 +280,59 @@ class PurePriceActionStrategy:
                 (current_candle['high'] - current_candle['low']) * 0.6
             )
             return is_bearish_engulfing or is_strong_bearish
+        
+    def _check_trend_alignment(self, breakout_type: str, trend: str) -> bool:
+        """
+        ENHANCEMENT: Check if breakout aligns with trend direction
+        """
+        if trend == 'ranging':
+            return True  # Allow trades in ranging market
+        
+        if breakout_type == 'bullish' and trend == 'bullish':
+            return True
+        if breakout_type == 'bearish' and trend == 'bearish':
+            return True
+            
+        return False
+    
+    def _calculate_confidence(self, 
+                                     breakout: Dict, 
+                                     patterns_found: List[str],
+                                     resistance_levels: List[float],
+                                     support_levels: List[float],
+                                     trend_aligned: bool) -> float:
+        """
+        ENHANCEMENT: Multi-factor confidence calculation
+        """
+        # Base confidence from breakout strength (capped to prevent overweight)
+        base_confidence = min(float(breakout.get('strength', 0.0)), 0.4)
+        
+        # Pattern strength component
+        pattern_weight = 0.0
+        if patterns_found:
+            # Multiple patterns = stronger signal
+            pattern_weight = min(len(patterns_found) * 0.15, 0.3)
+            
+            # Bonus for strong patterns
+            strong_patterns = ['ENGULFING', 'HAMMER', 'MORNING_STAR', 'EVENING_STAR']
+            if any(pattern in strong_patterns for pattern in patterns_found):
+                pattern_weight += 0.1
+        
+        # Structure quality component (number of S/R levels indicates good structure)
+        total_levels = len(resistance_levels) + len(support_levels)
+        structure_weight = min(total_levels * 0.05, 0.2)
+        
+        # Trend alignment bonus
+        trend_weight = 0.2 if trend_aligned else -0.1  # Penalty for counter-trend
+        
+        # Combined confidence
+        confidence = base_confidence + pattern_weight + structure_weight + trend_weight
+        confidence = max(0.0, min(confidence, 1.0))
+        
+        logger.debug(f"Confidence calculation: base={base_confidence:.2f}, pattern={pattern_weight:.2f}, "
+                    f"structure={structure_weight:.2f}, trend={trend_weight:.2f}, total={confidence:.2f}")
+        
+        return confidence
 
     def calculate_stop_loss(self, breakout: Dict,
                             support_levels: List[float],
@@ -326,64 +386,164 @@ class PurePriceActionStrategy:
         return float(stop_loss)
 
     def calculate_take_profit(self,
-                          entry_price: float,
-                          breakout: Dict,
-                          support_levels: List[float],
-                          resistance_levels: List[float],
-                          data: pd.DataFrame,
-                          symbol: str) -> float:
+                      entry_price: float,
+                      breakout: Dict,
+                      support_levels: List[float],
+                      resistance_levels: List[float],
+                      data: pd.DataFrame,
+                      symbol: str) -> float:
         """
-        Calculate take profit:
-        - Primary: breakout range projection (measured move).
-        - Fallback: ATR-based target when range invalid.
+        Calculate take profit with enhanced methods for better risk-reward
         """
-
         symbol_info = self._get_symbol_info(symbol)
         pip_size = get_pip_size(symbol_info)
-
-        # --- Primary method: range projection ---
+        
+        # Get the stop loss that was calculated earlier to ensure minimum RR
+        # We'll need to pass this or calculate the distance
+        
+        # Detect current trading session for session-specific adjustments
+        current_hour = datetime.now(timezone.utc).hour
+        
+        if 21 <= current_hour or current_hour <= 6:  # Asian session
+            buffer_pips = getattr(self.config, 'stop_loss_buffer_pips', 15) * 0.7
+        else:  # London/NY sessions - more volatility
+            buffer_pips = getattr(self.config, 'stop_loss_buffer_pips', 15)
+        
+        buffer = buffer_pips * pip_size
+        
+        # Now use the session-adjusted buffer]
+    
+        session_multipliers = {
+            'asian': 3.0,    # 21:00-06:00 UTC
+            'london': 4.5,   # 07:00-15:00 UTC  
+            'newyork': 4.0,  # 12:00-20:00 UTC
+            'overlap': 5.0   # London/NY overlap
+        }
+        
+        # Determine session
+        if 21 <= current_hour or current_hour <= 6:
+            session = 'asian'
+        elif 7 <= current_hour <= 11:
+            session = 'london'
+        elif 12 <= current_hour <= 15:
+            session = 'overlap'  # Best volatility
+        else:
+            session = 'newyork'
+        
+        # Method 1: Enhanced Range Projection (Primary)
         if support_levels and resistance_levels:
             range_high = max(resistance_levels)
             range_low = min(support_levels)
             range_height = range_high - range_low
-
-            min_range_pips = getattr(self.config, "min_range_pips", 5)
+            
+            min_range_pips = getattr(self.config, "min_range_pips", 10)  # Increased from 5
             if range_height >= min_range_pips * pip_size:
+                # Use range projection with session adjustment
+                projection_multiplier = 1.5 if session == 'asian' else 2.0
+                
                 if breakout['type'] == 'bullish':
-                    tp = entry_price + range_height
+                    tp = entry_price + (range_height * projection_multiplier)
                 else:
-                    tp = entry_price - range_height
+                    tp = entry_price - (range_height * projection_multiplier)
+                    
                 logger.info(
-                    f"{symbol}: TP set using range projection. "
-                    f"Range height={range_height/pip_size:.1f} pips, TP={tp:.5f}"
+                    f"{symbol}: TP set using enhanced range projection. "
+                    f"Range={range_height/pip_size:.1f} pips, "
+                    f"Multiplier={projection_multiplier}, TP={tp:.5f}"
                 )
-                return float(tp)
-
-        # --- Fallback method: ATR projection ---
+                
+                # Ensure minimum risk-reward ratio
+                min_tp = self._ensure_minimum_rr(entry_price, tp, breakout, pip_size)
+                return float(max(tp, min_tp) if breakout['type'] == 'bullish' else min(tp, min_tp))
+        
+        # Method 2: Enhanced ATR with Proper Multipliers
         atr_period = getattr(self.config, "atr_period", 14)
-        atr_multiplier = getattr(self.config, "atr_tp_multiplier", 2.0)
-
+        
         if TALIB_AVAILABLE and len(data) >= atr_period:
+            # Calculate ATR
             atr = talib.ATR(data['high'].values,
-                            data['low'].values,
+                            data['low'].values, 
                             data['close'].values,
                             timeperiod=atr_period)[-1]
+            
+            # Detect volatility regime
+            atr_ma = talib.SMA(talib.ATR(data['high'].values,
+                                        data['low'].values,
+                                        data['close'].values,
+                                        timeperiod=atr_period), 
+                            timeperiod=50)[-1] if len(data) >= 50 else atr
+            
+            volatility_ratio = atr / atr_ma if atr_ma > 0 else 1.0
+            
+            # Dynamic multiplier based on volatility and session
+            base_multiplier = session_multipliers[session]
+            
+            # Adjust for volatility regime
+            if volatility_ratio > 1.3:  # High volatility
+                volatility_adj = 0.8  # Reduce multiplier slightly
+            elif volatility_ratio < 0.7:  # Low volatility
+                volatility_adj = 1.2  # Increase multiplier
+            else:
+                volatility_adj = 1.0
+            
+            # Final ATR multiplier (ensure it's never less than risk_reward_ratio)
+            atr_multiplier = max(
+                base_multiplier * volatility_adj,
+                self.risk_reward_ratio * 1.5  # At least 1.5x the configured RR
+            )
+            
             tp_distance = atr * atr_multiplier
+            
             if breakout['type'] == 'bullish':
                 tp = entry_price + tp_distance
             else:
                 tp = entry_price - tp_distance
+                
             logger.info(
-                f"{symbol}: TP set using ATR fallback. "
-                f"ATR={atr/pip_size:.1f} pips, Multiplier={atr_multiplier}, TP={tp:.5f}"
+                f"{symbol}: TP using enhanced ATR. "
+                f"ATR={atr/pip_size:.1f} pips, Session={session}, "
+                f"Volatility ratio={volatility_ratio:.2f}, "
+                f"Final multiplier={atr_multiplier:.1f}, TP={tp:.5f}"
             )
+            
             return float(tp)
+        
+        # Method 3: Fallback - Use configured risk_reward_ratio
+        # This ensures we ALWAYS have at least the minimum RR
+        logger.warning(f"{symbol}: Using fallback RR-based TP calculation")
+        
+        # We need to know the stop loss distance to calculate proper TP
+        # Estimate based on minimum stop loss
+        estimated_sl_distance = self.min_stop_loss_pips * pip_size
+        tp_distance = estimated_sl_distance * self.risk_reward_ratio
+        
+        if breakout['type'] == 'bullish':
+            tp = entry_price + tp_distance
+        else:
+            tp = entry_price - tp_distance
+        
+        return float(tp)
 
-        # --- Last resort: no structure, no ATR ---
-        logger.warning(f"{symbol}: No valid S/R or ATR, defaulting to entry price TP.")
-        return entry_price
+    def _ensure_minimum_rr(self, entry_price: float, calculated_tp: float, 
+                        breakout: Dict, pip_size: float) -> float:
+        """
+        Helper method to ensure minimum risk-reward ratio
+        """
+        # Calculate the stop loss distance (approximate)
+        sl_buffer_pips = getattr(self.config, 'stop_loss_buffer_pips', 15)
+        min_sl_distance = max(self.min_stop_loss_pips, sl_buffer_pips) * pip_size
+        
+        # Ensure TP gives us at least the configured risk_reward_ratio
+        min_tp_distance = min_sl_distance * self.risk_reward_ratio
+        
+        if breakout['type'] == 'bullish':
+            min_tp = entry_price + min_tp_distance
+            return min_tp
+        else:
+            min_tp = entry_price - min_tp_distance
+            return min_tp
 
-    def generate_signal(self, data: pd.DataFrame, symbol: str) -> Optional[TradingSignal]:
+    def generate_signal(self, data: pd.DataFrame, symbol: str, trend: str = 'ranging') -> Optional[TradingSignal]:
         """
         Generate trading signal based on price action analysis
         """
@@ -427,7 +587,8 @@ class PurePriceActionStrategy:
                 current_candle, 
                 resistance_levels, 
                 support_levels, 
-                symbol
+                symbol,
+                data=completed_data
             )
             
             if not breakout:
@@ -435,6 +596,22 @@ class PurePriceActionStrategy:
                 return None
             
             logger.info(f"Breakout detected for {symbol}: {breakout['type']} at level {breakout['level']:.5f}")
+            
+            trend_aligned = self._check_trend_alignment(breakout['type'], trend)
+            if not trend_aligned:
+                logger.info(f"Breakout {breakout['type']} against {trend} trend for {symbol} - SKIPPING")
+                return None
+
+            # Confirm signal using completed candles only 
+            confirmation_result = self.confirm_signal(completed_data, breakout)
+            if isinstance(confirmation_result, tuple):
+                is_confirmed, patterns_found = confirmation_result
+            else:
+                is_confirmed, patterns_found = confirmation_result, []
+                
+            if not is_confirmed:
+                logger.debug(f"Breakout not confirmed for {symbol}")
+                return None
 
             # Confirm signal using completed candles only
             if not self.confirm_signal(completed_data, breakout):
@@ -462,7 +639,13 @@ class PurePriceActionStrategy:
             stop_loss_pips = abs(reference_price - stop_loss) / pip_size
 
             # Normalize confidence to 0-1
-            confidence = max(0.0, min(float(breakout.get('strength', 0.0)), 1.0))
+            confidence = self._calculate_confidence(
+                breakout, 
+                patterns_found, 
+                resistance_levels, 
+                support_levels, 
+                trend_aligned
+            )
 
             # Create the trading signal
             signal = TradingSignal(
@@ -493,15 +676,40 @@ class PurePriceActionStrategy:
 
     def _get_symbol_info(self, symbol: str) -> Dict:
         """
-        Get live symbol information from MetaTrader 5
+        Get live symbol information from MetaTrader 5 with error handling
         """
-        if not mt5.initialize():
-            logger.error("MT5 initialize() failed")
-            raise RuntimeError("MT5 connection failed")
+        try:
+            if not mt5.initialize():
+                # Try to initialize if not already done
+                if not mt5.initialize():
+                    logger.error("MT5 initialize() failed")
+                    # Return a default structure to prevent crashes
+                    return self._get_default_symbol_info(symbol)
+            
+            info = mt5.symbol_info(symbol)
+            if info is None:
+                logger.error(f"Failed to get symbol info for {symbol}")
+                return self._get_default_symbol_info(symbol)
+            
+            return info
+        except Exception as e:
+            logger.error(f"Error getting symbol info: {e}")
+            return self._get_default_symbol_info(symbol)
 
-        info = mt5.symbol_info(symbol)
-        if info is None:
-            logger.error(f"Failed to get symbol info for {symbol}")
-            raise ValueError(f"Symbol {symbol} not found in MT5")
-
-        return info
+    def _get_default_symbol_info(self, symbol: str) -> Dict:
+        """
+        Provide default symbol info as fallback
+        """
+        # Basic defaults for common pairs
+        if 'JPY' in symbol:
+            point = 0.001
+        else:
+            point = 0.00001
+        
+        class DefaultInfo:
+            def __init__(self):
+                self.point = point
+                self.spread = 10
+                self.digits = 3 if 'JPY' in symbol else 5
+                
+        return DefaultInfo()

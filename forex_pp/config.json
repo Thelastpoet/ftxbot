@@ -9,7 +9,12 @@
     "min_peak_rank": 2,
     "proximity_threshold_pips": 10,
     "min_stop_loss_pips": 20,
-    "stop_loss_buffer_pips": 15
+    "stop_loss_buffer_pips": 15,
+    "min_range_pips": 10,
+    "atr_period": 14,
+    "atr_tp_multiplier": 4.0,
+    "session_based_tp": true,
+    "volatility_adjustment": true
   },
   "risk_management": {
     "risk_per_trade": 0.02,
@@ -67,36 +72,5 @@
       "timeframes": ["M15", "H1"]
     }
   ],
-  "trading_sessions": [
-    {
-      "name": "Sydney",
-      "start_time": "22:00",
-      "end_time": "07:00"
-    },
-    {
-      "name": "Tokyo",
-      "start_time": "00:00",
-      "end_time": "09:00"
-    },
-    {
-      "name": "London",
-      "start_time": "07:00",
-      "end_time": "16:00"
-    },
-    {
-      "name": "New_York",
-      "start_time": "12:00",
-      "end_time": "21:00"
-    },
-    {
-      "name": "Tokyo_London_Overlap",
-      "start_time": "07:00",
-      "end_time": "09:00"
-    },
-    {
-      "name": "London_New_York_Overlap",
-      "start_time": "12:00",
-      "end_time": "16:00"
-    }
-  ]
+  "trading_sessions": []
 }

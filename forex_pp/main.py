@@ -316,41 +316,54 @@ class TradingBot:
 
         except Exception as e:
             logger.error(f"Error executing trade for {symbol}: {e}", exc_info=True)
-    
+                
     async def process_symbol(self, symbol_config: Dict):
-        """Process a single symbol for trading opportunities"""
+        """
+        Process a single symbol for trading opportunities
+        ENHANCED: Multi-timeframe coordination with trend alignment
+        """
         symbol = symbol_config['name']
         
-        for timeframe in symbol_config['timeframes']:
-            try:
-                # Fetch market data
-                num_candles_to_fetch = self.config.lookback_period + self.config.swing_window * 2 + 10  # Added buffer
+        try:
+            # ENHANCEMENT: Fetch multi-timeframe data
+            mtf_data = await self.market_data.fetch_multi_timeframe_data(symbol)
+            
+            if not mtf_data:
+                logger.warning(f"No data available for {symbol}")
+                return
+            
+            # ENHANCEMENT: Use H1 for trend, M15 for signal timing
+            if 'H1' in mtf_data and 'M15' in mtf_data:
+                # Get H1 trend direction using existing function
+                h1_trend = self.market_data.identify_trend(mtf_data['H1'])
+                logger.debug(f"{symbol} H1 trend: {h1_trend}")
                 
-                logger.debug(f"Fetching {num_candles_to_fetch} candles for {symbol} {timeframe}")
+                # Generate M15 signal with trend context
+                m15_signal = self.strategy.generate_signal(mtf_data['M15'], symbol, trend=h1_trend)
                 
-                data = await self.market_data.fetch_data(
-                    symbol=symbol,
-                    timeframe=timeframe,
-                    num_candles=num_candles_to_fetch
-                )
-                
-                if data is None or data.empty:
-                    logger.warning(f"No data available for {symbol} {timeframe}")
-                    continue
-                
-                logger.debug(f"Fetched {len(data)} candles for {symbol} {timeframe}")
-                
-                # The second-to-last candle is the last completed one
-                if len(data) < 2:
-                    logger.debug(f"Not enough candles for {symbol} {timeframe}")
-                    continue
+                if m15_signal:
+                    logger.info(
+                        f"Signal generated for {symbol}: "
+                        f"Type={'BUY' if m15_signal.type == 0 else 'SELL'}, "
+                        f"Confidence={m15_signal.confidence:.2f}, "
+                        f"H1 Trend={h1_trend}"
+                    )
                     
-                # Log current price info
-                current_price = data.iloc[-1]['close']
-                logger.debug(f"{symbol} current price: {current_price:.5f}")
+                    # Check if within trading session
+                    if self.session_manager.is_trading_time():
+                        await self.execute_trade(m15_signal, symbol)
+                    else:
+                        logger.info("Outside trading session, signal ignored")
+                else:
+                    logger.debug(f"No signal generated for {symbol}")
+            
+            # FALLBACK: Single timeframe processing (if only one timeframe available)
+            elif 'M15' in mtf_data:
+                # Use M15 data for both trend and signal
+                m15_data = mtf_data['M15']
+                m15_trend = self.market_data.identify_trend(m15_data)
                 
-                # Generate trading signal - returns TradingSignal dataclass
-                signal = self.strategy.generate_signal(data, symbol)
+                signal = self.strategy.generate_signal(m15_data, symbol, trend=m15_trend)
                 
                 if signal:
                     logger.info(
@@ -359,16 +372,36 @@ class TradingBot:
                         f"Confidence={signal.confidence:.2f}"
                     )
                     
-                    # Check if within trading session
                     if self.session_manager.is_trading_time():
                         await self.execute_trade(signal, symbol)
                     else:
                         logger.info("Outside trading session, signal ignored")
                 else:
-                    logger.debug(f"No signal generated for {symbol} {timeframe}")
+                    logger.debug(f"No signal generated for {symbol}")
+            
+            elif 'H1' in mtf_data:
+                # Use H1 data for both trend and signal
+                h1_data = mtf_data['H1']
+                h1_trend = self.market_data.identify_trend(h1_data)
+                
+                signal = self.strategy.generate_signal(h1_data, symbol, trend=h1_trend)
+                
+                if signal:
+                    logger.info(
+                        f"Signal generated for {symbol}: "
+                        f"Type={'BUY' if signal.type == 0 else 'SELL'}, "
+                        f"Confidence={signal.confidence:.2f}"
+                    )
+                    
+                    if self.session_manager.is_trading_time():
+                        await self.execute_trade(signal, symbol)
+                    else:
+                        logger.info("Outside trading session, signal ignored")
+                else:
+                    logger.debug(f"No signal generated for {symbol}")
                         
-            except Exception as e:
-                logger.error(f"Error processing {symbol} {timeframe}: {e}", exc_info=True)
+        except Exception as e:
+            logger.error(f"Error processing {symbol}: {e}", exc_info=True)
                 
     async def sync_trade_status(self):
         """Sync trade status using MT5's position checking"""
