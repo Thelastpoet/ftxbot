@@ -3,3 +3,8 @@ __pycache__/
 *$py.class
 .env
 venv/
+forex_bot.log
+trades.csv
+trades.json
+trades.log
+/__pycache__/
