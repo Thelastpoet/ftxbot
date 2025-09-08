@@ -4,6 +4,9 @@ Handles position sizing and risk management calculations
 """
 
 import logging
+import pandas as pd
+import numpy as np
+from talib import CORREL
 from typing import Dict, Any
 
 from utils import get_pip_size
@@ -19,6 +22,7 @@ class RiskManager:
         self.risk_per_trade = config.risk_per_trade
         self.fixed_lot_size = config.fixed_lot_size
         self.max_drawdown = config.max_drawdown
+        self.last_signal_type = None
 
     def calculate_position_size(self, symbol: str, stop_loss_pips: float) -> float:
         """
@@ -143,12 +147,80 @@ class RiskManager:
             if len(all_positions) >= 20:
                 logger.warning(f"Maximum total positions reached: {len(all_positions)}")
                 return False
+            
+            if not self.check_correlation_risk(symbol, self.mt5_client):
+                return False
 
             return True
 
         except Exception as e:
             logger.error(f"Error checking risk limits: {e}")
             return False
+        
+    def check_correlation_risk(self, new_symbol: str, mt5_client) -> bool:
+        """
+        Prevent multiple correlated positions to avoid risk multiplication
+        Returns True if safe to trade, False if correlation risk too high
+        """
+        try:
+            # Get existing open positions
+            existing_positions = mt5_client.get_all_positions()
+            if not existing_positions:
+                return True  # No positions, safe to trade
+            
+            # Get recent data for correlation calculation
+            new_data = mt5_client.copy_rates_from_pos(new_symbol, 'M15', 0, 30)
+            if new_data is None:
+                logger.warning(f"Cannot get data for {new_symbol} correlation check")
+                return False  # Be conservative if can't check
+            
+            new_df = pd.DataFrame(new_data)
+            new_close = new_df['close'].values
+            
+            for position in existing_positions:
+                # Skip if same symbol (already checked elsewhere)
+                if position.symbol == new_symbol:
+                    continue
+                
+                # Get data for existing position
+                pos_data = mt5_client.copy_rates_from_pos(position.symbol, 'M15', 0, 30)
+                if pos_data is None:
+                    continue
+                
+                pos_df = pd.DataFrame(pos_data)
+                pos_close = pos_df['close'].values
+                
+                # Calculate correlation
+                if len(new_close) == len(pos_close):
+                    correlation = CORREL(new_close, pos_close, timeperiod=30)
+                    current_corr = correlation[-1] if not np.isnan(correlation[-1]) else 0
+                    
+                    # Check if same or opposite direction
+                    same_direction = (
+                        (position.type == 0 and self.last_signal_type == 0) or  # Both long
+                        (position.type == 1 and self.last_signal_type == 1)     # Both short
+                    )
+                    
+                    if same_direction and abs(current_corr) > 0.70:
+                        logger.warning(
+                            f"HIGH CORRELATION RISK: {new_symbol} has {current_corr:.2f} "
+                            f"correlation with open {position.symbol} position"
+                        )
+                        return False
+                    
+                    # Opposite direction with negative correlation is also risky
+                    if not same_direction and current_corr < -0.70:
+                        logger.warning(
+                            f"INVERSE CORRELATION RISK: {new_symbol} has {current_corr:.2f} "
+                            f"correlation with opposite {position.symbol} position"
+                        )
+                        return False
+            
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error checking correlation risk: {e}")
+            return False  # Be conservative on error
 
     def calculate_risk_metrics(self) -> Dict[str, float]:
         """Calculate current risk metrics"""

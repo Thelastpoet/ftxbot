@@ -5,7 +5,8 @@ Handles fetching and processing of market data from MT5
 
 import pandas as pd
 import logging
-from talib import ATR, SMA, STDDEV
+from talib import ATR, LINEARREG_ANGLE, LINEARREG_SLOPE, STDDEV
+import numpy as np
 from typing import Optional, Dict, Any, Tuple
 from datetime import datetime
 
@@ -172,33 +173,36 @@ class MarketData:
     
     def identify_trend(self, data: pd.DataFrame, period: int = 20) -> str:
         """
-        Identify current market trend
-        
-        Args:
-            data: DataFrame with OHLC data
-            period: Period for trend calculation
-            
-        Returns:
-            'bullish', 'bearish', or 'ranging'
+        Use Linear Regression Angle for statistically accurate trend detection
         """
         if len(data) < period:
             return 'ranging'
         
-        # Calculate moving averages
-        sma = SMA(data['close'], timeperiod=period)
+        try:
+            # Linear regression angle in degrees
+            lr_angle = LINEARREG_ANGLE(data['close'].values, timeperiod=period)
+            current_angle = lr_angle[-1] if not np.isnan(lr_angle[-1]) else 0.0
+            
+            # Linear regression slope (strength of trend)
+            lr_slope = LINEARREG_SLOPE(data['close'].values, timeperiod=period)
+            current_slope = abs(lr_slope[-1]) if not np.isnan(lr_slope[-1]) else 0.0
+            
+            # Configurable thresholds
+            angle_threshold = getattr(self.config, "trend_angle_threshold", 5.0)
+            slope_threshold = getattr(self.config, "trend_slope_threshold", 0.0001)
+            
+            # Classification
+            if current_angle > angle_threshold and current_slope > slope_threshold:
+                return 'bullish'
+            elif current_angle < -angle_threshold and current_slope > slope_threshold:
+                return 'bearish'
+            else:
+                return 'ranging'
         
-        # Get recent data
-        recent_close = data['close'].iloc[-1]
-        recent_sma = sma.iloc[-1]
-        prev_sma = sma.iloc[-period]
-        
-        # Determine trend
-        if recent_close > recent_sma and recent_sma > prev_sma:
-            return 'bullish'
-        elif recent_close < recent_sma and recent_sma < prev_sma:
-            return 'bearish'
-        else:
-            return 'ranging'
+        except Exception as e:
+            logger.error(f"Error in trend detection: {e}")
+            return 'ranging'  # safe fallback
+
     
     def calculate_volatility(self, data: pd.DataFrame, period: int = 20) -> float:
         """

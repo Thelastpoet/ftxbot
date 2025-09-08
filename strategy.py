@@ -386,111 +386,81 @@ class PurePriceActionStrategy:
         return float(stop_loss)
 
     def calculate_take_profit(self,
-                      entry_price: float,
-                      breakout: Dict,
-                      support_levels: List[float],
-                      resistance_levels: List[float],
-                      data: pd.DataFrame,
-                      symbol: str) -> float:
+                  entry_price: float,
+                  stop_loss: float,
+                  breakout: Dict,
+                  support_levels: List[float],
+                  resistance_levels: List[float],
+                  data: pd.DataFrame,
+                  symbol: str) -> float:
         """
         Calculate take profit with enhanced methods for better risk-reward
         """
         symbol_info = self._get_symbol_info(symbol)
         pip_size = get_pip_size(symbol_info)
         
-        # Get the stop loss that was calculated earlier to ensure minimum RR
-        # We'll need to pass this or calculate the distance
+        # Now we have the ACTUAL stop loss distance
+        sl_distance = abs(entry_price - stop_loss)
+        sl_pips = sl_distance / pip_size
         
-        # Detect current trading session for session-specific adjustments
+        # Determine current session for context
         current_hour = datetime.now(timezone.utc).hour
-        
-        if 21 <= current_hour or current_hour <= 6:  # Asian session
-            buffer_pips = getattr(self.config, 'stop_loss_buffer_pips', 15) * 0.7
-        else:  # London/NY sessions - more volatility
-            buffer_pips = getattr(self.config, 'stop_loss_buffer_pips', 15)
-        
-        buffer = buffer_pips * pip_size
-        
-        # Now use the session-adjusted buffer]
-    
-        session_multipliers = {
-            'asian': 3.0,    # 21:00-06:00 UTC
-            'london': 4.5,   # 07:00-15:00 UTC  
-            'newyork': 4.0,  # 12:00-20:00 UTC
-            'overlap': 5.0   # London/NY overlap
-        }
-        
-        # Determine session
         if 21 <= current_hour or current_hour <= 6:
             session = 'asian'
         elif 7 <= current_hour <= 11:
             session = 'london'
         elif 12 <= current_hour <= 15:
-            session = 'overlap'  # Best volatility
+            session = 'overlap'
         else:
             session = 'newyork'
         
-        # Method 1: Enhanced Range Projection (Primary)
-        if support_levels and resistance_levels:
-            range_high = max(resistance_levels)
-            range_low = min(support_levels)
-            range_height = range_high - range_low
-            
-            min_range_pips = getattr(self.config, "min_range_pips", 10)  # Increased from 5
-            if range_height >= min_range_pips * pip_size:
-                # Use range projection with session adjustment
-                projection_multiplier = 1.5 if session == 'asian' else 2.0
-                
-                if breakout['type'] == 'bullish':
-                    tp = entry_price + (range_height * projection_multiplier)
-                else:
-                    tp = entry_price - (range_height * projection_multiplier)
-                    
-                logger.info(
-                    f"{symbol}: TP set using enhanced range projection. "
-                    f"Range={range_height/pip_size:.1f} pips, "
-                    f"Multiplier={projection_multiplier}, TP={tp:.5f}"
-                )
-                
-                # Ensure minimum risk-reward ratio
-                min_tp = self._ensure_minimum_rr(entry_price, tp, breakout, pip_size)
-                return float(max(tp, min_tp) if breakout['type'] == 'bullish' else min(tp, min_tp))
+        # Method 1: Structure-based TP (Best - uses market structure)
+        structure_tp = None
+        if breakout['type'] == 'bullish' and resistance_levels:
+            # Find next resistance that gives us at least minimum R:R
+            min_tp_distance = sl_distance * self.risk_reward_ratio
+            for resistance in sorted(resistance_levels):
+                if resistance > entry_price + min_tp_distance:
+                    structure_tp = resistance
+                    break
+        elif breakout['type'] == 'bearish' and support_levels:
+            # Find next support that gives us at least minimum R:R
+            min_tp_distance = sl_distance * self.risk_reward_ratio
+            for support in sorted(support_levels, reverse=True):
+                if support < entry_price - min_tp_distance:
+                    structure_tp = support
+                    break
         
-        # Method 2: Enhanced ATR with Proper Multipliers
-        atr_period = getattr(self.config, "atr_period", 14)
-        
-        if TALIB_AVAILABLE and len(data) >= atr_period:
-            # Calculate ATR
-            atr = talib.ATR(data['high'].values,
-                            data['low'].values, 
-                            data['close'].values,
-                            timeperiod=atr_period)[-1]
-            
-            # Detect volatility regime
-            atr_ma = talib.SMA(talib.ATR(data['high'].values,
-                                        data['low'].values,
-                                        data['close'].values,
-                                        timeperiod=atr_period), 
-                            timeperiod=50)[-1] if len(data) >= 50 else atr
-            
-            volatility_ratio = atr / atr_ma if atr_ma > 0 else 1.0
-            
-            # Dynamic multiplier based on volatility and session
-            base_multiplier = session_multipliers[session]
-            
-            # Adjust for volatility regime
-            if volatility_ratio > 1.3:  # High volatility
-                volatility_adj = 0.8  # Reduce multiplier slightly
-            elif volatility_ratio < 0.7:  # Low volatility
-                volatility_adj = 1.2  # Increase multiplier
-            else:
-                volatility_adj = 1.0
-            
-            # Final ATR multiplier (ensure it's never less than risk_reward_ratio)
-            atr_multiplier = max(
-                base_multiplier * volatility_adj,
-                self.risk_reward_ratio * 1.5  # At least 1.5x the configured RR
+        if structure_tp:
+            actual_rr = abs(structure_tp - entry_price) / sl_distance
+            logger.info(
+                f"{symbol}: TP using structure at {structure_tp:.5f} "
+                f"(R:R={actual_rr:.2f})"
             )
+            return float(structure_tp)
+        
+        # Method 2: ATR-based (Dynamic based on volatility)
+        if TALIB_AVAILABLE and len(data) >= 14:
+            atr = talib.ATR(data['high'].values, data['low'].values, 
+                        data['close'].values, timeperiod=14)[-1]
+            
+            # ATR should give us MORE than our minimum R:R
+            # But be realistic based on current volatility
+            atr_pips = atr / pip_size
+            
+            # If ATR is less than our stop loss, we need a multiplier
+            if atr_pips < sl_pips:
+                # Need multiple ATRs to reach good R:R
+                atr_multiplier = (sl_pips * self.risk_reward_ratio) / atr_pips
+            else:
+                # ATR is already large, use it more conservatively
+                atr_multiplier = self.risk_reward_ratio
+            
+            # Apply session adjustment (Asian = smaller targets)
+            if session == 'asian':
+                atr_multiplier *= 0.8
+            elif session == 'overlap':
+                atr_multiplier *= 1.2
             
             tp_distance = atr * atr_multiplier
             
@@ -498,50 +468,31 @@ class PurePriceActionStrategy:
                 tp = entry_price + tp_distance
             else:
                 tp = entry_price - tp_distance
-                
+            
+            actual_rr = tp_distance / sl_distance
             logger.info(
-                f"{symbol}: TP using enhanced ATR. "
-                f"ATR={atr/pip_size:.1f} pips, Session={session}, "
-                f"Volatility ratio={volatility_ratio:.2f}, "
-                f"Final multiplier={atr_multiplier:.1f}, TP={tp:.5f}"
+                f"{symbol}: TP using ATR. ATR={atr_pips:.1f} pips, "
+                f"multiplier={atr_multiplier:.2f}, R:R={actual_rr:.2f}"
             )
             
             return float(tp)
         
-        # Method 3: Fallback - Use configured risk_reward_ratio
-        # This ensures we ALWAYS have at least the minimum RR
-        logger.warning(f"{symbol}: Using fallback RR-based TP calculation")
-        
-        # We need to know the stop loss distance to calculate proper TP
-        # Estimate based on minimum stop loss
-        estimated_sl_distance = self.min_stop_loss_pips * pip_size
-        tp_distance = estimated_sl_distance * self.risk_reward_ratio
+        # Method 3: Pure R:R based (Fallback - guaranteed minimum)
+        # This is the simplest and most reliable
+        tp_distance = sl_distance * self.risk_reward_ratio
         
         if breakout['type'] == 'bullish':
             tp = entry_price + tp_distance
         else:
             tp = entry_price - tp_distance
         
+        logger.info(
+            f"{symbol}: TP using pure R:R ratio. "
+            f"SL={sl_pips:.1f} pips, TP={tp_distance/pip_size:.1f} pips, "
+            f"R:R={self.risk_reward_ratio:.1f}"
+        )
+        
         return float(tp)
-
-    def _ensure_minimum_rr(self, entry_price: float, calculated_tp: float, 
-                        breakout: Dict, pip_size: float) -> float:
-        """
-        Helper method to ensure minimum risk-reward ratio
-        """
-        # Calculate the stop loss distance (approximate)
-        sl_buffer_pips = getattr(self.config, 'stop_loss_buffer_pips', 15)
-        min_sl_distance = max(self.min_stop_loss_pips, sl_buffer_pips) * pip_size
-        
-        # Ensure TP gives us at least the configured risk_reward_ratio
-        min_tp_distance = min_sl_distance * self.risk_reward_ratio
-        
-        if breakout['type'] == 'bullish':
-            min_tp = entry_price + min_tp_distance
-            return min_tp
-        else:
-            min_tp = entry_price - min_tp_distance
-            return min_tp
 
     def generate_signal(self, data: pd.DataFrame, symbol: str, trend: str = 'ranging') -> Optional[TradingSignal]:
         """
@@ -633,7 +584,7 @@ class PurePriceActionStrategy:
                 symbol
             )
             
-            take_profit = self.calculate_take_profit(reference_price, breakout, support_levels, resistance_levels, completed_data, symbol)
+            take_profit = self.calculate_take_profit(reference_price, stop_loss, breakout, support_levels, resistance_levels, completed_data, symbol)
 
             # Calculate stop loss in pips for position sizing
             stop_loss_pips = abs(reference_price - stop_loss) / pip_size

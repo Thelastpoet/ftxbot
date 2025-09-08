@@ -404,50 +404,77 @@ class TradingBot:
             logger.error(f"Error processing {symbol}: {e}", exc_info=True)
                 
     async def sync_trade_status(self):
-        """Sync trade status using MT5's position checking"""
+        """Trade status synchronization"""
         if not self.trade_logger:
             return
             
-        try:                        
-            # Get trades that are marked as OPEN in our records
-            open_trades = [t for t in self.trade_logger.trades if t.get('status') == 'OPEN']
+        try:
+            open_trades = [t for t in self.trade_logger.trades 
+                        if t.get('status') == 'OPEN']
             
             if not open_trades:
                 return
                 
-            # Get all current positions from MT5
+            # Get current positions
             current_positions = self.mt5_client.get_all_positions()
             current_tickets = {pos.ticket for pos in current_positions}
             
-            # Check each open trade
             for trade in open_trades:
                 ticket = trade.get('ticket')
                 if ticket and ticket not in current_tickets:
-                    # Position was closed externally
-                    logger.info(f"Detected externally closed position: {ticket} for {trade.get('symbol', 'unknown')}")
+                    # Position was closed
+                    logger.info(f"Position {ticket} closed, fetching details...")
                     
-                    # Try to get exit details from history
+                    # Get the closing deal information
                     end_time = datetime.now()
-                    start_time = trade.get('timestamp', end_time - timedelta(days=7))
+                    start_time = datetime.fromisoformat(trade['timestamp'])
                     
+                    # Get history of deals
                     deals = self.mt5_client.get_history_deals(start_time, end_time)
+                    
                     exit_price = 0
                     profit = 0
+                    commission = 0
                     
-                    # Find the closing deal - FIX: Match by order ticket, not position_id
+                    # Find ALL deals related to this position
                     for deal in deals:
-                        if hasattr(deal, 'order') and deal.order == ticket:
-                            if hasattr(deal, 'price'):
+                        # Check multiple fields for matching
+                        if (hasattr(deal, 'position_id') and deal.position_id == ticket) or \
+                        (hasattr(deal, 'order') and deal.order == ticket):
+                            
+                            # Closing deals have DEAL_ENTRY_OUT
+                            if hasattr(deal, 'entry') and deal.entry == 1:  # DEAL_ENTRY_OUT
                                 exit_price = deal.price
-                            if hasattr(deal, 'profit'):
-                                profit = deal.profit
-                            break
+                                profit += deal.profit
+                                commission += getattr(deal, 'commission', 0)
                     
-                    # Update trade status
-                    self.trade_logger.update_trade(ticket, exit_price, profit, 'CLOSED_EXTERNAL')
+                    # If we couldn't find exit price, calculate from current price
+                    if exit_price == 0:
+                        tick = self.mt5_client.get_symbol_info_tick(trade['symbol'])
+                        if tick:
+                            if trade['order_type'] == 'BUY':
+                                exit_price = tick.bid
+                            else:
+                                exit_price = tick.ask
+                            
+                            # Calculate profit manually
+                            if trade['order_type'] == 'BUY':
+                                profit = (exit_price - trade['entry_price']) * trade['volume'] * 100000
+                            else:
+                                profit = (trade['entry_price'] - exit_price) * trade['volume'] * 100000
+                    
+                    # Update trade record
+                    self.trade_logger.update_trade(
+                        ticket, 
+                        exit_price, 
+                        profit - commission, 
+                        'CLOSED_SL' if exit_price == trade['stop_loss'] else 
+                        'CLOSED_TP' if exit_price == trade['take_profit'] else 
+                        'CLOSED_MANUAL'
+                    )
                     
         except Exception as e:
-            logger.error(f"Error syncing trade status: {e}")
+            logger.error(f"Error syncing trade status: {e}", exc_info=True)
     
     async def run(self):
         """Main trading loop"""
