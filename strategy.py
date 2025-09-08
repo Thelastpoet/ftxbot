@@ -8,9 +8,10 @@ import numpy as np
 try:
     import talib
     TALIB_AVAILABLE = True
-except ImportError:
+except Exception:
+    talib = None
     TALIB_AVAILABLE = False
-from scipy.signal import argrelextrema
+
 import logging
 from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass
@@ -45,70 +46,55 @@ class PurePriceActionStrategy:
         self.risk_reward_ratio = config.risk_reward_ratio
         self.min_stop_loss_pips = getattr(config, "min_stop_loss_pips", 10)
 
-    def find_swing_points(self, data: pd.DataFrame) -> Tuple[np.ndarray, np.ndarray]:
+    def calculate_support_resistance(self, data: pd.DataFrame, symbol: str) -> Tuple[List[float], List[float]]:
         """
-        Find swing highs and lows using argrelextrema
+        Uses Linear Regression + Standard Deviation for support/resistance when TA-Lib is available.
+        Fallback: recent highs/lows if TA-Lib not available.
         """
-        if len(data) < self.swing_window * 2:
-            return np.array([]), np.array([])
+        if data is None or len(data) < 20:
+            return [], []
 
-        try:
-            swing_highs = argrelextrema(data['high'].values, np.greater_equal, order=self.swing_window)[0]
-            swing_lows = argrelextrema(data['low'].values, np.less_equal, order=self.swing_window)[0]
-            return swing_highs, swing_lows
-        except Exception as e:
-            logger.error(f"Error finding swing points: {e}")
-            return np.array([]), np.array([])
+        close_prices = data['close'].values
 
-    def calculate_support_resistance(self,
-                                     data: pd.DataFrame,
-                                     swing_highs: np.ndarray,
-                                     swing_lows: np.ndarray,
-                                     symbol: str) -> Tuple[List[float], List[float]]:
-        """
-        Calculate dynamic support and resistance levels from swing points
-        """
-        resistance_levels: List[float] = []
-        support_levels: List[float] = []
+        resistance_levels = []
+        support_levels = []
 
-        if len(swing_highs) > 0:
-            resistance_prices = data.iloc[swing_highs]['high'].values
-            resistance_levels = self._cluster_levels(resistance_prices, symbol)
+        if TALIB_AVAILABLE and talib is not None:
+            try:
+                lr = talib.LINEARREG(close_prices, timeperiod=20)
+                stddev = talib.STDDEV(close_prices, timeperiod=20)
+                # Add statistically significant bands
+                for multiplier in [1.0, 1.5, 2.0]:
+                    upper_band = lr + (stddev * multiplier)
+                    lower_band = lr - (stddev * multiplier)
 
-        if len(swing_lows) > 0:
-            support_prices = data.iloc[swing_lows]['low'].values
-            support_levels = self._cluster_levels(support_prices, symbol)
+                    if any(data['high'].values[-20:] >= upper_band[-1]):
+                        resistance_levels.append(float(upper_band[-1]))
+                    if any(data['low'].values[-20:] <= lower_band[-1]):
+                        support_levels.append(float(lower_band[-1]))
+
+                # Add recent pivot based on linear regression slope if market flat
+                lr_slope = talib.LINEARREG_SLOPE(close_prices, timeperiod=14)
+                if not np.isnan(lr_slope[-1]) and abs(lr_slope[-1]) < 0.0001:
+                    resistance_levels.append(float(data['high'].tail(20).max()))
+                    support_levels.append(float(data['low'].tail(20).min()))
+            except Exception as e:
+                logger.exception("TA-Lib failure in calculate_support_resistance, falling back to simple S/R: %s", e)
+                # fallback to simple S/R
+                resistance_levels.append(float(data['high'].tail(20).max()))
+                support_levels.append(float(data['low'].tail(20).min()))
+        else:
+            # Fallback: recent high/low pivots
+            resistance_levels.append(float(data['high'].tail(20).max()))
+            support_levels.append(float(data['low'].tail(20).min()))
+
+        # dedupe & sort (resistance high->low, support low->high)
+        resistance_levels = sorted(list(set(resistance_levels)), reverse=True)
+        support_levels = sorted(list(set(support_levels)))
+
+        logger.debug(f"{symbol}: Statistical S/R - Resistance: {resistance_levels}, Support: {support_levels}")
 
         return resistance_levels, support_levels
-
-    def _cluster_levels(self, prices: np.ndarray, symbol: str) -> List[float]:
-        """
-        Cluster nearby price levels using peak ranking, scaled by symbol pip size
-        """
-        if len(prices) == 0:
-            return []
-
-        symbol_info = self._get_symbol_info(symbol)
-        pip_size = get_pip_size(symbol_info)
-
-        proximity = self.proximity_threshold * pip_size  # convert pips to price units
-
-        ranked_prices = []
-        for price in prices:
-            rank = sum(1 for p in prices if abs(p - price) <= proximity)
-            if rank >= self.min_peak_rank:
-                ranked_prices.append((price, rank))
-
-        # sort by rank descending
-        ranked_prices.sort(key=lambda x: x[1], reverse=True)
-
-        consolidated_levels: List[float] = []
-        for price, _rank in ranked_prices:
-            is_close = any(abs(price - level) <= proximity for level in consolidated_levels)
-            if not is_close:
-                consolidated_levels.append(price)
-
-        return sorted(consolidated_levels)
 
     def detect_breakout(self,
                    current_candle: pd.Series,
@@ -124,7 +110,7 @@ class PurePriceActionStrategy:
         
         if TALIB_AVAILABLE and data is not None and len(data) >= 14:
             atr = talib.ATR(data['high'].values, data['low'].values, data['close'].values, timeperiod=14)[-1]
-            dynamic_threshold = max(self.breakout_threshold * pip_size, atr * 0.3)  # Min 5 pips or 30% of ATR
+            dynamic_threshold = max(self.breakout_threshold * pip_size, atr * 0.3) 
             logger.debug(f"{symbol} - Using dynamic threshold: {dynamic_threshold/pip_size:.1f} pips (ATR: {atr/pip_size:.1f} pips)")
         else:
             dynamic_threshold = self.breakout_threshold * pip_size
@@ -163,13 +149,15 @@ class PurePriceActionStrategy:
 
         return None
 
-    def confirm_signal(self, data: pd.DataFrame, breakout: Dict) -> bool:
+    def confirm_signal(self, data: pd.DataFrame, breakout: Dict) -> Tuple[bool, List[str]]:
         """
         Confirm breakout signal using TA-Lib patterns when available with fallback.
+        Always returns (bool, patterns_found_list)
         """
-        # require enough candles for pattern recognition
+        patterns_found: List[str] = []
+
         if len(data) < 20:
-            return False
+            return False, patterns_found
 
         try:
             open_prices = data['open'].values
@@ -177,10 +165,8 @@ class PurePriceActionStrategy:
             low_prices = data['low'].values
             close_prices = data['close'].values
 
-            patterns_found = []
-
-            if talib:
-                # Determine which set of patterns to check
+            if TALIB_AVAILABLE and talib is not None:
+                # choose pattern dicts as you already do...
                 if breakout['type'] == 'bullish':
                     patterns_to_check = {
                         'ENGULFING': talib.CDLENGULFING, 'HAMMER': talib.CDLHAMMER,
@@ -188,29 +174,25 @@ class PurePriceActionStrategy:
                         'MORNING_STAR': talib.CDLMORNINGSTAR, 'BULLISH_HARAMI': talib.CDLHARAMI,
                         'THREE_WHITE_SOLDIERS': talib.CDL3WHITESOLDIERS, 'MARUBOZU': talib.CDLMARUBOZU
                     }
-                    # Bullish patterns return a positive value (e.g., 100)
                     is_signal = lambda val: val > 0
-                else:  # bearish
+                else:
                     patterns_to_check = {
                         'ENGULFING': talib.CDLENGULFING, 'SHOOTING_STAR': talib.CDLSHOOTINGSTAR,
                         'HANGING_MAN': talib.CDLHANGINGMAN, 'DARK_CLOUD': talib.CDLDARKCLOUDCOVER,
                         'EVENING_STAR': talib.CDLEVENINGSTAR, 'BEARISH_HARAMI': talib.CDLHARAMI,
                         'THREE_BLACK_CROWS': talib.CDL3BLACKCROWS, 'MARUBOZU': talib.CDLMARUBOZU
                     }
-                    # Bearish patterns return a negative value (e.g., -100)
                     is_signal = lambda val: val < 0
 
-                # Calculate and check patterns
                 for name, func in patterns_to_check.items():
-                    result = func(open_prices, high_prices, low_prices, close_prices)
-                    
-                    # Check the last 3 candles for a signal using negative indexing
-                    # Ensure we don't go out of bounds if there are fewer than 3 results
+                    try:
+                        result = func(open_prices, high_prices, low_prices, close_prices)
+                    except Exception:
+                        continue
+                    # check last up to 3 candles
                     for i in range(1, min(4, len(result) + 1)):
                         if is_signal(result[-i]):
                             patterns_found.append(name)
-                            logger.debug(f"{breakout['type'].capitalize()} pattern found: {name} on candle {-i}")
-                            # Break the inner loop once a pattern is found for this type
                             break
 
             # fallback to strong candle if no TA-Lib or no patterns found
@@ -233,17 +215,17 @@ class PurePriceActionStrategy:
                     if is_strong_bearish:
                         patterns_found.append('STRONG_BEARISH_CANDLE')
 
-            if patterns_found:
+            is_confirmed = len(patterns_found) > 0
+            if is_confirmed:
                 logger.info(f"Signal confirmed with patterns: {list(set(patterns_found))}")
-                return True, patterns_found
             else:
                 logger.debug("No confirming candlestick patterns found")
-                return False
+
+            return is_confirmed, patterns_found
 
         except Exception as e:
-            logger.error(f"Error in candlestick pattern confirmation: {e}")
-            # Fallback to basic confirmation on any error
-            return self._basic_pattern_confirmation(data, breakout)
+            logger.error(f"Error in candlestick pattern confirmation: {e}", exc_info=True)
+            return self._basic_pattern_confirmation(data, breakout), []
 
     def _basic_pattern_confirmation(self, data: pd.DataFrame, breakout: Dict) -> bool:
         """Basic confirmation when TA-Lib is missing or errors"""
@@ -348,18 +330,19 @@ class PurePriceActionStrategy:
         buffer_pips = getattr(self.config, 'stop_loss_buffer_pips', 15)
         buffer = buffer_pips * pip_size
         if breakout['type'] == 'bullish':
-            stop_loss = breakout['level'] - buffer
-            # pick nearest support below current price
-            for support in reversed(support_levels):
-                if support < current_price - buffer:
-                    stop_loss = support - buffer
-                    break
-        else:
-            stop_loss = breakout['level'] + buffer
-            for resistance in resistance_levels:
-                if resistance > current_price + buffer:
-                    stop_loss = resistance + buffer
-                    break
+            # Find the highest support level that is below the breakout level
+            relevant_supports = [s for s in support_levels if s < breakout['level']]
+            if relevant_supports:
+                stop_loss = max(relevant_supports) - buffer
+            else:
+                stop_loss = breakout['level'] - buffer
+        else:  # Bearish
+            # Find the lowest resistance level that is above the breakout level
+            relevant_resistances = [r for r in resistance_levels if r > breakout['level']]
+            if relevant_resistances:
+                stop_loss = min(relevant_resistances) + buffer
+            else:
+                stop_loss = breakout['level'] + buffer
 
         # enforce minimum stop loss distance (in price units)
         min_sl_price_distance = self.min_stop_loss_pips * pip_size
@@ -506,20 +489,9 @@ class PurePriceActionStrategy:
             # Get trading data
             completed_data = data.iloc[:-1].tail(self.lookback_period).copy()
             current_candle = data.iloc[-1]
-            
-            # Find swing points in the analysis window
-            swing_highs, swing_lows = self.find_swing_points(completed_data)
-            
-            logger.debug(f"{symbol}: Found {len(swing_highs)} swing highs and {len(swing_lows)} swing lows")
-            
-            if len(swing_highs) == 0 and len(swing_lows) == 0:
-                logger.debug(f"No swing points found for {symbol}")
-                return None
-    
+                
             # Calculate support and resistance levels
-            resistance_levels, support_levels = self.calculate_support_resistance(
-                completed_data, swing_highs, swing_lows, symbol
-            )
+            resistance_levels, support_levels = self.calculate_support_resistance(completed_data, symbol)
 
             logger.debug(f"{symbol}: {len(resistance_levels)} resistance levels, {len(support_levels)} support levels")
             
@@ -554,21 +526,11 @@ class PurePriceActionStrategy:
                 return None
 
             # Confirm signal using completed candles only 
-            confirmation_result = self.confirm_signal(completed_data, breakout)
-            if isinstance(confirmation_result, tuple):
-                is_confirmed, patterns_found = confirmation_result
-            else:
-                is_confirmed, patterns_found = confirmation_result, []
-                
+            is_confirmed, patterns_found = self.confirm_signal(completed_data, breakout)
             if not is_confirmed:
                 logger.debug(f"Breakout not confirmed for {symbol}")
                 return None
 
-            # Confirm signal using completed candles only
-            if not self.confirm_signal(completed_data, breakout):
-                logger.debug(f"Breakout not confirmed for {symbol}")
-                return None
-            
             # Get symbol info for pip calculations
             symbol_info = self._get_symbol_info(symbol)
             pip_size = get_pip_size(symbol_info)         

@@ -97,34 +97,6 @@ class PurePriceActionStrategy:
 
         return resistance_levels, support_levels
 
-    def _cluster_levels(self, prices: np.ndarray, symbol: str) -> List[float]:
-        """
-        Cluster nearby price levels using peak ranking, scaled by symbol pip size
-        """
-        if len(prices) == 0:
-            return []
-
-        symbol_info = self._get_symbol_info(symbol)
-        pip_size = get_pip_size(symbol_info)
-
-        proximity = self.proximity_threshold * pip_size  # convert pips to price units
-
-        ranked_prices = []
-        for price in prices:
-            rank = sum(1 for p in prices if abs(p - price) <= proximity)
-            if rank >= self.min_peak_rank:
-                ranked_prices.append((price, rank))
-
-        ranked_prices.sort(key=lambda x: x[1], reverse=True)
-
-        consolidated_levels: List[float] = []
-        for price, _rank in ranked_prices:
-            is_close = any(abs(price - level) <= proximity for level in consolidated_levels)
-            if not is_close:
-                consolidated_levels.append(price)
-
-        return sorted(consolidated_levels)
-
     def detect_breakout(self,
                    current_candle: pd.Series,
                    resistance_levels: List[float],
@@ -305,81 +277,6 @@ class PurePriceActionStrategy:
         except Exception as e:
             logger.exception(f"Error in candlestick pattern confirmation: {e}")
             return False, []
-
-    def _basic_pattern_confirmation(self, data: pd.DataFrame, breakout: Dict) -> bool:
-        """Basic confirmation when TA-Lib is missing or errors - kept for backwards compatibility"""
-        if data is None or len(data) < 2:
-            return False
-
-        current_candle = data.iloc[-1]
-        previous_candle = data.iloc[-2]
-
-        if breakout['type'] == 'bullish':
-            is_bullish_engulfing = (
-                current_candle['close'] > current_candle['open'] and
-                previous_candle['close'] < previous_candle['open'] and
-                current_candle['close'] > previous_candle['open'] and
-                current_candle['open'] < previous_candle['close']
-            )
-            is_strong_bullish = (
-                current_candle['close'] > current_candle['open'] and
-                (current_candle['close'] - current_candle['open']) >
-                (current_candle['high'] - current_candle['low']) * 0.6
-            )
-            return is_bullish_engulfing or is_strong_bullish
-        else:
-            is_bearish_engulfing = (
-                current_candle['close'] < current_candle['open'] and
-                previous_candle['close'] > previous_candle['open'] and
-                current_candle['close'] < previous_candle['open'] and
-                current_candle['open'] > previous_candle['close']
-            )
-            is_strong_bearish = (
-                current_candle['close'] < current_candle['open'] and
-                (current_candle['open'] - current_candle['close']) >
-                (current_candle['high'] - current_candle['low']) * 0.6
-            )
-            return is_bearish_engulfing or is_strong_bearish
-
-    def _check_trend_alignment(self, breakout_type: str, trend: str) -> bool:
-        """
-        ENHANCEMENT: Check if breakout aligns with trend direction
-        """
-        if trend == 'ranging':
-            return True  # Allow trades in ranging market
-
-        return (breakout_type == 'bullish' and trend == 'bullish') or (breakout_type == 'bearish' and trend == 'bearish')
-
-    def _calculate_confidence(self,
-                              breakout: Dict,
-                              patterns_found: List[str],
-                              resistance_levels: List[float],
-                              support_levels: List[float],
-                              trend_aligned: bool) -> float:
-        """
-        ENHANCEMENT: Multi-factor confidence calculation
-        """
-        base_confidence = min(float(breakout.get('strength', 0.0)), 0.4)
-
-        pattern_weight = 0.0
-        if patterns_found:
-            pattern_weight = min(len(patterns_found) * 0.15, 0.3)
-            strong_patterns = ['ENGULFING', 'HAMMER', 'MORNING_STAR', 'EVENING_STAR', 'BULLISH_ENGULFING', 'BEARISH_ENGULFING']
-            if any(any(sp in pf for pf in patterns_found) for sp in strong_patterns):
-                pattern_weight += 0.1
-
-        total_levels = len(resistance_levels) + len(support_levels)
-        structure_weight = min(total_levels * 0.05, 0.2)
-
-        trend_weight = 0.2 if trend_aligned else -0.1
-
-        confidence = base_confidence + pattern_weight + structure_weight + trend_weight
-        confidence = max(0.0, min(confidence, 1.0))
-
-        logger.debug(f"Confidence calculation: base={base_confidence:.2f}, pattern={pattern_weight:.2f}, "
-                     f"structure={structure_weight:.2f}, trend={trend_weight:.2f}, total={confidence:.2f}")
-
-        return confidence
 
     def calculate_stop_loss(self, breakout: Dict,
                             support_levels: List[float],

@@ -202,7 +202,6 @@ class MarketData:
         except Exception as e:
             logger.error(f"Error in trend detection: {e}")
             return 'ranging'  # safe fallback
-
     
     def calculate_volatility(self, data: pd.DataFrame, period: int = 20) -> float:
         """
