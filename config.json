@@ -62,14 +62,6 @@
     {
       "name": "EURGBP",
       "timeframes": ["M15", "H1"]
-    },
-    {
-      "name": "EURJPY",
-      "timeframes": ["M15", "H1"]
-    },
-    {
-      "name": "EURCAD",
-      "timeframes": ["M15", "H1"]
     }
   ],
   "trading_sessions": []
