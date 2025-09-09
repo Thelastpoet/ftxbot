@@ -324,6 +324,12 @@ class TradingBot:
         """
         symbol = symbol_config['name']
         
+        # Early check: if we already have a position for this symbol, skip all calculations
+        existing_positions = self.mt5_client.get_positions(symbol)
+        if existing_positions and len(existing_positions) >= 1:
+            logger.info(f"Position already exists for {symbol}, skipping signal generation")
+            return
+        
         try:
             # ENHANCEMENT: Fetch multi-timeframe data
             mtf_data = await self.market_data.fetch_multi_timeframe_data(symbol)

@@ -56,7 +56,8 @@ class MarketData:
             self.data_cache[cache_key] = (df, datetime.now())
             
             # Clean old cache entries
-            if len(self.data_cache) > 20:  # Simple limit
+            max_cache_entries = len(self.config.symbols) * 3  # Allow 3 timeframes per symbol
+            if len(self.data_cache) > max_cache_entries:
                 oldest_key = min(self.data_cache.keys(), 
                                 key=lambda k: self.data_cache[k][1])
                 del self.data_cache[oldest_key]

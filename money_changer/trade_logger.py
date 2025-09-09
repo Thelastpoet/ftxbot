@@ -213,6 +213,14 @@ class TradeLogger:
             with open(self.csv_file, 'w', newline='') as f:
                 writer = csv.writer(f)
                 
+                # Write header row first
+                writer.writerow([
+                    'timestamp', 'symbol', 'order_type', 'entry_price', 
+                    'volume', 'stop_loss', 'take_profit', 'ticket',
+                    'exit_price', 'profit', 'duration', 'status',
+                    'reason', 'confidence', 'signal_time'
+                ])
+                
                 # Write all trades (updated ones will have new values)
                 for trade in self.trades:
                     writer.writerow([

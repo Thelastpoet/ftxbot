@@ -50,6 +50,13 @@ class Config:
             self.breakout_threshold = trading.get('breakout_threshold_pips', 5)
             self.min_peak_rank = trading.get('min_peak_rank', 2)
             self.proximity_threshold = trading.get('proximity_threshold_pips', 10)
+            self.min_stop_loss_pips = trading.get('min_stop_loss_pips', 20)
+            self.stop_loss_buffer_pips = trading.get('stop_loss_buffer_pips', 15)
+            self.min_range_pips = trading.get('min_range_pips', 10)
+            self.atr_period = trading.get('atr_period', 14)
+            self.atr_tp_multiplier = trading.get('atr_tp_multiplier', 4.0)
+            self.session_based_tp = trading.get('session_based_tp', True)
+            self.volatility_adjustment = trading.get('volatility_adjustment', True)
             
             # Risk management
             risk = config_data.get('risk_management', {})
@@ -109,9 +116,16 @@ class Config:
         self.risk_per_trade = 0.02
         self.fixed_lot_size = None
         self.max_drawdown = 0.1
-        self.risk_reward_ratio = 2.0
+        self.risk_reward_ratio = 1.25
         self.symbols = [{'name': 'EURUSD', 'timeframes': ['M15']}]
         self.trading_sessions = []
+        self.min_stop_loss_pips = 20
+        self.stop_loss_buffer_pips = 15
+        self.min_range_pips = 10
+        self.atr_period = 14
+        self.atr_tp_multiplier = 4.0
+        self.session_based_tp = True
+        self.volatility_adjustment = True
 
 class TradingSession:
     """Manages trading session times"""
@@ -209,12 +223,6 @@ class TradingBot:
     async def execute_trade(self, signal: TradingSignal, symbol: str):
         """Execute a trade based on signal"""
         try:
-            # First check if we already have a position for this symbol
-            existing_positions = self.mt5_client.get_positions(symbol)
-            if existing_positions and len(existing_positions) >= 1:  # Fixed: was > 2
-                logger.info(f"Position already exists for {symbol}, skipping new signal to let it work")
-                return
-
             # Get symbol info (required for pip calculations & validations)
             symbol_info = self.mt5_client.get_symbol_info(symbol)
             if not symbol_info:
@@ -254,7 +262,7 @@ class TradingBot:
                 return
 
             # Check risk limits before executing
-            if not self.risk_manager.check_risk_limits(symbol):
+            if not self.risk_manager.check_risk_limits(symbol, signal.type):
                 logger.info(f"Risk limits prevent trading {symbol}")
                 return
 
@@ -320,19 +328,25 @@ class TradingBot:
     async def process_symbol(self, symbol_config: Dict):
         """
         Process a single symbol for trading opportunities
-        ENHANCED: Multi-timeframe coordination with trend alignment
+        Multi-timeframe coordination with trend alignment
         """
         symbol = symbol_config['name']
         
+        # Early check: if we already have a position for this symbol, skip all calculations
+        existing_positions = self.mt5_client.get_positions(symbol)
+        if existing_positions and len(existing_positions) >= 1:
+            logger.debug(f"Position already exists for {symbol}, skipping signal generation")
+            return
+        
         try:
-            # ENHANCEMENT: Fetch multi-timeframe data
+            # Fetch multi-timeframe data
             mtf_data = await self.market_data.fetch_multi_timeframe_data(symbol)
             
             if not mtf_data:
                 logger.warning(f"No data available for {symbol}")
                 return
             
-            # ENHANCEMENT: Use H1 for trend, M15 for signal timing
+            # Use H1 for trend, M15 for signal timing
             if 'H1' in mtf_data and 'M15' in mtf_data:
                 # Get H1 trend direction using existing function
                 h1_trend = self.market_data.identify_trend(mtf_data['H1'])
@@ -450,26 +464,43 @@ class TradingBot:
                     
                     # If we couldn't find exit price, calculate from current price
                     if exit_price == 0:
-                        tick = self.mt5_client.get_symbol_info_tick(trade['symbol'])
-                        if tick:
-                            if trade['order_type'] == 'BUY':
-                                exit_price = tick.bid
-                            else:
-                                exit_price = tick.ask
-                            
-                            # Calculate profit manually
-                            if trade['order_type'] == 'BUY':
-                                profit = (exit_price - trade['entry_price']) * trade['volume'] * 100000
-                            else:
-                                profit = (trade['entry_price'] - exit_price) * trade['volume'] * 100000
-                    
+                        current_positions = self.mt5_client.get_all_positions()
+                        open_pos = any(pos.ticket == ticket for pos in current_positions)
+                        
+                        if open_pos:
+                            logger.debug(f"Position {ticket} still open, skipping sync")
+                            continue
+                        
+                        extended_end_time = datetime.now() + timedelta(days=1)
+                        extended_start_time = datetime.fromisoformat(trade['timestamp']) - timedelta(hours=1)
+
+                        extended_deals = self.mt5_client.get_history_deals(extended_start_time, extended_end_time)
+                        
+                        for deal in extended_deals:
+                            if (hasattr(deal, 'position_id') and deal.position_id == ticket) or \
+                            (hasattr(deal, 'order') and deal.order == ticket):
+                                if hasattr(deal, 'entry') and deal.entry == 1:  # DEAL_ENTRY_OUT
+                                    exit_price = deal.price
+                                    profit += deal.profit
+                                    commission += getattr(deal, 'commission', 0)
+                                    logger.info(f"Found exit for position {ticket} in extended history")
+                                    break
+                                
+                    if exit_price == 0:
+                        logger.error(f"Could not find exit price for closed position {ticket}. "
+                            f"This trade will not be properly logged. Consider manual review.")
+                        
+                        # Mark it with a special status so we know it needs review
+                        self.trade_logger.update_trade(ticket, 0, 0 - commission, 'CLOSED_UNKNOWN')
+                        continue
+
                     # Update trade record
                     self.trade_logger.update_trade(
                         ticket, 
                         exit_price, 
                         profit - commission, 
-                        'CLOSED_SL' if exit_price == trade['stop_loss'] else 
-                        'CLOSED_TP' if exit_price == trade['take_profit'] else 
+                        'CLOSED_SL' if abs(exit_price - trade['stop_loss']) < 0.0001 else 
+                        'CLOSED_TP' if abs(exit_price - trade['take_profit']) < 0.0001 else 
                         'CLOSED_MANUAL'
                     )
                     
