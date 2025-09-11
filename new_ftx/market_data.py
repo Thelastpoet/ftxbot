@@ -2,6 +2,7 @@
 Market Data Module
 Handles fetching and processing of market data from MT5
 """
+
 import pandas as pd
 import numpy as np
 import logging
