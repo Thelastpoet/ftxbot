@@ -133,6 +133,11 @@ class TradingSession:
     
     def __init__(self, config: Config):
         self.config = config
+        # Log session info on creation for clarity
+        try:
+            self.log_session_info()
+        except Exception:
+            pass
         
     def is_trading_time(self) -> bool:
         """Check if current time is within any defined trading session"""
@@ -156,6 +161,25 @@ class TradingSession:
                     return True
         
         return False
+
+    def log_session_info(self):
+        """Log configured sessions and local time zone info"""
+        try:
+            now_local = datetime.now().astimezone()
+            tzname = now_local.tzname()
+            offset = now_local.utcoffset()
+            logger.info(
+                f"Session timezone: {tzname} (UTC offset {offset}) | Local time: {now_local.strftime('%Y-%m-%d %H:%M:%S')}"
+            )
+            if not self.config.trading_sessions:
+                logger.info("No trading sessions configured (24/7 mode)")
+                return
+            for sess in self.config.trading_sessions:
+                logger.info(
+                    f"Session configured: {sess['name']} {sess['start_time']}–{sess['end_time']} (interpreted in local time)"
+                )
+        except Exception as e:
+            logger.debug(f"Failed to log session info: {e}")
 
 class TradingBot:
     """Main trading bot orchestrator"""
@@ -188,6 +212,11 @@ class TradingBot:
             
             self.market_data = MarketData(self.mt5_client, self.config)
             self.strategy = PurePriceActionStrategy(self.config)
+            # Disable M1 confirmation for now
+            try:
+                self.strategy.m1_confirmation_enabled = False
+            except Exception:
+                pass
             self.risk_manager = RiskManager(self.config, self.mt5_client)
             self.trade_logger = TradeLogger('trades.log')
             
@@ -198,6 +227,18 @@ class TradingBot:
                 logger.info(f"Initial account balance: {self.initial_balance}")
             
             logger.info("Trading bot initialized successfully")
+
+            # Warm up M1 history so confirmation has data (live only)
+            try:
+                import asyncio as _asyncio
+                tasks = []
+                for sym_cfg in self.config.symbols:
+                    tasks.append(self.market_data.fetch_data(sym_cfg['name'], 'M1', max(200, self.config.max_period * 5)))
+                if tasks:
+                    await _asyncio.gather(*tasks)
+                    logger.info("M1 history warmup complete")
+            except Exception as _e:
+                logger.debug(f"M1 warmup skipped: {_e}")
             
         except Exception as e:
             logger.error(f"Failed to initialize trading bot: {e}")

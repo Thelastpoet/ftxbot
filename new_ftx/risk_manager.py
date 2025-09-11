@@ -88,8 +88,11 @@ class RiskManager:
         """
         try:
             if symbol_info.trade_tick_size > 0:
-                pip_value = symbol_info.trade_tick_value / symbol_info.trade_tick_size
-                return pip_value
+                # Convert native tick value per tick-size to value per pip
+                pip_size = get_pip_size(symbol_info)
+                per_price_unit = symbol_info.trade_tick_value / symbol_info.trade_tick_size
+                pip_value = per_price_unit * pip_size
+                return float(pip_value)
             else:
                 return 0.0
         except Exception as e:

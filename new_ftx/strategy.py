@@ -3,6 +3,7 @@ Pure Price Action Strategy Module - LIVE FOREX TRADING
 Real-time breakout detection with smart confirmation
 """
 import math
+import time
 import MetaTrader5 as mt5
 from scipy.signal import argrelextrema
 import pandas as pd
@@ -67,6 +68,14 @@ class PurePriceActionStrategy:
         self.min_confidence = 0.6
         self.proximity_threshold = getattr(config, "proximity_threshold", 20)  # in pips
         self.min_peak_rank = getattr(config, "min_peak_rank", 2)  # min confirmations
+
+        # M1 confirmation settings
+        self.m1_confirmation_enabled = getattr(config, "m1_confirmation_enabled", True)
+        self.m1_confirmation_candles = getattr(config, "m1_confirmation_candles", 1)  # number of closed M1 candles beyond level
+        self.m1_confirmation_buffer_pips = getattr(config, "m1_confirmation_buffer_pips", 0.5)  # small buffer beyond level
+
+        # Backtest mode: disables real-time age/close filters
+        self.backtest_mode = getattr(config, "backtest_mode", False)
 
     def find_swing_points(self, data: pd.DataFrame) -> Tuple[np.ndarray, np.ndarray]:
         """
@@ -148,6 +157,72 @@ class PurePriceActionStrategy:
                 )
         
         return None
+
+    def _confirm_breakout_m1(self, symbol: str, breakout: BreakoutInfo, pip_size: float, tick: any) -> Tuple[bool, str]:
+        """
+        Confirm breakout on M1 timeframe using closed candles.
+
+        Rules:
+        - Last closed M1 candle must close beyond the broken level (with small buffer)
+        - Optionally require N last closed M1 candles to be beyond the level
+        - Current price (tick) must still be beyond the level
+
+        Returns: (is_confirmed, reason)
+        """
+        try:
+            # Ensure symbol is selected (helps history download in live)
+            try:
+                mt5.symbol_select(symbol, True)
+            except Exception:
+                pass
+
+            # Fetch a few recent M1 bars (include the forming one)
+            need_closed = max(1, int(self.m1_confirmation_candles))
+            count = max(need_closed + 2, 5)  # ensure enough bars
+
+            rates = None
+            for attempt in range(3):
+                rates = mt5.copy_rates_from_pos(symbol, mt5.TIMEFRAME_M1, 0, count)
+                if rates is not None and len(rates) >= need_closed + 1:
+                    break
+                # escalate count and give terminal a moment to download history (live only)
+                count = max(count * 2, 20)
+                time.sleep(0.05)
+            if rates is None or len(rates) < need_closed + 1:
+                return False, "insufficient_m1_data"
+
+            df = pd.DataFrame(rates)
+            if df.empty:
+                return False, "empty_m1_data"
+
+            # Sort and get closed candles (exclude last row = forming)
+            df.sort_values(by="time", inplace=True)
+            closed = df.iloc[:-1]
+            if len(closed) < need_closed:
+                return False, "not_enough_closed_m1"
+
+            buffer = self.m1_confirmation_buffer_pips * pip_size
+
+            if breakout.type == 'bullish':
+                # Check last N closed candles closed beyond level
+                recent = closed.tail(need_closed)
+                cond_closed = (recent['close'] > (breakout.level + buffer)).all()
+                cond_tick = tick.ask > (breakout.level + buffer)
+                if cond_closed and cond_tick:
+                    return True, "m1_confirmed"
+                return False, "m1_not_confirmed_bullish"
+
+            else:  # bearish
+                recent = closed.tail(need_closed)
+                cond_closed = (recent['close'] < (breakout.level - buffer)).all()
+                cond_tick = tick.bid < (breakout.level - buffer)
+                if cond_closed and cond_tick:
+                    return True, "m1_confirmed"
+                return False, "m1_not_confirmed_bearish"
+
+        except Exception as e:
+            logger.error(f"Error during M1 confirmation for {symbol}: {e}", exc_info=True)
+            return False, "m1_error"
 
     def _calculate_confidence(self,
                         breakout: BreakoutInfo,
@@ -347,28 +422,31 @@ class PurePriceActionStrategy:
                 logger.debug(f"{symbol}: Spread too high ({spread_pips:.1f} pips)")
                 return None
             
-            # 2. Candle age filter
-            candle_age = (datetime.now(timezone.utc) - 
-                         pd.to_datetime(forming_candle.name).replace(tzinfo=timezone.utc))
-            candle_age_seconds = candle_age.total_seconds()
-            
-            if candle_age_seconds > self.max_signal_age_seconds:
-                logger.debug(f"{symbol}: Signal too old ({candle_age_seconds:.0f}s)")
-                return None
-            
-            # 3. Don't enter near candle close
-            timeframe_seconds = {'M1': 60, 'M5': 300, 'M15': 900, 'M30': 1800, 'H1': 3600}
-            current_timeframe = 'M15'
-            for sym_config in self.config.symbols:
-                if sym_config['name'] == symbol:
-                    current_timeframe = sym_config['timeframes'][0]
-                    break
-            max_candle_seconds = timeframe_seconds.get(current_timeframe, 900)
-            time_remaining = max_candle_seconds - (candle_age_seconds % max_candle_seconds)
-            
-            if time_remaining < self.min_candle_time_remaining:
-                logger.debug(f"{symbol}: Too close to candle close ({time_remaining:.0f}s remaining)")
-                return None
+            # Prepare time_remaining for optional logging
+            time_remaining = None
+
+            # 2. Time-based filters (skip in backtests)
+            if not self.backtest_mode:
+                # Age filter
+                candle_age = (datetime.now(timezone.utc) - 
+                            pd.to_datetime(forming_candle.name).replace(tzinfo=timezone.utc))
+                candle_age_seconds = candle_age.total_seconds()
+                if candle_age_seconds > self.max_signal_age_seconds:
+                    logger.debug(f"{symbol}: Signal too old ({candle_age_seconds:.0f}s)")
+                    return None
+
+                # Don't enter near candle close
+                timeframe_seconds = {'M1': 60, 'M5': 300, 'M15': 900, 'M30': 1800, 'H1': 3600}
+                current_timeframe = 'M15'
+                for sym_config in self.config.symbols:
+                    if sym_config['name'] == symbol:
+                        current_timeframe = sym_config['timeframes'][0]
+                        break
+                max_candle_seconds = timeframe_seconds.get(current_timeframe, 900)
+                time_remaining = max_candle_seconds - (candle_age_seconds % max_candle_seconds)
+                if time_remaining < self.min_candle_time_remaining:
+                    logger.debug(f"{symbol}: Too close to candle close ({time_remaining:.0f}s remaining)")
+                    return None
             
             # 4. Momentum filter
             candle_body = abs(forming_candle['close'] - forming_candle['open'])
@@ -400,6 +478,30 @@ class PurePriceActionStrategy:
                 f"{symbol}: Breakout detected - {breakout.type} @ {breakout.entry_price:.5f}, "
                 f"distance={breakout.distance_pips:.1f}p, strength={breakout.strength_score:.2f}"
             )
+
+            # M1 confirmation gate (prevents false signals on forming M15 candle)
+            if self.m1_confirmation_enabled:
+                confirmed, reason = self._confirm_breakout_m1(symbol, breakout, pip_size, tick)
+                if not confirmed:
+                    logger.info(f"{symbol}: Breakout not confirmed on M1 ({reason}), skipping.")
+                    return None
+                else:
+                    # Use last closed M1 candle for momentum/direction in confidence calc
+                    try:
+                        rates_m1 = mt5.copy_rates_from_pos(symbol, mt5.TIMEFRAME_M1, 0, 3)
+                        if rates_m1 is not None and len(rates_m1) >= 2:
+                            m1_df = pd.DataFrame(rates_m1)
+                            m1_df.sort_values(by="time", inplace=True)
+                            last_closed = m1_df.iloc[-2]
+                            m1_body = abs(last_closed['close'] - last_closed['open'])
+                            m1_range = max(last_closed['high'] - last_closed['low'], 1e-12)
+                            m1_bullish = last_closed['close'] > last_closed['open']
+                            # Override local variables used later in confidence calculation
+                            candle_body = float(m1_body)
+                            candle_range = float(m1_range)
+                            is_bullish_candle = bool(m1_bullish)
+                    except Exception as e:
+                        logger.warning(f"{symbol}: Failed to derive M1 momentum candle: {e}")
             
             # Structure distance check
             res_levels = sorted(resistance_levels)
@@ -477,13 +579,16 @@ class PurePriceActionStrategy:
                 timestamp=datetime.now(timezone.utc)
             )
             
+            time_remaining_str = (
+                f"  Time remaining in candle: {time_remaining:.0f}s" if time_remaining is not None else ""
+            )
             logger.info(
                 f"*** SIGNAL: {symbol} {'BUY' if signal.type == 0 else 'SELL'} @ {signal.entry_price:.5f}"
                 f"  SL: {signal.stop_loss:.5f} ({signal.stop_loss_pips:.1f}p)"
                 f"  TP: {signal.take_profit:.5f} ({(abs(signal.take_profit - signal.entry_price)/pip_size):.1f}p)"
                 f"  R:R: {risk_reward_ratio:.1f}"
                 f"  Confidence: {signal.confidence:.2f}"
-                f"  Time remaining in candle: {time_remaining:.0f}s"
+                f"{time_remaining_str}"
             )
             
             return signal
