@@ -57,25 +57,30 @@ class PurePriceActionStrategy:
         self.min_stop_loss_pips = getattr(config, "min_stop_loss_pips", 15)
         self.stop_loss_buffer_pips = getattr(config, "stop_loss_buffer_pips", 10)
         
-        # Trading thresholds
-        self.max_spread_atr_ratio = 0.3
-        self.max_spread_pips = 3
-        self.max_signal_age_seconds = 30
-        self.min_candle_time_remaining = 5  # Don't enter in last 5 seconds
+        # Trading thresholds (slightly relaxed to avoid over-filtering)
+        self.max_spread_atr_ratio = getattr(config, "max_spread_atr_ratio", 0.35)
+        self.max_spread_pips = getattr(config, "max_spread_pips", 4)
+        # Age filter removed to avoid rejecting intra-candle entries; keep only close-time guard
+        self.max_signal_age_seconds = getattr(config, "max_signal_age_seconds", None)
+        self.min_candle_time_remaining = getattr(config, "min_candle_time_remaining", 5)  # seconds
         self.max_extension_atr = 1.5
         self.min_extension_atr = 0.3
-        self.min_body_ratio = 0.3
-        self.min_confidence = 0.6
+        self.min_body_ratio = getattr(config, "min_body_ratio", 0.25)
+        self.min_confidence = getattr(config, "min_confidence", 0.5)
         self.proximity_threshold = getattr(config, "proximity_threshold", 20)  # in pips
         self.min_peak_rank = getattr(config, "min_peak_rank", 2)  # min confirmations
 
-        # M1 confirmation settings
-        self.m1_confirmation_enabled = getattr(config, "m1_confirmation_enabled", True)
+        # M1 confirmation settings (default off to avoid over-restriction)
+        self.m1_confirmation_enabled = getattr(config, "m1_confirmation_enabled", False)
         self.m1_confirmation_candles = getattr(config, "m1_confirmation_candles", 1)  # number of closed M1 candles beyond level
         self.m1_confirmation_buffer_pips = getattr(config, "m1_confirmation_buffer_pips", 0.5)  # small buffer beyond level
 
         # Backtest mode: disables real-time age/close filters
         self.backtest_mode = getattr(config, "backtest_mode", False)
+
+        # Optional: require last closed candle to confirm beyond the level
+        self.require_close_breakout = getattr(config, "require_close_breakout", False)
+        self.close_breakout_buffer_pips = getattr(config, "close_breakout_buffer_pips", 0.2)
 
     def find_swing_points(self, data: pd.DataFrame) -> Tuple[np.ndarray, np.ndarray]:
         """
@@ -252,41 +257,42 @@ class PurePriceActionStrategy:
         
         confidence += momentum_score * 0.3
         
-        # 3. Direction alignment (HARD CHECK)
+        # 3. Direction alignment (SOFT)
         direction_match = (
             (breakout.type == 'bullish' and is_bullish_candle) or
             (breakout.type == 'bearish' and not is_bullish_candle)
         )
-        if not direction_match:
-            logger.debug(f"Direction mismatch: {breakout.type} breakout but {'bullish' if is_bullish_candle else 'bearish'} candle")
-            return confidence, False  # HARD STOP
+        if direction_match:
+            confidence += 0.12
+        else:
+            # Soft penalty instead of hard stop; allow strong breakouts to pass
+            confidence -= 0.15
+            logger.debug(
+                f"Direction mismatch: {breakout.type} breakout but {'bullish' if is_bullish_candle else 'bearish'} candle"
+            )
         
-        confidence += 0.1
-        
-        # 4. Trend alignment (HARD CHECK for strong trends)
-        if trend in ['bullish', 'bearish']:  # Strong trend
+        # 4. Trend alignment (SOFT)
+        if trend in ['bullish', 'bearish']:
             trend_aligned = (
                 (breakout.type == 'bullish' and trend == 'bullish') or
                 (breakout.type == 'bearish' and trend == 'bearish')
             )
-            if not trend_aligned:
-                logger.info(f"Against strong {trend} trend - skipping {breakout.type} breakout")
-                return confidence, False  # HARD STOP against strong trend
-        
-        # Bonus for aligned trades
-        if trend != 'ranging':
-            if (breakout.type == 'bullish' and trend == 'bullish') or \
-            (breakout.type == 'bearish' and trend == 'bearish'):
+            if trend_aligned:
                 confidence += 0.2
+            else:
+                confidence -= 0.2
+                logger.debug(f"Against {trend} trend: applying penalty, not rejecting outright")
         
         # 5. Spread penalty
-        if atr:
-            spread_impact = spread / atr  # spread is already in price units
-            if spread_impact > 0.2:
-                confidence -= 0.1
+        if atr and atr > 0:
+            spread_impact = spread / atr  # price units
+            if spread_impact > 0.35:
+                confidence -= 0.15
+            elif spread_impact > 0.2:
+                confidence -= 0.05
         else:
-            spread_pips = spread / pip_size
-            if spread_pips > 2:
+            spread_pips = spread / pip_size if pip_size > 0 else 0
+            if spread_pips > 3:
                 confidence -= 0.1
         
         final_confidence = max(0.1, min(confidence, 1.0))
@@ -425,16 +431,8 @@ class PurePriceActionStrategy:
             # Prepare time_remaining for optional logging
             time_remaining = None
 
-            # 2. Time-based filters (skip in backtests)
+            # 2. Time-based filters (only avoid the last few seconds of the candle)
             if not self.backtest_mode:
-                # Age filter
-                candle_age = (datetime.now(timezone.utc) - 
-                            pd.to_datetime(forming_candle.name).replace(tzinfo=timezone.utc))
-                candle_age_seconds = candle_age.total_seconds()
-                if candle_age_seconds > self.max_signal_age_seconds:
-                    logger.debug(f"{symbol}: Signal too old ({candle_age_seconds:.0f}s)")
-                    return None
-
                 # Don't enter near candle close
                 timeframe_seconds = {'M1': 60, 'M5': 300, 'M15': 900, 'M30': 1800, 'H1': 3600}
                 current_timeframe = 'M15'
@@ -443,22 +441,27 @@ class PurePriceActionStrategy:
                         current_timeframe = sym_config['timeframes'][0]
                         break
                 max_candle_seconds = timeframe_seconds.get(current_timeframe, 900)
+                # Compute age based on index time if available
+                candle_age = (datetime.now(timezone.utc) - 
+                              pd.to_datetime(forming_candle.name).replace(tzinfo=timezone.utc))
+                candle_age_seconds = candle_age.total_seconds()
                 time_remaining = max_candle_seconds - (candle_age_seconds % max_candle_seconds)
                 if time_remaining < self.min_candle_time_remaining:
                     logger.debug(f"{symbol}: Too close to candle close ({time_remaining:.0f}s remaining)")
                     return None
             
-            # 4. Momentum filter
+            # 4. Momentum filter (either body is decent OR range expanded vs ATR)
             candle_body = abs(forming_candle['close'] - forming_candle['open'])
-            candle_range = forming_candle['high'] - forming_candle['low']
-            body_ratio = candle_body / candle_range if candle_range > 0 else 0
+            candle_range = max(forming_candle['high'] - forming_candle['low'], 1e-12)
+            body_ratio = candle_body / candle_range
             
             min_body_ratio = self.min_body_ratio
             if atr and (atr / pip_size) < 10:
                 min_body_ratio *= 0.8
             
-            if body_ratio < min_body_ratio:
-                logger.debug(f"{symbol}: Insufficient momentum (body_ratio={body_ratio:.2f})")
+            range_ok = (atr is not None and atr > 0 and (candle_range / atr) >= 0.8)
+            if body_ratio < min_body_ratio and not range_ok:
+                logger.debug(f"{symbol}: Insufficient momentum (body_ratio={body_ratio:.2f}, range/ATR={(candle_range/atr) if atr else 0:.2f})")
                 return None
             
             # Calculate S/R levels
@@ -473,11 +476,24 @@ class PurePriceActionStrategy:
             
             if not breakout:
                 return None
-            
+
             logger.info(
                 f"{symbol}: Breakout detected - {breakout.type} @ {breakout.entry_price:.5f}, "
                 f"distance={breakout.distance_pips:.1f}p, strength={breakout.strength_score:.2f}"
             )
+
+            # Optional: require last closed candle to have closed beyond the broken level (softens false breaks)
+            if self.require_close_breakout and len(completed_data) > 0:
+                last_closed = completed_data.iloc[-1]
+                buffer = self.close_breakout_buffer_pips * pip_size
+                if breakout.type == 'bullish':
+                    if not (last_closed['close'] > breakout.level + buffer):
+                        logger.info(f"{symbol}: Last close not beyond level (bullish); skipping by close-confirm rule.")
+                        return None
+                else:
+                    if not (last_closed['close'] < breakout.level - buffer):
+                        logger.info(f"{symbol}: Last close not beyond level (bearish); skipping by close-confirm rule.")
+                        return None
 
             # M1 confirmation gate (prevents false signals on forming M15 candle)
             if self.m1_confirmation_enabled:
@@ -523,11 +539,11 @@ class PurePriceActionStrategy:
                 if room_req_pips:
                     room_req = room_req_pips * pip_size
                 else:
-                    room_req = max(1.5 * min_sl_distance, 0.8 * atr if atr else 0.0)
+                    room_req = max(1.0 * min_sl_distance, 0.5 * atr if atr else 0.0)
 
                 if distance_to_next < room_req:
                     logger.info(
-                        f"{symbol}: Not enough room after breakout (distance_to_next={distance_to_next/pip_size:.1f}p < required={room_req/pip_size:.1f}p). Skipping.")
+                        f"{symbol}: Limited room after breakout ({distance_to_next/pip_size:.1f}p < {room_req/pip_size:.1f}p). Skipping.")
                     return None
             
             # Calculate confidence

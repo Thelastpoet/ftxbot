@@ -287,16 +287,19 @@ class TradingBot:
             else:  # SELL
                 execution_price = tick.bid
             
-            # CRITICAL: Check price drift from signal
+            # CRITICAL: Check price drift from signal (relative to risk)
             price_drift = abs(execution_price - signal.entry_price)
-            max_drift_pips = 5  # Maximum acceptable drift
-            
-            if price_drift > max_drift_pips * pip_size:
+            # Estimate SL distance in pips with current execution price
+            provisional_sl_pips = abs(execution_price - signal.stop_loss) / pip_size
+            # Allow drift up to 25% of SL, bounded [2, 10] pips
+            dynamic_max_drift_pips = max(2.0, min(10.0, 0.25 * provisional_sl_pips))
+
+            if price_drift > dynamic_max_drift_pips * pip_size:
                 logger.warning(
                     f"{symbol}: Price drifted too far\n"
                     f"  Signal: {signal.entry_price:.5f}\n"
                     f"  Current: {execution_price:.5f}\n"
-                    f"  Drift: {price_drift/pip_size:.1f} pips\n"
+                    f"  Drift: {price_drift/pip_size:.1f} pips (limit {dynamic_max_drift_pips:.1f})\n"
                     f"  TRADE SKIPPED"
                 )
                 return

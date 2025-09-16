@@ -54,45 +54,6 @@
     {
       "name": "XAUUSD",
       "timeframes": ["M15", "H1"]
-    },
-    {
-      "name": "EURGBP",
-      "timeframes": ["M15", "H1"]
-    },
-    {
-      "name": "EURJPY",
-      "timeframes": ["M15", "H1"]
-    },
-    {
-      "name": "GBPJPY",
-      "timeframes": ["M15", "H1"]
-    },
-    {
-      "name": "AUDJPY",
-      "timeframes": ["M15", "H1"]
-    },
-    {
-      "name": "CHFJPY",
-      "timeframes": ["M15", "H1"]
-    },
-    {
-      "name": "CADJPY",
-      "timeframes": ["M15", "H1"]
-    }, {
-      "name": "GBPCAD",
-      "timeframes": ["M15", "H1"]
-    },
-    {
-      "name": "EURCAD",
-      "timeframes": ["M15", "H1"]
-    },
-    {
-      "name": "AUDCAD",
-      "timeframes": ["M15", "H1"]
-    },
-    {
-      "name": "AUDNZD",
-      "timeframes": ["M15", "H1"]
     }
   ],
   "trading_sessions": [
