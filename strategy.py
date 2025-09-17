@@ -35,6 +35,7 @@ class TradingSignal:
     reason: str
     confidence: float
     timestamp: datetime
+    breakout_level: float = None
 
 class BreakoutInfo(NamedTuple):
     """Breakout detection result"""
@@ -592,7 +593,8 @@ class PurePriceActionStrategy:
                 stop_loss_pips=sl_distance / pip_size,
                 reason=f"live_{breakout.type}_breakout",
                 confidence=confidence,
-                timestamp=datetime.now(timezone.utc)
+                timestamp=datetime.now(timezone.utc),
+                breakout_level=breakout.level 
             )
             
             time_remaining_str = (

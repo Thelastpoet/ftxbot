@@ -7,6 +7,7 @@ Pure Price Action Strategy with MetaTrader 5 Integration
 import asyncio
 import logging
 import json
+import os
 import argparse
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -191,6 +192,9 @@ class TradingBot:
         self.strategy = None
         self.risk_manager = None
         self.trade_logger = None
+        self.consumed_breakouts = {}
+        self.recent_closures = {} 
+        self.load_memory_state()
         self.session_manager = TradingSession(config)
         self.running = False
         self.initial_balance = None
@@ -381,12 +385,16 @@ class TradingBot:
                     f"  Risk: {actual_sl_pips:.1f} pips\n"
                     f"  Ticket: {result.order}"
                 )
+                return result
             else:
                 error_msg = getattr(result, 'comment', 'Unknown error') if result else 'No result'
                 logger.error(f"{symbol}: Trade execution failed - {error_msg}")
-                
+                return None
+            
+            
         except Exception as e:
             logger.error(f"Error executing trade for {symbol}: {e}", exc_info=True)
+            return None
                 
     async def process_symbol(self, symbol_config: Dict):
         """
@@ -400,6 +408,57 @@ class TradingBot:
         if existing_positions and len(existing_positions) >= 1:
             logger.debug(f"Position already exists for {symbol}, skipping signal generation")
             return
+        
+        # Check if symbol is in cooldown with IMPROVED logic (different times for TP/SL)
+        if symbol in self.recent_closures:
+            closure_time, exit_price, status = self.recent_closures[symbol]
+            time_since_close = (datetime.now() - closure_time).total_seconds()
+            
+            # Different cooldowns based on how trade closed
+            if status == 'CLOSED_TP':
+                cooldown_period = 900  # 15 minutes after TP (market digesting the move)
+            elif status == 'CLOSED_SL':
+                cooldown_period = 300  # 5 minutes after SL (failed move, can retry sooner)
+            else:  # CLOSED_MANUAL or CLOSED_UNKNOWN
+                cooldown_period = 600  # 10 minutes default
+            
+            if time_since_close < cooldown_period:
+                logger.info(f"{symbol} in cooldown for {cooldown_period-time_since_close:.0f}s more (closed {status} {time_since_close/60:.1f} min ago)")
+                return
+        
+        # NEW: Check consumed breakouts BEFORE signal generation to save computation
+        if symbol in self.consumed_breakouts:
+            current_time = datetime.now()
+            symbol_info = self.mt5_client.get_symbol_info(symbol)
+            if symbol_info:
+                pip_size = get_pip_size(symbol_info)
+                
+                # Get current price for comparison
+                tick = self.mt5_client.get_symbol_info_tick(symbol)
+                if tick:
+                    # Clean old entries and check if current price is near recently traded levels
+                    active_breakouts = []
+                    for level, direction, timestamp in self.consumed_breakouts[symbol]:
+                        age = (current_time - timestamp).total_seconds()
+                        
+                        if age < 1800:  # Keep for 30 minutes
+                            active_breakouts.append((level, direction, timestamp))
+                            
+                            # Check if we're still near this consumed breakout level
+                            if age < 900:  # Block re-entry for 15 minutes
+                                current_price = tick.bid if direction == 'bearish' else tick.ask
+                                distance_pips = abs(current_price - level) / pip_size
+                                
+                                # If price is still near the consumed level, skip
+                                if distance_pips < 20:  # Within 20 pips of consumed level
+                                    logger.info(
+                                        f"{symbol}: Already traded {direction} breakout at {level:.5f} "
+                                        f"({age/60:.1f} min ago). Current price {current_price:.5f} still near level. Skipping."
+                                    )
+                                    return
+                    
+                    # Update with only non-expired breakouts
+                    self.consumed_breakouts[symbol] = active_breakouts
         
         try:
             # Fetch multi-timeframe data
@@ -419,6 +478,22 @@ class TradingBot:
                 m15_signal = self.strategy.generate_signal(mtf_data['M15'], symbol, trend=h1_trend)
                 
                 if m15_signal:
+                    # ADDITIONAL CHECK: Is this breakout level already consumed?
+                    if symbol in self.consumed_breakouts:
+                        for level, direction, timestamp in self.consumed_breakouts[symbol]:
+                            age = (datetime.now() - timestamp).total_seconds()
+                            if age < 900:  # Within 15 minutes
+                                signal_direction = 'bullish' if m15_signal.type == 0 else 'bearish'
+                                if direction == signal_direction:
+                                    # Check if this is the same breakout level
+                                    level_distance_pips = abs(m15_signal.breakout_level - level) / pip_size
+                                    if level_distance_pips < 5:  # Same level (within 5 pips)
+                                        logger.info(
+                                            f"{symbol}: Signal generated but breakout at {level:.5f} "
+                                            f"already consumed {age/60:.1f} min ago. Skipping duplicate trade."
+                                        )
+                                        return
+                    
                     logger.info(
                         f"Signal generated for {symbol}: "
                         f"Type={'BUY' if m15_signal.type == 0 else 'SELL'}, "
@@ -428,7 +503,26 @@ class TradingBot:
                     
                     # Check if within trading session
                     if self.session_manager.is_trading_time():
-                        await self.execute_trade(m15_signal, symbol)
+                        result = await self.execute_trade(m15_signal, symbol)
+                        
+                        if result:  # If trade was successfully opened
+                            # Track this breakout as consumed
+                            if symbol not in self.consumed_breakouts:
+                                self.consumed_breakouts[symbol] = []
+                            
+                            direction = 'bullish' if m15_signal.type == 0 else 'bearish'
+                            self.consumed_breakouts[symbol].append(
+                                (m15_signal.breakout_level, direction, datetime.now())
+                            )
+                            
+                            self.save_memory_state()
+                            
+                            # Clean old entries (older than 30 minutes)
+                            current_time = datetime.now()
+                            self.consumed_breakouts[symbol] = [
+                                (lvl, dir, ts) for lvl, dir, ts in self.consumed_breakouts[symbol]
+                                if (current_time - ts).total_seconds() < 1800
+                            ]
                     else:
                         logger.info("Outside trading session, signal ignored")
                 else:
@@ -443,6 +537,21 @@ class TradingBot:
                 signal = self.strategy.generate_signal(m15_data, symbol, trend=m15_trend)
                 
                 if signal:
+                    # Check if this breakout level is already consumed (same as above)
+                    if symbol in self.consumed_breakouts:
+                        symbol_info = self.mt5_client.get_symbol_info(symbol)
+                        if symbol_info:
+                            pip_size = get_pip_size(symbol_info)
+                            for level, direction, timestamp in self.consumed_breakouts[symbol]:
+                                age = (datetime.now() - timestamp).total_seconds()
+                                if age < 900:  # Within 15 minutes
+                                    signal_direction = 'bullish' if signal.type == 0 else 'bearish'
+                                    if direction == signal_direction:
+                                        level_distance_pips = abs(signal.breakout_level - level) / pip_size
+                                        if level_distance_pips < 5:
+                                            logger.info(f"{symbol}: Duplicate breakout detected, skipping.")
+                                            return
+                    
                     logger.info(
                         f"Signal generated for {symbol}: "
                         f"Type={'BUY' if signal.type == 0 else 'SELL'}, "
@@ -450,7 +559,19 @@ class TradingBot:
                     )
                     
                     if self.session_manager.is_trading_time():
-                        await self.execute_trade(signal, symbol)
+                        result = await self.execute_trade(signal, symbol)
+                        
+                        if result:
+                            # Track consumed breakout
+                            if symbol not in self.consumed_breakouts:
+                                self.consumed_breakouts[symbol] = []
+                            
+                            direction = 'bullish' if signal.type == 0 else 'bearish'
+                            self.consumed_breakouts[symbol].append(
+                                (signal.breakout_level, direction, datetime.now())
+                            )
+                            
+                            self.save_memory_state()
                     else:
                         logger.info("Outside trading session, signal ignored")
                 else:
@@ -464,6 +585,21 @@ class TradingBot:
                 signal = self.strategy.generate_signal(h1_data, symbol, trend=h1_trend)
                 
                 if signal:
+                    # Check consumed breakouts (same logic)
+                    if symbol in self.consumed_breakouts:
+                        symbol_info = self.mt5_client.get_symbol_info(symbol)
+                        if symbol_info:
+                            pip_size = get_pip_size(symbol_info)
+                            for level, direction, timestamp in self.consumed_breakouts[symbol]:
+                                age = (datetime.now() - timestamp).total_seconds()
+                                if age < 900:
+                                    signal_direction = 'bullish' if signal.type == 0 else 'bearish'
+                                    if direction == signal_direction:
+                                        level_distance_pips = abs(signal.breakout_level - level) / pip_size
+                                        if level_distance_pips < 5:
+                                            logger.info(f"{symbol}: Duplicate breakout detected, skipping.")
+                                            return
+                    
                     logger.info(
                         f"Signal generated for {symbol}: "
                         f"Type={'BUY' if signal.type == 0 else 'SELL'}, "
@@ -471,7 +607,18 @@ class TradingBot:
                     )
                     
                     if self.session_manager.is_trading_time():
-                        await self.execute_trade(signal, symbol)
+                        result = await self.execute_trade(signal, symbol)
+                        
+                        if result:
+                            if symbol not in self.consumed_breakouts:
+                                self.consumed_breakouts[symbol] = []
+                            
+                            direction = 'bullish' if signal.type == 0 else 'bearish'
+                            self.consumed_breakouts[symbol].append(
+                                (signal.breakout_level, direction, datetime.now())
+                            )
+                            
+                            self.save_memory_state()
                     else:
                         logger.info("Outside trading session, signal ignored")
                 else:
@@ -557,19 +704,127 @@ class TradingBot:
                         self.trade_logger.update_trade(ticket, 0, 0 - commission, 'CLOSED_UNKNOWN')
                         continue
 
-                    # Update trade record
-                    self.trade_logger.update_trade(
-                        ticket, 
-                        exit_price, 
-                        profit - commission, 
-                        'CLOSED_SL' if abs(exit_price - trade['stop_loss']) < 0.0001 else 
-                        'CLOSED_TP' if abs(exit_price - trade['take_profit']) < 0.0001 else 
+                    # Determine closure status and update trade record
+                    status = (
+                        'CLOSED_SL' if abs(exit_price - trade['stop_loss']) < 0.0001 else
+                        'CLOSED_TP' if abs(exit_price - trade['take_profit']) < 0.0001 else
                         'CLOSED_MANUAL'
                     )
+
+                    self.trade_logger.update_trade(
+                        ticket,
+                        exit_price,
+                        profit - commission,
+                        status
+                    )
                     
+                    symbol = trade.get('symbol')
+                    if exit_price and symbol:
+                        self.recent_closures[symbol] = (
+                            datetime.now(),
+                            exit_price,
+                            status  # This will be 'CLOSED_TP', 'CLOSED_SL', or 'CLOSED_MANUAL'
+                        )
+                        self.save_memory_state()
+                        
+                        logger.info(f"Recorded {symbol} closure at {exit_price} ({status})")
+                                    
         except Exception as e:
             logger.error(f"Error syncing trade status: {e}", exc_info=True)
-    
+            
+    def save_memory_state(self):
+        """Save consumed breakouts and recent closures to file"""
+        memory_state = {
+            'consumed_breakouts': {},
+            'recent_closures': {},
+            'last_updated': datetime.now().isoformat()
+        }
+        
+        # Convert consumed breakouts to JSON-serializable format
+        for symbol, breakouts in self.consumed_breakouts.items():
+            memory_state['consumed_breakouts'][symbol] = [
+                {
+                    'level': level,
+                    'direction': direction,
+                    'timestamp': timestamp.isoformat()
+                }
+                for level, direction, timestamp in breakouts
+            ]
+        
+        # Convert recent closures to JSON-serializable format
+        for symbol, (timestamp, exit_price, status) in self.recent_closures.items():
+            memory_state['recent_closures'][symbol] = {
+                'timestamp': timestamp.isoformat(),
+                'exit_price': exit_price,
+                'status': status
+            }
+        
+        # Save to file
+        with open('bot_memory.json', 'w') as f:
+            json.dump(memory_state, f, indent=2)
+        
+        logger.debug("Memory state saved to bot_memory.json")
+
+    def load_memory_state(self):
+        """Load consumed breakouts and recent closures from file"""
+        if not os.path.exists('bot_memory.json'):
+            logger.info("No memory state file found, starting fresh")
+            return
+        
+        try:
+            with open('bot_memory.json', 'r') as f:
+                content = f.read()
+                
+                # Check if file is empty or just whitespace
+                if not content.strip():
+                    logger.info("Memory state file is empty, starting fresh")
+                    return
+                    
+                memory_state = json.loads(content)
+            
+            current_time = datetime.now()
+            
+            # Load consumed breakouts (only those less than 30 minutes old)
+            for symbol, breakouts in memory_state.get('consumed_breakouts', {}).items():
+                self.consumed_breakouts[symbol] = []
+                for b in breakouts:
+                    timestamp = datetime.fromisoformat(b['timestamp'])
+                    age_seconds = (current_time - timestamp).total_seconds()
+                    
+                    # Only load if less than 30 minutes old
+                    if age_seconds < 1800:
+                        self.consumed_breakouts[symbol].append(
+                            (b['level'], b['direction'], timestamp)
+                        )
+                        logger.info(f"Loaded consumed breakout: {symbol} {b['direction']} "
+                                f"at {b['level']} ({age_seconds/60:.1f} min old)")
+            
+            # Load recent closures (only those less than 5 minutes old)
+            for symbol, closure in memory_state.get('recent_closures', {}).items():
+                timestamp = datetime.fromisoformat(closure['timestamp'])
+                age_seconds = (current_time - timestamp).total_seconds()
+                
+                # Only load if less than 5 minutes old
+                if age_seconds < 300:
+                    self.recent_closures[symbol] = (
+                        timestamp,
+                        closure['exit_price'],
+                        closure['status']
+                    )
+                    logger.info(f"Loaded recent closure: {symbol} at {closure['exit_price']} "
+                            f"({age_seconds:.0f}s ago)")
+            
+            logger.info(f"Memory state loaded: {len(self.consumed_breakouts)} symbols with consumed breakouts, "
+                    f"{len(self.recent_closures)} recent closures")
+                    
+        except json.JSONDecodeError as e:
+            logger.error(f"Invalid JSON in memory state file: {e}")
+            logger.info("Starting with fresh memory state")
+            # Don't clear the dictionaries - they're already initialized
+        except Exception as e:
+            logger.error(f"Error loading memory state: {e}")
+            # Don't clear the dictionaries - they're already initialized
+        
     async def run(self):
         """Main trading loop"""
         self.running = True
@@ -602,6 +857,8 @@ class TradingBot:
         """Graceful shutdown"""
         logger.info("Shutting down trading bot")
         self.running = False
+        
+        self.save_memory_state()
         
         # Positions should be managed according to their stop loss and take profit
         if self.mt5_client:
