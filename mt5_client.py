@@ -349,6 +349,18 @@ class MetaTrader5Client:
         
         return list(orders)
     
+    def get_history_deals_by_position(self, position_id: int) -> List[Any]:
+        """Get historical deals by position ID"""
+        if not self.is_connected():
+            return []
+        
+        try:
+            deals = mt5.history_deals_get(position=position_id)
+            return list(deals) if deals else []
+        except Exception as e:
+            logger.error(f"Error getting deals for position {position_id}: {e}")
+            return []
+    
     def get_history_deals(self, from_date: datetime, to_date: datetime) -> List[Any]:
         """Get historical deals"""
         if not self.is_connected():

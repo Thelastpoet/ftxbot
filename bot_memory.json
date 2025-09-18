@@ -1,5 +1,19 @@
 {
-  "consumed_breakouts": {},
-  "recent_closures": {},
-  "last_updated": "2025-09-17T06:07:16.580199"
+  "consumed_breakouts": {
+    "EURUSD": [],
+    "USDCHF": [],
+    "USDJPY": [],
+    "GBPUSD": [],
+    "AUDUSD": [],
+    "USDCAD": [],
+    "NZDUSD": []
+  },
+  "recent_closures": {
+    "USDJPY": {
+      "timestamp": "2025-09-18T19:52:10.391205",
+      "exit_price": 147.883,
+      "status": "CLOSED_SL"
+    }
+  },
+  "last_updated": "2025-09-18T19:52:10.391241"
 }

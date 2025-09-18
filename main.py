@@ -661,16 +661,23 @@ class TradingBot:
                     commission = 0
                     
                     # Find ALL deals related to this position
-                    for deal in deals:
-                        # Check multiple fields for matching
-                        if (hasattr(deal, 'position_id') and deal.position_id == ticket) or \
-                        (hasattr(deal, 'order') and deal.order == ticket):
-                            
-                            # Closing deals have DEAL_ENTRY_OUT
+                    deals = self.mt5_client.get_history_deals_by_position(ticket)
+                    
+                    if deals:
+                        for deal in deals:
                             if hasattr(deal, 'entry') and deal.entry == 1:  # DEAL_ENTRY_OUT
                                 exit_price = deal.price
-                                profit += deal.profit
-                                commission += getattr(deal, 'commission', 0)
+                                profit += deal.profit + getattr(deal, 'commission', 0) + getattr(deal, 'swap', 0)
+                                
+                                # Determine closure reason
+                                reason = getattr(deal, 'reason', 0)
+                                if reason == 4:
+                                    status = 'CLOSED_SL'
+                                elif reason == 5:
+                                    status = 'CLOSED_TP'
+                                else:
+                                    status = 'CLOSED_MANUAL'
+                                break
                     
                     # If we couldn't find exit price, calculate from current price
                     if exit_price == 0:
