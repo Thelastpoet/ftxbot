@@ -1,19 +1,41 @@
 {
   "consumed_breakouts": {
-    "EURUSD": [],
+    "EURUSD": [
+      {
+        "level": 1.17721,
+        "direction": "bearish",
+        "timestamp": "2025-09-19T09:02:36.555569"
+      }
+    ],
     "USDCHF": [],
     "USDJPY": [],
     "GBPUSD": [],
     "AUDUSD": [],
     "USDCAD": [],
-    "NZDUSD": []
+    "NZDUSD": [],
+    "XAUUSD": []
   },
   "recent_closures": {
+    "GBPUSD": {
+      "timestamp": "2025-09-19T06:28:27.850985",
+      "exit_price": 1.35557,
+      "status": "CLOSED_SL"
+    },
     "USDJPY": {
-      "timestamp": "2025-09-18T19:52:10.391205",
-      "exit_price": 147.883,
+      "timestamp": "2025-09-19T16:35:24.448033",
+      "exit_price": 147.874,
+      "status": "CLOSED_SL"
+    },
+    "XAUUSD": {
+      "timestamp": "2025-09-19T18:29:12.504924",
+      "exit_price": 3671.26,
+      "status": "CLOSED_SL"
+    },
+    "NZDUSD": {
+      "timestamp": "2025-09-19T15:01:45.176226",
+      "exit_price": 0.58597,
       "status": "CLOSED_SL"
     }
   },
-  "last_updated": "2025-09-18T19:52:10.391241"
+  "last_updated": "2025-09-19T19:01:37.064445"
 }

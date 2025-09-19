@@ -679,44 +679,52 @@ class TradingBot:
                                     status = 'CLOSED_MANUAL'
                                 break
                     
-                    # If we couldn't find exit price, calculate from current price
+                    status = 'CLOSED_UNKNOWN'  # Default status
                     if exit_price == 0:
-                        current_positions = self.mt5_client.get_all_positions()
-                        open_pos = any(pos.ticket == ticket for pos in current_positions)
+                        # Fallback if no exit deal found (e.g., manual closure, partial close)
+                        logger.warning(f"No exit deal found for position {ticket}, trying to infer status.")
                         
-                        if open_pos:
-                            logger.debug(f"Position {ticket} still open, skipping sync")
-                            continue
-                        
-                        extended_end_time = datetime.now() + timedelta(days=1)
-                        extended_start_time = datetime.fromisoformat(trade['timestamp']) - timedelta(hours=1)
-
-                        extended_deals = self.mt5_client.get_history_deals(extended_start_time, extended_end_time)
-                        
-                        for deal in extended_deals:
-                            if (hasattr(deal, 'position_id') and deal.position_id == ticket) or \
-                            (hasattr(deal, 'order') and deal.order == ticket):
-                                if hasattr(deal, 'entry') and deal.entry == 1:  # DEAL_ENTRY_OUT
-                                    exit_price = deal.price
-                                    profit += deal.profit
-                                    commission += getattr(deal, 'commission', 0)
-                                    logger.info(f"Found exit for position {ticket} in extended history")
+                        # Check history again with a wider time range
+                        history_orders = self.mt5_client.get_history_orders(ticket)
+                        if history_orders:
+                            for order in history_orders:
+                                if order.type == 1:  # Sell order for a buy position
+                                    exit_price = order.price_done
                                     break
-                                
-                    if exit_price == 0:
-                        logger.error(f"Could not find exit price for closed position {ticket}. "
-                            f"This trade will not be properly logged. Consider manual review.")
+                                elif order.type == 0:  # Buy order for a sell position
+                                    exit_price = order.price_done
+                                    break
                         
-                        # Mark it with a special status so we know it needs review
-                        self.trade_logger.update_trade(ticket, 0, 0 - commission, 'CLOSED_UNKNOWN')
-                        continue
+                        if exit_price != 0:
+                            logger.info(f"Inferred exit price {exit_price} from order history.")
+                        else:
+                            logger.error(f"Could not determine exit price for {ticket}. Status remains UNKNOWN.")
 
-                    # Determine closure status and update trade record
-                    status = (
-                        'CLOSED_SL' if abs(exit_price - trade['stop_loss']) < 0.0001 else
-                        'CLOSED_TP' if abs(exit_price - trade['take_profit']) < 0.0001 else
-                        'CLOSED_MANUAL'
-                    )
+                    # Determine closure status from deal reason if possible
+                    if deals:
+                        for deal in deals:
+                            if deal.entry == 1:  # Out-deal
+                                reason = getattr(deal, 'reason', 0)
+                                if reason == 4: # DEAL_REASON_SL
+                                    status = 'CLOSED_SL'
+                                elif reason == 5: # DEAL_REASON_TP
+                                    status = 'CLOSED_TP'
+                                else:
+                                    status = 'CLOSED_MANUAL'
+                                break # Exit after finding the main closing deal
+                    
+                    # If status is still unknown, try to infer from price
+                    if status == 'CLOSED_UNKNOWN' and exit_price != 0:
+                        pip_size = get_pip_size(self.mt5_client.get_symbol_info(trade['symbol']))
+                        
+                        # Check against SL/TP with a tolerance
+                        if abs(exit_price - trade['stop_loss']) < 5 * pip_size:
+                            status = 'CLOSED_SL'
+                        elif abs(exit_price - trade['take_profit']) < 5 * pip_size:
+                            status = 'CLOSED_TP'
+                        else:
+                            status = 'CLOSED_MANUAL' # If not near SL/TP, likely manual
+
 
                     self.trade_logger.update_trade(
                         ticket,
