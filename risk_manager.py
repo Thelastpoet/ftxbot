@@ -150,12 +150,9 @@ class RiskManager:
                 logger.warning(f"Maximum total positions reached: {len(all_positions)}")
                 return False
             
-            # Let's skip correlation risk check for now
-            """
             if signal_type is not None:
                 if not self.check_correlation_risk(symbol, self.mt5_client, signal_type):
                     return False
-            """
             return True
 
         except Exception as e:
