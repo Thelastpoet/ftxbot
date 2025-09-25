@@ -15,13 +15,13 @@ def fetch_and_save_deals():
 
     # Calculate date range
     to_date = datetime.now()
-    from_date = to_date - timedelta(days=5)
+    from_date = to_date - timedelta(days=3)
 
     # Fetch deals
     deals = mt5.get_history_deals(from_date, to_date)
 
     if not deals:
-        print("No deals found in the last 5 days.")
+        print("No deals found in the last 3 days.")
         return
 
     # Convert deals to a list of dictionaries

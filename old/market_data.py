@@ -7,8 +7,7 @@ import pandas as pd
 import numpy as np
 import logging
 from talib import ATR, LINEARREG_ANGLE, LINEARREG_SLOPE, STDDEV
-from typing import Optional, Dict, Any
-from collections import OrderedDict
+from typing import Optional, Dict, Any, Tuple
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
@@ -19,7 +18,7 @@ class MarketData:
     def __init__(self, mt5_client, config):
         self.mt5_client = mt5_client
         self.config = config
-        self.data_cache = OrderedDict()
+        self.data_cache = {}
         self.cache_expiry = 60  # seconds
         
     async def fetch_data(self, symbol: str, timeframe: str, num_candles: int) -> Optional[pd.DataFrame]:
@@ -59,7 +58,9 @@ class MarketData:
             # Clean old cache entries
             max_cache_entries = len(self.config.symbols) * 3  # Allow 3 timeframes per symbol
             if len(self.data_cache) > max_cache_entries:
-                self.data_cache.popitem(last=False)
+                oldest_key = min(self.data_cache.keys(), 
+                                key=lambda k: self.data_cache[k][1])
+                del self.data_cache[oldest_key]
             
             return df
             

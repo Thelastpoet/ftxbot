@@ -11,6 +11,7 @@ import time
 
 logger = logging.getLogger(__name__)
 
+
 class MetaTrader5Client:
     """Encapsulates all MetaTrader 5 API interactions"""
     
@@ -258,6 +259,17 @@ class MetaTrader5Client:
         if last_result is not None:
             logger.error(f"Order failed after trying modes {candidates}: {last_result.retcode} - {last_result.comment}")
         return None
+        
+        if result is None:
+            logger.error("Order send failed: No result returned")
+            return None
+        
+        if result.retcode != mt5.TRADE_RETCODE_DONE:
+            logger.error(f"Order failed: {result.retcode} - {result.comment}")
+            return None
+        
+        logger.info(f"Order placed successfully: {result.order}")
+        return result
     
     def get_positions(self, symbol: Optional[str] = None) -> List[Any]:
         """Get open positions"""

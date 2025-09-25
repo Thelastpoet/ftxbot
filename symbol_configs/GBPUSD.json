@@ -1,0 +1,27 @@
+{
+  "parameters": {
+    "min_stop_loss_pips": 22.0,
+    "stop_loss_buffer_pips": 12.0,
+    "risk_reward_ratio": 1.7,
+    "min_confidence": 0.57
+  },
+  "bounds": {
+    "min_stop_loss_pips": [
+      15.0,
+      50.0
+    ],
+    "risk_reward_ratio": [
+      1.2,
+      2.5
+    ]
+  },
+  "adaptive_keys": [
+    "min_stop_loss_pips",
+    "risk_reward_ratio"
+  ],
+  "risk": {
+    "risk_per_trade": 0.013,
+    "max_drawdown_percentage": 0.09,
+    "correlation_threshold": 0.72
+  }
+}

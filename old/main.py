@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 """
 Forex Trading Bot - Main Application
 Pure Price Action Strategy with MetaTrader 5 Integration
@@ -9,14 +9,15 @@ import logging
 import json
 import os
 import argparse
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, Optional
 import sys
 
 from strategy import TradingSignal
-from utils import get_pip_size, is_trading_paused
-from symbol_runtime import SymbolRuntimeContext, load_symbol_profile
+from market_session import MarketSession
+from utils import get_pip_size
+from calibrator import OnlineLogisticCalibrator, CalibratorConfig
 
 # Configure logging
 logging.basicConfig(
@@ -60,17 +61,29 @@ class Config:
             self.atr_tp_multiplier = trading.get('atr_tp_multiplier', 4.0)
             self.session_based_tp = trading.get('session_based_tp', True)
             self.volatility_adjustment = trading.get('volatility_adjustment', True)
-            self.enable_news_filter = trading.get('enable_news_filter', True)
+            self.volume_zscore_threshold = trading.get('volume_zscore_threshold', 1.0)
+            # Supervision behavior: 'none' | 'advisory' | 'active' (default: none)
+            self.supervision_mode = trading.get('supervision_mode', 'none')
+            # M1 confirmation (wasn't previously wired into Config)
+            self.m1_confirmation_enabled = trading.get('m1_confirmation_enabled', False)
+            self.m1_confirmation_candles = trading.get('m1_confirmation_candles', 1)
+            self.m1_confirmation_buffer_pips = trading.get('m1_confirmation_buffer_pips', 0.5)
             
             # Risk management
-            risk = config_data.get('risk_management', {})
-            self.risk_per_trade = risk.get('risk_per_trade', 0.02)
-            self.fixed_lot_size = risk.get('fixed_lot_size', None)
-            self.max_drawdown = risk.get('max_drawdown_percentage', 0.1)
-            self.risk_reward_ratio = risk.get('risk_reward_ratio', 2.0)
-            self.correlation_threshold = risk.get('correlation_threshold', 0.7)
-            self.correlation_lookback_period = risk.get('correlation_lookback_period', 30)
-            self.risk_management_settings = risk
+            self.risk_management = config_data.get('risk_management', {})
+            self.risk_per_trade = self.risk_management.get('risk_per_trade', 0.02)
+            self.fixed_lot_size = self.risk_management.get('fixed_lot_size', None)
+            self.max_drawdown = self.risk_management.get('max_drawdown_percentage', 0.1)
+            self.risk_reward_ratio = self.risk_management.get('risk_reward_ratio', 2.0)
+            
+            # Calibration (lightweight ML) settings
+            calib = config_data.get('calibration', {})
+            self.calib_enabled = calib.get('enabled', False)
+            self.calib_margin = calib.get('margin', 0.05)
+            self.calib_lr = calib.get('learning_rate', 0.01)
+            self.calib_l2 = calib.get('l2', 1e-3)
+            self.calib_state_file = calib.get('state_file', 'calibrator_state.json')
+            self.calib_ttl_minutes = calib.get('ttl_minutes', 60)
             
             # Symbols and timeframes
             symbols_data = config_data.get('symbols', [])
@@ -91,13 +104,6 @@ class Config:
                     'end_time': datetime.strptime(session['end_time'], '%H:%M').time()
                 })
             
-            paths_cfg = config_data.get('paths', {})
-            base_dir = self.config_path.parent
-            self.symbol_config_dir = (base_dir / paths_cfg.get('symbol_config_dir', 'symbol_configs')).resolve()
-            self.calibrator_state_dir = (base_dir / paths_cfg.get('calibrator_state_dir', 'calibrator_states')).resolve()
-            self.optimizer_state_dir = (base_dir / paths_cfg.get('optimizer_state_dir', 'optimizer_states')).resolve()
-            self.calibration_settings = dict(config_data.get('calibration', {}))
-
             # Apply command-line overrides
             if self.args:
                 if self.args.risk_per_trade:
@@ -108,16 +114,6 @@ class Config:
                     for sym in self.symbols:
                         sym['timeframes'] = [self.args.timeframe]
                         
-            if isinstance(getattr(self, 'risk_management_settings', None), dict):
-                self.risk_management_settings.update({
-                    'risk_per_trade': self.risk_per_trade,
-                    'fixed_lot_size': self.fixed_lot_size,
-                    'max_drawdown_percentage': self.max_drawdown,
-                    'risk_reward_ratio': self.risk_reward_ratio,
-                    'correlation_threshold': self.correlation_threshold,
-                    'correlation_lookback_period': self.correlation_lookback_period,
-                })
-
             logger.info(f"Configuration loaded successfully from {self.config_path}")
             
         except FileNotFoundError:
@@ -141,16 +137,6 @@ class Config:
         self.fixed_lot_size = None
         self.max_drawdown = 0.1
         self.risk_reward_ratio = 1.25
-        self.correlation_threshold = 0.7
-        self.correlation_lookback_period = 30
-        self.risk_management_settings = {
-            'risk_per_trade': self.risk_per_trade,
-            'fixed_lot_size': self.fixed_lot_size,
-            'max_drawdown_percentage': self.max_drawdown,
-            'risk_reward_ratio': self.risk_reward_ratio,
-            'correlation_threshold': self.correlation_threshold,
-            'correlation_lookback_period': self.correlation_lookback_period,
-        }
         self.symbols = [{'name': 'EURUSD', 'timeframes': ['M15']}]
         self.trading_sessions = []
         self.min_stop_loss_pips = 20
@@ -160,13 +146,18 @@ class Config:
         self.atr_tp_multiplier = 4.0
         self.session_based_tp = True
         self.volatility_adjustment = True
-        self.enable_news_filter = True
-
-        base_dir = self.config_path.parent
-        self.symbol_config_dir = (base_dir / 'symbol_configs').resolve()
-        self.calibrator_state_dir = (base_dir / 'calibrator_states').resolve()
-        self.optimizer_state_dir = (base_dir / 'optimizer_states').resolve()
-        self.calibration_settings = {}
+        self.supervision_mode = 'none'
+        # M1 confirmation defaults
+        self.m1_confirmation_enabled = False
+        self.m1_confirmation_candles = 1
+        self.m1_confirmation_buffer_pips = 0.5
+        # Calibration defaults
+        self.calib_enabled = False
+        self.calib_margin = 0.05
+        self.calib_lr = 0.01
+        self.calib_l2 = 1e-3
+        self.calib_state_file = 'calibrator_state.json'
+        self.calib_ttl_minutes = 60
 
 class TradingSession:
     """Manages trading session times"""
@@ -216,7 +207,7 @@ class TradingSession:
                 return
             for sess in self.config.trading_sessions:
                 logger.info(
-                    f"Session configured: {sess['name']} {sess['start_time']}â€“{sess['end_time']} (interpreted in local time)"
+                    f"Session configured: {sess['name']} {sess['start_time']} -> {sess['end_time']} (interpreted in local time)"
                 )
         except Exception as e:
             logger.debug(f"Failed to log session info: {e}")
@@ -233,11 +224,48 @@ class TradingBot:
         self.trade_logger = None
         self.consumed_breakouts = {}
         self.recent_closures = {} 
-        self.symbol_contexts: Dict[str, SymbolRuntimeContext] = {}
         self.load_memory_state()
         self.session_manager = TradingSession(config)
+        # Calibrator (lightweight ML) setup
+        try:
+            calib_cfg = CalibratorConfig(
+                enabled=getattr(self.config, 'calib_enabled', False),
+                margin=getattr(self.config, 'calib_margin', 0.05),
+                learning_rate=getattr(self.config, 'calib_lr', 0.01),
+                l2=getattr(self.config, 'calib_l2', 1e-3),
+                state_file=getattr(self.config, 'calib_state_file', 'calibrator_state.json'),
+            )
+            self.calibrator = OnlineLogisticCalibrator(calib_cfg)
+            if calib_cfg.enabled:
+                logger.info(f"Calibrator: ENABLED | margin={calib_cfg.margin} | state={calib_cfg.state_file}")
+            else:
+                logger.info("Calibrator: DISABLED")
+        except Exception as _e:
+            self.calibrator = None
+            logger.debug(f"Calibrator init skipped: {_e}")
+        # Session-phase engine (lightweight, additive)
+        try:
+            self.market_session = MarketSession(config)
+        except Exception:
+            self.market_session = None
         self.running = False
         self.initial_balance = None
+        # Log current session phase and reference times
+        try:
+            if self.market_session:
+                phase = self.market_session.get_phase()
+                mins = self.market_session.minutes_to_boundary()
+                refs = self.market_session.get_reference_times()
+                logger.info(
+                    f"Current phase: {phase.name} ({phase.session}) | weight={phase.weight:.2f} | ttl={phase.ttl_minutes}m | blackout={phase.is_blackout} | next boundary in {mins}m"
+                )
+                logger.info(
+                    f"London: {refs['london'].strftime('%Y-%m-%d %H:%M:%S')} | NewYork: {refs['new_york'].strftime('%Y-%m-%d %H:%M:%S')} | UTC: {refs['utc'].strftime('%Y-%m-%d %H:%M:%S')}"
+                )
+            # Explicitly log supervision mode
+            logger.info(f"Supervision mode: {self.config.supervision_mode.upper()} (no auto-close/SL changes unless ACTIVE)")
+        except Exception:
+            pass
         
     async def initialize(self):
         """Initialize all bot components"""
@@ -245,7 +273,7 @@ class TradingBot:
             # Import components (delayed to allow for proper module structure)
             from mt5_client import MetaTrader5Client
             from market_data import MarketData
-            from strategy import PurePriceActionStrategy
+            from strategy import PriceActionStrategy
             from risk_manager import RiskManager
             from trade_logger import TradeLogger
             
@@ -255,16 +283,17 @@ class TradingBot:
                 raise Exception("Failed to initialize MetaTrader5 connection")
             
             self.market_data = MarketData(self.mt5_client, self.config)
-            self.strategy = PurePriceActionStrategy(self.config)
-            # Disable M1 confirmation for now
+            self.strategy = PriceActionStrategy(self.config)
+            # Log whether M1 confirmation is enabled via config
             try:
-                self.strategy.m1_confirmation_enabled = False
+                m1_on = getattr(self.strategy, 'm1_confirmation_enabled', False)
+                candles = getattr(self.strategy, 'm1_confirmation_candles', 1)
+                buf = getattr(self.strategy, 'm1_confirmation_buffer_pips', 0.5)
+                logger.info(f"M1 confirmation: {'ENABLED' if m1_on else 'DISABLED'} (candles={candles}, buffer_pips={buf})")
             except Exception:
                 pass
-            self.risk_manager = RiskManager(self.config.risk_management_settings, self.mt5_client)
-            from pathlib import Path as _P; self.trade_logger = TradeLogger(str((_P(__file__).parent / 'trades.log').resolve()))
-
-            self._init_symbol_contexts()
+            self.risk_manager = RiskManager(self.config.risk_management, self.mt5_client)
+            self.trade_logger = TradeLogger('trades.log')
             
             # Get initial account balance
             account_info = self.mt5_client.get_account_info()
@@ -289,133 +318,44 @@ class TradingBot:
         except Exception as e:
             logger.error(f"Failed to initialize trading bot: {e}")
             raise
-    
-    def _init_symbol_contexts(self) -> None:
-        """Initialize per-symbol runtime contexts."""
-        if not self.strategy:
-            return
 
-        symbol_config_dir = Path(self.config.symbol_config_dir)
-        calibrator_state_dir = Path(self.config.calibrator_state_dir)
-        optimizer_state_dir = Path(self.config.optimizer_state_dir)
+    def log_signal_row(self, symbol: str, signal: TradingSignal, rr: float, p_hat: float, p_star: float, prefilter: bool = False) -> None:
+        """Append a signal decision row to signals.csv for analysis/calibration.
 
-        symbol_config_dir.mkdir(parents=True, exist_ok=True)
-        calibrator_state_dir.mkdir(parents=True, exist_ok=True)
-        optimizer_state_dir.mkdir(parents=True, exist_ok=True)
-
-        base_defaults = {
-            'min_stop_loss_pips': float(getattr(self.strategy, 'min_stop_loss_pips', getattr(self.config, 'min_stop_loss_pips', 20))),
-            'stop_loss_buffer_pips': float(getattr(self.strategy, 'stop_loss_buffer_pips', getattr(self.config, 'stop_loss_buffer_pips', 10))),
-            'risk_reward_ratio': float(getattr(self.config, 'risk_reward_ratio', 1.5)),
-            'min_confidence': float(getattr(self.strategy, 'min_confidence', 0.5)),
-        }
-
-        self.symbol_contexts.clear()
-        for sym_cfg in self.config.symbols:
-            symbol = sym_cfg['name']
-            profile_path = symbol_config_dir / f"{symbol}.json"
-            profile = load_symbol_profile(symbol, dict(base_defaults), profile_path)
-            trade_history = self._closed_trades_for_symbol(symbol)
-            context = SymbolRuntimeContext(
-                profile=profile,
-                calibration_cfg=self.config.calibration_settings,
-                calibrator_state_dir=calibrator_state_dir,
-                optimizer_state_dir=optimizer_state_dir,
-                trade_history=trade_history,
-            )
-            self.symbol_contexts[symbol] = context
-
-    def _closed_trades_for_symbol(self, symbol: str) -> List[Dict]:
-        if not self.trade_logger:
-            return []
-        results: List[Dict] = []
-        for trade in self.trade_logger.get_all_trades():
-            if trade.get('symbol') != symbol:
-                continue
-            status = str(trade.get('status', '')).upper()
-            if status.startswith('CLOSED'):
-                results.append(trade)
-        return results
-
-    def _is_recent_breakout_duplicate(self, symbol: str, signal: TradingSignal, pip_size: Optional[float]) -> bool:
-        if symbol not in self.consumed_breakouts or not pip_size:
-            return False
-        now = datetime.now()
-        filtered = []
-        duplicate = False
-        for level, direction, timestamp in self.consumed_breakouts.get(symbol, []):
-            age = (now - timestamp).total_seconds()
-            if age < 1800:
-                filtered.append((level, direction, timestamp))
-            if duplicate:
-                continue
-            if age < 900:
-                signal_direction = 'bullish' if signal.type == 0 else 'bearish'
-                if direction == signal_direction:
-                    level_distance_pips = abs(signal.breakout_level - level) / pip_size
-                    if level_distance_pips < 5:
-                        logger.info(
-                            f"{symbol}: Breakout at {level:.5f} already traded {age/60:.1f} min ago; skipping duplicate."
-                        )
-                        duplicate = True
-        self.consumed_breakouts[symbol] = filtered
-        return duplicate
-
-    async def _handle_generated_signal(
-        self,
-        symbol: str,
-        signal: TradingSignal,
-        context: SymbolRuntimeContext,
-        symbol_params: Dict[str, float],
-        risk_overrides: Dict[str, float],
-        pip_size: Optional[float],
-        trend_context: Optional[str] = None,
-    ) -> None:
-        if not signal:
-            return
-        risk_overrides = risk_overrides or {}
-        if self._is_recent_breakout_duplicate(symbol, signal, pip_size):
-            return
-        rr_for_threshold = None
-        if isinstance(signal.parameters, dict):
-            rr_for_threshold = signal.parameters.get('risk_reward_ratio')
-        if rr_for_threshold is None:
-            rr_for_threshold = float(symbol_params.get('risk_reward_ratio', getattr(self.config, 'risk_reward_ratio', 1.5)))
-        gating = context.evaluate_signal(signal.features, rr_for_threshold)
-        if not gating.get('accepted', True):
-            logger.info(
-                f"{symbol}: Calibrator vetoed signal (p={gating.get('probability', 0.0):.2f} < thr={gating.get('threshold', 0.0):.2f})"
-            )
-            return
-        merged_params = dict(symbol_params)
-        if isinstance(signal.parameters, dict):
-            merged_params.update(signal.parameters)
-        merged_params['calibrator'] = gating
-        signal.parameters = merged_params
-        if not isinstance(signal.features, dict):
-            signal.features = {}
-        trend_suffix = f", {trend_context}" if trend_context else ''
-        logger.info(
-            f"Signal generated for {symbol}: Type={'BUY' if signal.type == 0 else 'SELL'}, "
-            f"Confidence={signal.confidence:.2f}{trend_suffix}, "
-            f"Calib={gating.get('probability', 0.0):.2f}/{gating.get('threshold', 0.0):.2f}"
-        )
-        if not self.session_manager.is_trading_time():
-            logger.info("Outside trading session, signal ignored")
-            return
-        result = await self.execute_trade(signal, symbol, risk_overrides)
-        if result:
-            if symbol not in self.consumed_breakouts:
-                self.consumed_breakouts[symbol] = []
-            now = datetime.now()
-            direction = 'bullish' if signal.type == 0 else 'bearish'
-            self.consumed_breakouts[symbol].append((signal.breakout_level, direction, now))
-            self.consumed_breakouts[symbol] = [
-                (lvl, dirn, ts) for lvl, dirn, ts in self.consumed_breakouts[symbol]
-                if (now - ts).total_seconds() < 1800
+        Columns: timestamp, symbol, type, rr, p_hat, p_star, confidence, strength, momentum,
+                 dir_match, trend_match, spread_impact, prefilter
+        """
+        try:
+            from datetime import timezone
+            path = 'signals.csv'
+            exists = os.path.exists(path)
+            cols = [
+                'timestamp','symbol','type','rr','p_hat','p_star','confidence',
+                'strength','momentum','dir_match','trend_match','spread_impact','prefilter'
             ]
-            self.save_memory_state()
-
+            row = {
+                'timestamp': datetime.now(timezone.utc).isoformat(),
+                'symbol': symbol,
+                'type': ('BUY' if signal.type == 0 else 'SELL'),
+                'rr': f"{rr:.4f}",
+                'p_hat': f"{p_hat:.4f}",
+                'p_star': f"{p_star:.4f}",
+                'confidence': f"{getattr(signal, 'confidence', 0.0):.4f}",
+                'strength': f"{float((signal.features or {}).get('strength', 0.0)):.4f}",
+                'momentum': f"{float((signal.features or {}).get('momentum', 0.0)):.4f}",
+                'dir_match': f"{float((signal.features or {}).get('dir_match', 0.0)):.4f}",
+                'trend_match': f"{float((signal.features or {}).get('trend_match', 0.0)):.4f}",
+                'spread_impact': f"{float((signal.features or {}).get('spread_impact', 0.0)):.4f}",
+                'prefilter': '1' if prefilter else '0'
+            }
+            # Write CSV (manual to avoid adding deps)
+            with open(path, 'a', encoding='utf-8') as f:
+                if not exists:
+                    f.write(','.join(cols) + "\n")
+                f.write(','.join(str(row[c]) for c in cols) + "\n")
+        except Exception:
+            pass
+    
     async def check_drawdown(self) -> bool:
         """Check if maximum drawdown has been reached"""
         if not self.initial_balance:
@@ -434,11 +374,10 @@ class TradingBot:
         
         return False
     
-    async def execute_trade(self, signal: TradingSignal, symbol: str, risk_overrides: Optional[Dict[str, float]] = None):
+    async def execute_trade(self, signal: TradingSignal, symbol: str):
         """
         Execute trade with live price validation for FOREX
         """
-        risk_overrides = risk_overrides or {}
         try:
             # Get symbol info for pip calculations
             symbol_info = self.mt5_client.get_symbol_info(symbol)
@@ -460,11 +399,9 @@ class TradingBot:
             else:  # SELL
                 execution_price = tick.bid
             
-            # CRITICAL: Check price drift from signal (relative to risk)
+            # Check price drift from signal (relative to risk)
             price_drift = abs(execution_price - signal.entry_price)
-            # Estimate SL distance in pips with current execution price
             provisional_sl_pips = abs(execution_price - signal.stop_loss) / pip_size
-            # Allow drift up to 25% of SL, bounded [2, 10] pips
             dynamic_max_drift_pips = max(2.0, min(10.0, 0.25 * provisional_sl_pips))
 
             if price_drift > dynamic_max_drift_pips * pip_size:
@@ -482,23 +419,16 @@ class TradingBot:
             actual_sl_pips = actual_sl_distance / pip_size
             
             # Validate minimum stop loss
-            min_sl_floor = self.config.min_stop_loss_pips
-            if isinstance(signal.parameters, dict):
-                try:
-                    min_sl_floor = float(signal.parameters.get('min_stop_loss_pips', min_sl_floor))
-                except (TypeError, ValueError):
-                    pass
-            if actual_sl_pips < min_sl_floor:
+            if actual_sl_pips < self.config.min_stop_loss_pips:
                 logger.warning(
-                    f"{symbol}: SL too tight after drift ({actual_sl_pips:.1f} pips < {min_sl_floor:.1f}) - skipping"
+                    f"{symbol}: SL too tight after drift ({actual_sl_pips:.1f} pips) - skipping"
                 )
                 return
             
             # Calculate position size
             position_size = self.risk_manager.calculate_position_size(
                 symbol=symbol,
-                stop_loss_pips=actual_sl_pips,
-                overrides=risk_overrides
+                stop_loss_pips=actual_sl_pips
             )
             
             if position_size <= 0:
@@ -510,13 +440,14 @@ class TradingBot:
                 symbol=symbol,
                 volume=position_size,
                 stop_loss=signal.stop_loss,
-                take_profit=signal.take_profit
+                take_profit=signal.take_profit,
+                order_type=signal.type
             ):
                 logger.warning(f"{symbol}: Trade parameters validation failed")
                 return
             
             # Check risk limits
-            if not self.risk_manager.check_risk_limits(symbol, signal.type, overrides=risk_overrides):
+            if not self.risk_manager.check_risk_limits(symbol, signal.type):
                 logger.info(f"{symbol}: Risk limits prevent trading")
                 return
             
@@ -532,67 +463,39 @@ class TradingBot:
             
             if result and result.retcode == self.mt5_client.mt5.TRADE_RETCODE_DONE:
                 # Log successful trade
-                parameter_snapshot = dict(signal.parameters) if isinstance(signal.parameters, dict) else {}
-                calibrator_meta = parameter_snapshot.pop('calibrator', None)
-                features_snapshot = signal.features if isinstance(signal.features, dict) else {}
-                if calibrator_meta is not None:
-                    calibrator_meta = dict(calibrator_meta)
-                    if 'features' not in calibrator_meta and features_snapshot:
-                        calibrator_meta['features'] = features_snapshot
-                elif features_snapshot:
-                    calibrator_meta = {'features': features_snapshot}
-
-                
-                # Try to capture the live position ticket for robust closure tracking
-                try:
-                    pos_list = self.mt5_client.get_positions(symbol)
-                    if pos_list and len(pos_list) >= 1:
-                        pos_id = None
-                        for pos in pos_list:
-                            if getattr(pos, 'type', None) == signal.type:
-                                pos_id = getattr(pos, 'ticket', None)
-                                break
-                        if pos_id is None:
-                            pos_id = getattr(pos_list[0], 'ticket', None)
-                        if pos_id is not None:
-                            trade_details['position_ticket'] = int(pos_id)
-                except Exception:
-                    pass
-
+                # Optional: compute calibrator fields
+                calib_rr = 0.0
+                calib_p_hat = None
+                calib_p_star = None
+                if getattr(self, 'calibrator', None) and getattr(self.calibrator, 'cfg', None) and self.calibrator.cfg.enabled:
+                    try:
+                        risk = abs(signal.entry_price - signal.stop_loss)
+                        reward = abs(signal.take_profit - signal.entry_price)
+                        calib_rr = (reward / risk) if risk > 0 else 0.0
+                        calib_p_hat = self.calibrator.predict_proba(signal.features or {})
+                        calib_p_star = self.calibrator.decision_threshold(calib_rr)
+                    except Exception:
+                        pass
                 trade_details = {
                     'timestamp': datetime.now(),
-
                     'symbol': symbol,
                     'order_type': 'BUY' if signal.type == 0 else 'SELL',
                     'entry_price': result.price,
                     'signal_price': signal.entry_price,  # Track signal vs execution
                     'volume': position_size,
                     'stop_loss': signal.stop_loss,
-                    'stop_loss_pips': signal.stop_loss_pips,
                     'take_profit': signal.take_profit,
                     'ticket': result.order,
                     'reason': signal.reason,
                     'confidence': signal.confidence,
                     'signal_time': signal.timestamp,
                     'drift_pips': price_drift / pip_size,
-                    'pip_size': pip_size,
+                    'features': getattr(signal, 'features', None),
+                    'calib_rr': calib_rr,
+                    'calib_p_hat': calib_p_hat,
+                    'calib_p_star': calib_p_star,
                 }
-
-                if parameter_snapshot:
-                    trade_details['parameters'] = parameter_snapshot
-                if calibrator_meta:
-                    trade_details['calibrator'] = calibrator_meta
-                elif features_snapshot:
-                    trade_details['features'] = features_snapshot
-
-                applied_risk = risk_overrides.get('risk_per_trade', self.risk_manager.risk_per_trade)
-                try:
-                    trade_details['risk_per_trade'] = float(applied_risk) if applied_risk is not None else None
-                except (TypeError, ValueError):
-                    trade_details['risk_per_trade'] = applied_risk
-                if risk_overrides:
-                    trade_details['risk_overrides'] = dict(risk_overrides)
-
+                
                 self.trade_logger.log_trade(trade_details)
                 
                 logger.info(
@@ -623,33 +526,14 @@ class TradingBot:
         Multi-timeframe coordination with trend alignment
         """
         symbol = symbol_config['name']
-
-        context = self.symbol_contexts.get(symbol) if hasattr(self, 'symbol_contexts') else None
-        if context is None:
-            logger.debug(f"{symbol}: No runtime context available, skipping")
-            return
-
-        symbol_params = context.get_parameters()
-        risk_overrides = context.get_risk_overrides()
-        if hasattr(self.strategy, 'set_symbol_params'):
-            try:
-                self.strategy.set_symbol_params(symbol, symbol_params)
-            except Exception:
-                pass
-
+        
         # Early check: if we already have a position for this symbol, skip all calculations
         existing_positions = self.mt5_client.get_positions(symbol)
         if existing_positions and len(existing_positions) >= 1:
             logger.debug(f"Position already exists for {symbol}, skipping signal generation")
             return
-
-        symbol_info = self.mt5_client.get_symbol_info(symbol)
-        if not symbol_info:
-            logger.error(f"Failed to get symbol info for {symbol}")
-            return
-        pip_size = get_pip_size(symbol_info)
-
-        # Check if symbol is in cooldown with IMPROVED logic (different times for TP/SL)
+        
+        # Check if symbol is in cooldown
         if symbol in self.recent_closures:
             closure_time, exit_price, status = self.recent_closures[symbol]
             time_since_close = (datetime.now() - closure_time).total_seconds()
@@ -663,10 +547,10 @@ class TradingBot:
                 cooldown_period = 600  # 10 minutes default
             
             if time_since_close < cooldown_period:
-                logger.info(f"{symbol} in cooldown for {cooldown_period-time_since_close:.0f}s more (closed {status} {time_since_close/60:.1f} min ago)")
+                logger.debug(f"{symbol} in cooldown for {cooldown_period-time_since_close:.0f}s more (closed {status} {time_since_close/60:.1f} min ago)")
                 return
         
-        # NEW: Check consumed breakouts BEFORE signal generation to save computation
+        # Check consumed breakouts BEFORE signal generation to save computation
         if symbol in self.consumed_breakouts:
             current_time = datetime.now()
             symbol_info = self.mt5_client.get_symbol_info(symbol)
@@ -714,19 +598,90 @@ class TradingBot:
                 h1_trend = self.market_data.identify_trend(mtf_data['H1'])
                 logger.debug(f"{symbol} H1 trend: {h1_trend}")
                 
-                # Generate M15 signal with trend context
-                m15_signal = self.strategy.generate_signal(mtf_data['M15'], symbol, trend=h1_trend)
-                
+                # Generate M15 signal with trend context and session phase
+                phase = self.market_session.get_phase() if getattr(self, 'market_session', None) else None
+                m15_signal = self.strategy.generate_signal(mtf_data['M15'], symbol, trend=h1_trend, phase=phase)
+
                 if m15_signal:
-                    await self._handle_generated_signal(
-                        symbol,
-                        m15_signal,
-                        context,
-                        symbol_params,
-                        risk_overrides,
-                        pip_size,
-                        trend_context=f"H1 Trend={h1_trend}",
+                    # Disable for now not trade if signal is against H1 trend
+                    """
+                    if not (m15_signal.features or {}).get('trend_match', 0.0):
+                        logger.debug(f"{symbol}: Signal ignored, does not match H1 trend.")
+                        return
+                    """    
+                    # Optional calibrator gating based on probability threshold
+                    if getattr(self, 'calibrator', None) and getattr(self.calibrator, 'cfg', None) and self.calibrator.cfg.enabled:
+                        try:
+                            rr = 0.0
+                            try:
+                                risk = abs(m15_signal.entry_price - m15_signal.stop_loss)
+                                reward = abs(m15_signal.take_profit - m15_signal.entry_price)
+                                rr = (reward / risk) if risk > 0 else 0.0
+                            except Exception:
+                                rr = 0.0
+                            p_hat = self.calibrator.predict_proba(m15_signal.features or {})
+                            p_star = self.calibrator.decision_threshold(rr)
+                            # Log to signals.csv
+                            try:
+                                self.log_signal_row(symbol, m15_signal, rr, p_hat, p_star, prefilter=False)
+                            except Exception:
+                                pass
+                            if p_hat < p_star:
+                                logger.info(
+                                    f"{symbol}: Calibrator gated trade (p={p_hat:.2f} < p*={p_star:.2f}, R={rr:.2f})"
+                                )
+                                return
+                        except Exception as _e:
+                            logger.debug(f"Calibrator gating error: {_e}")
+                    # ADDITIONAL CHECK: Is this breakout level already consumed?
+                    if symbol in self.consumed_breakouts:
+                        for level, direction, timestamp in self.consumed_breakouts[symbol]:
+                            age = (datetime.now() - timestamp).total_seconds()
+                            if age < 900:  # Within 15 minutes
+                                signal_direction = 'bullish' if m15_signal.type == 0 else 'bearish'
+                                if direction == signal_direction:
+                                    # Check if this is the same breakout level
+                                    level_distance_pips = abs(m15_signal.breakout_level - level) / pip_size
+                                    if level_distance_pips < 5:  # Same level (within 5 pips)
+                                        logger.info(
+                                            f"{symbol}: Signal generated but breakout at {level:.5f} "
+                                            f"already consumed {age/60:.1f} min ago. Skipping duplicate trade."
+                                        )
+                                        return
+                    
+                    logger.info(
+                        f"Signal generated for {symbol}: "
+                        f"Type={'BUY' if m15_signal.type == 0 else 'SELL'}, "
+                        f"Confidence={m15_signal.confidence:.2f}, "
+                        f"H1 Trend={h1_trend}"
                     )
+                    
+                    # Check if within trading session (coarse) and not in blackout (rollover)
+                    if self.session_manager.is_trading_time() and (self.market_session.is_trade_window() if getattr(self, 'market_session', None) else True):
+                        result = await self.execute_trade(m15_signal, symbol)
+                        # If calibrator enabled and trade executed (non-None result), optionally we could
+                        # later update with outcome when closed. For now we only log the signal row above.
+                        
+                        if result:  # If trade was successfully opened
+                            # Track this breakout as consumed
+                            if symbol not in self.consumed_breakouts:
+                                self.consumed_breakouts[symbol] = []
+                            
+                            direction = 'bullish' if m15_signal.type == 0 else 'bearish'
+                            self.consumed_breakouts[symbol].append(
+                                (m15_signal.breakout_level, direction, datetime.now())
+                            )
+                            
+                            self.save_memory_state()
+                            
+                            # Clean old entries (older than 30 minutes)
+                            current_time = datetime.now()
+                            self.consumed_breakouts[symbol] = [
+                                (lvl, dir, ts) for lvl, dir, ts in self.consumed_breakouts[symbol]
+                                if (current_time - ts).total_seconds() < 1800
+                            ]
+                    else:
+                        logger.info("Outside trading session, signal ignored")
                 else:
                     logger.debug(f"No signal generated for {symbol}")
             
@@ -736,17 +691,47 @@ class TradingBot:
                 m15_data = mtf_data['M15']
                 m15_trend = self.market_data.identify_trend(m15_data)
                 
-                signal = self.strategy.generate_signal(m15_data, symbol, trend=m15_trend)
+                phase = self.market_session.get_phase() if getattr(self, 'market_session', None) else None
+                signal = self.strategy.generate_signal(m15_data, symbol, trend=m15_trend, phase=phase)
                 
                 if signal:
-                    await self._handle_generated_signal(
-                        symbol,
-                        signal,
-                        context,
-                        symbol_params,
-                        risk_overrides,
-                        pip_size,
+                    # Check if this breakout level is already consumed (same as above)
+                    if symbol in self.consumed_breakouts:
+                        symbol_info = self.mt5_client.get_symbol_info(symbol)
+                        if symbol_info:
+                            pip_size = get_pip_size(symbol_info)
+                            for level, direction, timestamp in self.consumed_breakouts[symbol]:
+                                age = (datetime.now() - timestamp).total_seconds()
+                                if age < 900:  # Within 15 minutes
+                                    signal_direction = 'bullish' if signal.type == 0 else 'bearish'
+                                    if direction == signal_direction:
+                                        level_distance_pips = abs(signal.breakout_level - level) / pip_size
+                                        if level_distance_pips < 5:
+                                            logger.info(f"{symbol}: Duplicate breakout detected, skipping.")
+                                            return
+                    
+                    logger.info(
+                        f"Signal generated for {symbol}: "
+                        f"Type={'BUY' if signal.type == 0 else 'SELL'}, "
+                        f"Confidence={signal.confidence:.2f}"
                     )
+                    
+                    if self.session_manager.is_trading_time() and (self.market_session.is_trade_window() if getattr(self, 'market_session', None) else True):
+                        result = await self.execute_trade(signal, symbol)
+                        
+                        if result:
+                            # Track consumed breakout
+                            if symbol not in self.consumed_breakouts:
+                                self.consumed_breakouts[symbol] = []
+                            
+                            direction = 'bullish' if signal.type == 0 else 'bearish'
+                            self.consumed_breakouts[symbol].append(
+                                (signal.breakout_level, direction, datetime.now())
+                            )
+                            
+                            self.save_memory_state()
+                    else:
+                        logger.info("Outside trading session, signal ignored")
                 else:
                     logger.debug(f"No signal generated for {symbol}")
             
@@ -755,7 +740,8 @@ class TradingBot:
                 h1_data = mtf_data['H1']
                 h1_trend = self.market_data.identify_trend(h1_data)
                 
-                signal = self.strategy.generate_signal(h1_data, symbol, trend=h1_trend)
+                phase = self.market_session.get_phase() if getattr(self, 'market_session', None) else None
+                signal = self.strategy.generate_signal(h1_data, symbol, trend=h1_trend, phase=phase)
                 
                 if signal:
                     # Check consumed breakouts (same logic)
@@ -779,8 +765,8 @@ class TradingBot:
                         f"Confidence={signal.confidence:.2f}"
                     )
                     
-                    if self.session_manager.is_trading_time():
-                        result = await self.execute_trade(signal, symbol, risk_overrides)
+                    if self.session_manager.is_trading_time() and (self.market_session.is_trade_window() if getattr(self, 'market_session', None) else True):
+                        result = await self.execute_trade(signal, symbol)
                         
                         if result:
                             if symbol not in self.consumed_breakouts:
@@ -806,7 +792,7 @@ class TradingBot:
             return
             
         try:
-            open_trades = [t for t in self.trade_logger.get_all_trades() 
+            open_trades = [t for t in self.trade_logger.trades 
                         if t.get('status') == 'OPEN']
             
             if not open_trades:
@@ -817,7 +803,7 @@ class TradingBot:
             current_tickets = {pos.ticket for pos in current_positions}
             
             for trade in open_trades:
-                ticket = trade.get('position_ticket') or trade.get('ticket')
+                ticket = trade.get('ticket')
                 if ticket and ticket not in current_tickets:
                     # Position was closed
                     logger.info(f"Position {ticket} closed, fetching details...")
@@ -833,12 +819,8 @@ class TradingBot:
                     profit = 0
                     commission = 0
                     
-                    # Find ALL deals related to this position (prefer position_ticket)
-                    deals = None
-                    try:
-                        deals = self.mt5_client.get_history_deals_by_position(ticket)
-                    except Exception:
-                        deals = None
+                    # Find ALL deals related to this position
+                    deals = self.mt5_client.get_history_deals_by_position(ticket)
                     
                     if deals:
                         for deal in deals:
@@ -862,7 +844,7 @@ class TradingBot:
                         logger.warning(f"No exit deal found for position {ticket}, trying to infer status.")
                         
                         # Check history again with a wider time range
-                        history_orders = self.mt5_client.get_history_orders(ticket)
+                        history_orders = self.mt5_client.get_history_orders_by_position(ticket)
                         if history_orders:
                             for order in history_orders:
                                 if order.type == 1:  # Sell order for a buy position
@@ -895,15 +877,9 @@ class TradingBot:
                         pip_size = get_pip_size(self.mt5_client.get_symbol_info(trade['symbol']))
                         
                         # Check against SL/TP with a tolerance
-                        sl_diff = abs(exit_price - trade['stop_loss'])
-                        tp_diff = abs(exit_price - trade['take_profit'])
-                        
-                        logger.info(f"Inferring close reason for {ticket}: exit_price={exit_price}, tp={trade['take_profit']}, sl={trade['stop_loss']}")
-                        logger.info(f"TP diff: {tp_diff}, SL diff: {sl_diff}, tolerance: {10 * pip_size}")
-
-                        if sl_diff < 10 * pip_size:
+                        if abs(exit_price - trade['stop_loss']) < 5 * pip_size:
                             status = 'CLOSED_SL'
-                        elif tp_diff < 10 * pip_size:
+                        elif abs(exit_price - trade['take_profit']) < 5 * pip_size:
                             status = 'CLOSED_TP'
                         else:
                             status = 'CLOSED_MANUAL' # If not near SL/TP, likely manual
@@ -915,30 +891,22 @@ class TradingBot:
                         profit - commission,
                         status
                     )
+
+                    # Update calibrator with stricter +1R-before-SL label
+                    try:
+                        if getattr(self, 'calibrator', None) and getattr(self.calibrator, 'cfg', None) and self.calibrator.cfg.enabled:
+                            ttl = int(getattr(self.config, 'calib_ttl_minutes', 60))
+                            label = self._label_one_r_before_sl(trade, ttl)
+                            feat = trade.get('features') if isinstance(trade, dict) else None
+                            if feat is not None and label is not None:
+                                self.calibrator.update(feat, int(label))
+                                logger.info(f"Calibrator updated: +1R label={label} (ttl={ttl}m)")
+                            else:
+                                logger.debug("Calibrator not updated (missing features/label)")
+                    except Exception as _e:
+                        logger.debug(f"Calibrator update skipped: {_e}")
                     
                     symbol = trade.get('symbol')
-                    if symbol and hasattr(self, 'symbol_contexts'):
-                        context = self.symbol_contexts.get(symbol)
-                        if context:
-                            try:
-                                enriched_trade = dict(trade)
-                                enriched_trade['exit_price'] = exit_price
-                                enriched_trade['profit'] = profit - commission
-                                enriched_trade['status'] = status
-                                enriched_trade['exit_time'] = datetime.now().isoformat()
-                                if 'duration' not in enriched_trade:
-                                    entry_ts = trade.get('timestamp')
-                                    try:
-                                        if isinstance(entry_ts, str):
-                                            entry_dt = datetime.fromisoformat(entry_ts)
-                                        else:
-                                            entry_dt = entry_ts
-                                        enriched_trade['duration'] = str(datetime.now() - entry_dt)
-                                    except Exception:
-                                        pass
-                                context.record_trade_result(enriched_trade)
-                            except Exception:
-                                logger.debug(f"{symbol}: Failed to record trade result for optimizer")
                     if exit_price and symbol:
                         self.recent_closures[symbol] = (
                             datetime.now(),
@@ -947,10 +915,225 @@ class TradingBot:
                         )
                         self.save_memory_state()
                         
-                        logger.info(f"Recorded {symbol} closure at {exit_price} ({status})")
+                    logger.info(f"Recorded {symbol} closure at {exit_price} ({status})")
                                     
         except Exception as e:
             logger.error(f"Error syncing trade status: {e}", exc_info=True)
+
+    def _label_one_r_before_sl(self, trade: Dict, ttl_minutes: int) -> Optional[int]:
+        """Return 1 if +1R is reached before SL within ttl_minutes of entry; else 0.
+
+        BUY uses bid highs/lows; SELL approximates ask by bid + spread*point.
+        Ties are counted as loss-first (conservative).
+        """
+        try:
+            from datetime import timedelta
+            symbol = trade.get('symbol')
+            if not symbol:
+                return None
+            entry_ts_raw = trade.get('timestamp')
+            if not entry_ts_raw:
+                return None
+            if isinstance(entry_ts_raw, str):
+                entry_time = datetime.fromisoformat(entry_ts_raw)
+            else:
+                entry_time = entry_ts_raw
+            order_type = trade.get('order_type') or ('BUY' if trade.get('type', 0) == 0 else 'SELL')
+            entry_price = float(trade.get('entry_price', 0.0))
+            sl = float(trade.get('stop_loss', 0.0))
+            if entry_price <= 0 or sl <= 0:
+                return None
+            to_time = entry_time + timedelta(minutes=int(ttl_minutes))
+            rates = self.mt5_client.copy_rates_range(symbol, 'M1', entry_time, to_time)
+            if rates is None or len(rates) == 0:
+                return None
+            import pandas as pd
+            df = pd.DataFrame(rates)
+            sym_info = self.mt5_client.get_symbol_info(symbol)
+            point = float(getattr(sym_info, 'point', 0.00001)) if sym_info else 0.00001
+
+            if order_type == 'BUY':
+                risk = entry_price - sl
+                if risk <= 0:
+                    return None
+                target = entry_price + risk
+                for _, row in df.iterrows():
+                    bid_low = float(row['low'])
+                    bid_high = float(row['high'])
+                    if bid_low <= sl:
+                        return 0
+                    if bid_high >= target:
+                        return 1
+                return 0
+            else:  # SELL
+                risk = sl - entry_price
+                if risk <= 0:
+                    return None
+                target = entry_price - risk
+                for _, row in df.iterrows():
+                    bid_high = float(row['high'])
+                    bid_low = float(row['low'])
+                    spread_points = float(row['spread']) if 'spread' in row else 0.0
+                    ask_high = bid_high + spread_points * point
+                    ask_low = bid_low + spread_points * point
+                    if ask_high >= sl:
+                        return 0
+                    if ask_low <= target:
+                        return 1
+                return 0
+        except Exception:
+            return None
+    
+    async def supervise_positions(self):
+        """Session-aware TTL supervision for open positions.
+
+        Policies (lightweight, additive):
+        - If elapsed >= phase.ttl_minutes and R < 0.0: close position (failed to follow through).
+        - If elapsed >= phase.ttl_minutes and 0.0 <= R < 0.5: move SL to breakeven (with broker-distance buffer).
+        - If elapsed >= 0.5 * ttl and R <= 0.0: tighten SL halfway toward entry to reduce risk.
+        - Near session boundary (<=10m) and R >= 0.8: lock at +0.5R via SL.
+        """
+        try:
+            mode = getattr(self.config, 'supervision_mode', 'advisory').lower()
+            if mode == 'none':
+                return
+            if not self.mt5_client:
+                return
+            positions = self.mt5_client.get_all_positions()
+            if not positions:
+                return
+
+            phase = self.market_session.get_phase() if getattr(self, 'market_session', None) else None
+            ttl_minutes = getattr(phase, 'ttl_minutes', None) or 60
+            boundary_mins = self.market_session.minutes_to_boundary() if getattr(self, 'market_session', None) else 999
+
+            for p in positions:
+                symbol = p.symbol
+                symbol_info = self.mt5_client.get_symbol_info(symbol)
+                if not symbol_info:
+                    continue
+                pip_size = get_pip_size(symbol_info)
+
+                # Fetch matching trade record for entry time; fallback to now if missing
+                entry_time = None
+                entry_price = float(p.price_open)
+                stop_loss = float(getattr(p, 'sl', 0.0)) if getattr(p, 'sl', 0.0) else None
+                take_profit = float(getattr(p, 'tp', 0.0)) if getattr(p, 'tp', 0.0) else None
+                try:
+                    if self.trade_logger and self.trade_logger.trades:
+                        for t in reversed(self.trade_logger.trades):
+                            if t.get('ticket') == p.ticket:
+                                ts = t.get('timestamp')
+                                if ts:
+                                    entry_time = datetime.fromisoformat(ts)
+                                # Prefer logged SL/TP if defined
+                                stop_loss = float(t.get('stop_loss', stop_loss or 0.0)) or stop_loss
+                                take_profit = float(t.get('take_profit', take_profit or 0.0)) or take_profit
+                                break
+                except Exception:
+                    pass
+
+                if entry_time is None:
+                    # Best-effort fallback: approximate from current time
+                    entry_time = datetime.now()
+
+                elapsed_min = max(0.0, (datetime.now() - entry_time).total_seconds() / 60.0)
+
+                # Compute R progress
+                risk_distance = None
+                if stop_loss is not None and stop_loss != 0.0:
+                    risk_distance = abs(entry_price - stop_loss)
+                if not risk_distance or risk_distance <= 0:
+                    # Can't supervise without SL reference
+                    continue
+
+                price_current = float(p.price_current)
+                if p.type == 0:  # BUY
+                    progress = price_current - entry_price
+                else:  # SELL
+                    progress = entry_price - price_current
+                r_multiple = progress / risk_distance
+
+                # Broker minimum stop distance
+                try:
+                    min_stop_distance = float(symbol_info.trade_stops_level) * float(symbol_info.point)
+                except Exception:
+                    min_stop_distance = 0.0
+
+                # Helper to set SL safely
+                def set_sl(target_sl: float) -> bool:
+                    # Ensure SL on correct side and satisfies broker min distance
+                    tick = self.mt5_client.get_symbol_info_tick(symbol)
+                    if not tick:
+                        return False
+                    if p.type == 0:  # BUY: SL below current ask
+                        safe_max = float(tick.ask) - max(min_stop_distance, pip_size)
+                        new_sl = min(target_sl, safe_max)
+                        if new_sl >= safe_max:
+                            new_sl = safe_max - pip_size/10.0
+                        if new_sl >= entry_price:
+                            new_sl = entry_price - pip_size  # breakeven just below
+                        if new_sl <= 0:
+                            return False
+                    else:  # SELL: SL above current bid
+                        safe_min = float(tick.bid) + max(min_stop_distance, pip_size)
+                        new_sl = max(target_sl, safe_min)
+                        if new_sl <= safe_min:
+                            new_sl = safe_min + pip_size/10.0
+                        if new_sl <= entry_price:
+                            new_sl = entry_price + pip_size  # breakeven just above
+                    if mode == 'active':
+                        res = self.mt5_client.modify_position(p.ticket, sl=new_sl, tp=take_profit)
+                        if res:
+                            logger.info(
+                                f"TTL supervise: SL set -> {symbol} ticket {p.ticket} {new_sl:.5f} (R={r_multiple:.2f}, elapsed={elapsed_min:.0f}m, phase={getattr(phase,'name', 'n/a')})"
+                            )
+                            return True
+                        return False
+                    else:
+                        logger.info(
+                            f"TTL supervise (advisory): would set SL -> {symbol} ticket {p.ticket} {new_sl:.5f} (R={r_multiple:.2f}, elapsed={elapsed_min:.0f}m, phase={getattr(phase,'name', 'n/a')})"
+                        )
+                        return True
+
+                # 1) End of TTL actions
+                if elapsed_min >= ttl_minutes:
+                    if r_multiple < 0.0:
+                        # No follow-through and negative: close (or advise)
+                        if mode == 'active':
+                            close_res = self.mt5_client.close_position(p.ticket)
+                            if close_res:
+                                logger.info(
+                                    f"TTL supervise: closed -> {symbol} ticket {p.ticket} (R={r_multiple:.2f}, elapsed={elapsed_min:.0f}m >= ttl {ttl_minutes}m)"
+                                )
+                        else:
+                            logger.info(
+                                f"TTL supervise (advisory): would CLOSE -> {symbol} ticket {p.ticket} (R={r_multiple:.2f}, elapsed={elapsed_min:.0f}m >= ttl {ttl_minutes}m)"
+                            )
+                        continue
+                    if r_multiple < 0.5:
+                        # Protect by moving to breakeven
+                        be_sl = entry_price - pip_size if p.type == 0 else entry_price + pip_size
+                        set_sl(be_sl)
+                        continue
+
+                # 2) Half TTL and non-positive: reduce risk by moving SL halfway to entry
+                if elapsed_min >= (ttl_minutes * 0.5) and r_multiple <= 0.0 and stop_loss is not None:
+                    mid_sl = (entry_price + stop_loss) / 2.0
+                    set_sl(mid_sl)
+
+                # 3) Near boundary and decent profit: lock partial R
+                if boundary_mins <= 10 and r_multiple >= 0.8 and stop_loss is not None:
+                    # Lock at +0.5R
+                    lock_distance = 0.5 * risk_distance
+                    if p.type == 0:
+                        target_sl = entry_price + lock_distance
+                    else:
+                        target_sl = entry_price - lock_distance
+                    set_sl(target_sl)
+
+        except Exception as e:
+            logger.error(f"Error in supervise_positions: {e}", exc_info=True)
             
     def save_memory_state(self):
         """Save consumed breakouts and recent closures to file"""
@@ -979,15 +1162,11 @@ class TradingBot:
                 'status': status
             }
         
-        # Save to file atomically
-        memory_path = Path('bot_memory.json')
-        tmp_path = memory_path.with_suffix('.json.tmp')
-        try:
-            tmp_path.write_text(json.dumps(memory_state, indent=2))
-            tmp_path.replace(memory_path)
-            logger.debug("Memory state saved to bot_memory.json")
-        except Exception as exc:
-            logger.error(f"Failed to persist memory state: {exc}", exc_info=True)
+        # Save to file
+        with open('bot_memory.json', 'w') as f:
+            json.dump(memory_state, f, indent=2)
+        
+        logger.debug("Memory state saved to bot_memory.json")
 
     def load_memory_state(self):
         """Load consumed breakouts and recent closures from file"""
@@ -1056,21 +1235,16 @@ class TradingBot:
         
         while self.running:
             try:
-                # Check for news-related trading pause
-                if self.config.enable_news_filter:
-                    paused, reason = is_trading_paused(datetime.now(timezone.utc))
-                    if paused:
-                        logger.debug(f"Trading is paused: {reason}. Skipping this cycle.")
-                        await asyncio.sleep(self.config.main_loop_interval)
-                        continue
-
                 # Check for maximum drawdown
                 if await self.check_drawdown():
                     logger.error("Maximum drawdown reached, stopping bot")
                     break
                 
                 # Sync trade status with MT5
-                await self.sync_trade_status()                
+                await self.sync_trade_status()
+                # Session-aware TTL supervision (only when enabled)
+                if getattr(self.config, 'supervision_mode', 'none').lower() != 'none':
+                    await self.supervise_positions()
                 # Process each symbol
                 for symbol_config in self.config.symbols:
                     await self.process_symbol(symbol_config)

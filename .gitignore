@@ -8,3 +8,4 @@ trades.csv
 trades.json
 trades.log
 /__pycache__/
+bot_memory.json

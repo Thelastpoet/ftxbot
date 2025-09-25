@@ -15,8 +15,7 @@
     "atr_tp_multiplier": 4.0,
     "session_based_tp": true,
     "volatility_adjustment": true,
-    "m1_confirmation_enabled": false,
-    "enable_news_filter": true
+    "m1_confirmation_enabled": false
   },
   "risk_management": {
     "risk_per_trade": 0.01,
