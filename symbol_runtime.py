@@ -1,7 +1,8 @@
-﻿"""Per-symbol runtime context: config overrides, calibrator, and optimizer."""
+"""Per-symbol runtime context: config overrides, calibrator, and optimizer."""
 from __future__ import annotations
 
 import json
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -9,6 +10,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from calibrator import CalibratorConfig, OnlineLogisticCalibrator
 from optimizer import OptimizerConfig, ParameterOptimizer
 
+logger = logging.getLogger(__name__)
 
 @dataclass
 class SymbolProfile:
@@ -37,6 +39,17 @@ class SymbolRuntimeContext:
         self.calibration_cfg = calibration_cfg or {}
         self.calibrator_enabled = bool(self.calibration_cfg.get("enabled", False))
         self._calibrator = self._build_calibrator(calibrator_state_dir)
+        
+        # Ensure adaptive keys include breakout quality knobs
+        if 'breakout_threshold_pips' not in profile.adaptive_keys:
+            profile.adaptive_keys.append('breakout_threshold_pips')
+        if 'min_peak_rank' not in profile.adaptive_keys:
+            profile.adaptive_keys.append('min_peak_rank')
+        if 'proximity_threshold_pips' not in profile.adaptive_keys:
+            profile.adaptive_keys.append('proximity_threshold_pips')
+        if 'require_close_breakout' not in profile.adaptive_keys:
+            profile.adaptive_keys.append('require_close_breakout')
+
         optimizer_cfg = OptimizerConfig(
             symbol=self.symbol,
             base_params=self.effective_base,
@@ -93,8 +106,8 @@ class SymbolRuntimeContext:
         label = float(outcome.get("label", 0.0)) if outcome else float(trade.get("result_label", 0.0) or 0.0)
         try:
             self._calibrator.update(features, label)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.error(f"Failed to update calibrator for trade {trade.get('ticket')}: {e}")
 
     # ------------------------------------------------------------------
     def _build_calibrator(self, state_dir: Path) -> Optional[OnlineLogisticCalibrator]:
@@ -206,7 +219,7 @@ class SymbolRuntimeContext:
 def load_symbol_profile(symbol: str, base_params: Dict[str, float], profile_path: Path) -> SymbolProfile:
     overrides: Dict[str, float] = {}
     bounds: Dict[str, List[float]] = {}
-    adaptive_keys = ["min_stop_loss_pips", "risk_reward_ratio"]
+    adaptive_keys = ["min_stop_loss_pips", "stop_loss_atr_multiplier", "risk_reward_ratio"]
     risk_overrides: Dict[str, float] = {}
 
     if profile_path.exists():

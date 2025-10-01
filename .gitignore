@@ -9,3 +9,7 @@ trades.json
 trades.log
 /__pycache__/
 bot_memory.json
+calibrator_states/
+optimizer_states/
+pump_spot/
+QWEN.md

@@ -8,10 +8,9 @@ import pandas as pd
 import logging
 from typing import Any, Dict, Optional
 
-from utils import get_pip_size
+from utils import get_symbol_precision, get_pip_value
 
 logger = logging.getLogger(__name__)
-
 
 class RiskManager:
     """Manages risk and position sizing with optional per-symbol overrides."""
@@ -59,6 +58,41 @@ class RiskManager:
                 return overrides[key]
         attribute = attr_key or key
         return getattr(self, attribute, default)
+    
+    def _series_returns(self, closes: np.ndarray) -> np.ndarray:
+        # log-returns are standard; fall back to pct change if needed
+        x = np.asarray(closes, dtype=float)
+        x = x[~np.isnan(x)]
+        if x.size < 3:
+            return np.array([], dtype=float)
+        rets = np.diff(np.log(x))
+        return rets
+
+    def _ewma_corr(self, r1: np.ndarray, r2: np.ndarray, lam: float = 0.94) -> Optional[float]:
+        """
+        RiskMetrics-style EWMA correlation on returns.
+        lam is decay (daily classic=0.94). For M15 you can use 0.97–0.99.
+        """
+        n = min(r1.size, r2.size)
+        if n < 10:
+            return None
+        r1 = r1[-n:]
+        r2 = r2[-n:]
+
+        # de-mean with EWMA means
+        w = np.power(lam, np.arange(n-1, -1, -1, dtype=float))
+        w /= w.sum()
+        m1 = (w * r1).sum()
+        m2 = (w * r2).sum()
+        d1 = r1 - m1
+        d2 = r2 - m2
+        cov = float((w * d1 * d2).sum())
+        v1 = float((w * d1 * d1).sum())
+        v2 = float((w * d2 * d2).sum())
+        if v1 <= 0 or v2 <= 0:
+            return None
+        return cov / (v1**0.5 * v2**0.5)
+
 
     # ------------------------------------------------------------------
     def calculate_position_size(
@@ -92,7 +126,7 @@ class RiskManager:
             account_balance = account_info.balance
             risk_amount = account_balance * float(risk_per_trade)
 
-            pip_value = self._calculate_pip_value(symbol_info)
+            pip_value = get_pip_value(symbol_info, overrides=overrides)
 
             if stop_loss_pips > 0 and pip_value > 0:
                 position_size = risk_amount / (stop_loss_pips * pip_value)
@@ -119,18 +153,6 @@ class RiskManager:
             logger.error(f"Error calculating position size: {e}")
             return 0.0
 
-    def _calculate_pip_value(self, symbol_info: Any) -> float:
-        """Calculate pip value per standard lot using MT5 native values."""
-        try:
-            if symbol_info.trade_tick_size > 0:
-                pip_size = get_pip_size(symbol_info)
-                per_price_unit = symbol_info.trade_tick_value / symbol_info.trade_tick_size
-                pip_value = per_price_unit * pip_size
-                return float(pip_value)
-            return 0.0
-        except Exception as e:
-            logger.error(f"Error calculating pip value: {e}")
-            return 0.0
 
     def check_risk_limits(
         self,
@@ -169,7 +191,7 @@ class RiskManager:
             if signal_type is not None:
                 if not self.check_correlation_risk(symbol, signal_type, overrides=overrides):
                     return False
-
+            
             return True
 
         except Exception as e:
@@ -182,50 +204,38 @@ class RiskManager:
         proposed_signal_type: int,
         overrides: Optional[Dict[str, float]] = None,
     ) -> bool:
-        """Prevent multiple highly correlated positions."""
+        """Prevent highly correlated duplicates; soft cases are handled via size reduction."""
         overrides = overrides or {}
         try:
-            existing_positions = self.mt5_client.get_all_positions()
-            if not existing_positions:
+            positions = self.mt5_client.get_all_positions()
+            if not positions:
                 return True
 
-            threshold = float(self._resolve_setting(
-                'correlation_threshold', overrides, attr_key='correlation_threshold', default=self.correlation_threshold
-            ))
+            hard = float(self._resolve_setting('correlation_threshold', overrides,
+                                            attr_key='correlation_threshold', default=self.correlation_threshold))
+            # Optional softer threshold (below 'hard') to inform sizing only
+            soft = float(self._resolve_setting('correlation_soft_threshold', overrides, default=max(0.5, hard - 0.15)))
 
-            for position in existing_positions:
-                if position.symbol == new_symbol:
+            for p in positions:
+                if p.symbol == new_symbol:
                     continue
 
-                current_corr = self._get_correlation(new_symbol, position.symbol, overrides)
-                if current_corr is None:
+                corr = self._get_correlation(new_symbol, p.symbol, overrides)
+                if corr is None:
                     continue
 
-                same_direction = (
-                    (position.type == 0 and proposed_signal_type == 0)
-                    or (position.type == 1 and proposed_signal_type == 1)
-                )
+                same_dir = ((p.type == 0 and proposed_signal_type == 0) or
+                            (p.type == 1 and proposed_signal_type == 1))
 
-                if same_direction and abs(current_corr) > threshold:
-                    logger.debug(
-                        "HIGH CORRELATION RISK: %s vs %s corr=%.2f",
-                        new_symbol,
-                        position.symbol,
-                        current_corr,
-                    )
+                # HARD block only for extreme same-direction correlation
+                if same_dir and abs(corr) >= hard:
+                    logger.debug("HARD CORR BLOCK: %s vs %s corr=%.2f >= %.2f",
+                                new_symbol, p.symbol, corr, hard)
                     return False
 
-                if not same_direction and current_corr < -threshold:
-                    logger.debug(
-                        "INVERSE CORRELATION RISK: %s vs %s corr=%.2f",
-                        new_symbol,
-                        position.symbol,
-                        current_corr,
-                    )
-                    return False
-
+                # Opposite-direction, strongly negative correlation can also be risky (pairs trade),
+                # but we allow it and let sizing handle reduction.
             return True
-
         except Exception as e:
             logger.error(f"Error checking correlation risk: {e}")
             return False
@@ -236,55 +246,55 @@ class RiskManager:
         base_position_size: float,
         overrides: Optional[Dict[str, float]] = None,
     ) -> float:
-        """Adjust position size based on correlation with existing positions."""
+        """Continuously reduce size as correlated overlaps grow; avoid full block unless 'hard' hit."""
         overrides = overrides or {}
         try:
             positions = self.mt5_client.get_all_positions()
             if not positions:
                 return base_position_size
 
-            threshold = float(self._resolve_setting(
-                'correlation_threshold', overrides, attr_key='correlation_threshold', default=self.correlation_threshold
-            ))
+            hard = float(self._resolve_setting('correlation_threshold', overrides,
+                                            attr_key='correlation_threshold', default=self.correlation_threshold))
+            soft = float(self._resolve_setting('correlation_soft_threshold', overrides, default=max(0.5, hard - 0.15)))
 
-            total_correlation_risk = 0.0
-            correlated_count = 0
+            # k controls reduction speed; 0.0=off, 1.0=aggressive
+            k = float(self._resolve_setting('correlation_size_slope', overrides, default=0.8))
 
-            for position in positions:
-                if position.symbol == symbol:
+            reduction = 1.0
+            for p in positions:
+                if p.symbol == symbol:
+                    continue
+                corr = self._get_correlation(symbol, p.symbol, overrides)
+                if corr is None:
                     continue
 
-                correlation = self._get_correlation(symbol, position.symbol, overrides)
-                if correlation is not None and abs(correlation) > threshold:
-                    total_correlation_risk += abs(correlation)
-                    correlated_count += 1
+                # Only reduce when correlation meaningfully high (beyond soft)
+                x = abs(corr)
+                if x >= soft:
+                    # linear taper from soft -> hard: at hard, reduction could be near zero
+                    span = max(1e-9, hard - soft)
+                    frac = min(1.0, (x - soft) / span)  # 0..1
+                    reduction *= max(0.0, 1.0 - k * frac)
 
-            if correlated_count > 0:
-                avg_correlation = total_correlation_risk / correlated_count
-                reduction_factor = 1.0 / (1 + correlated_count * avg_correlation)
-                adjusted_size = base_position_size * reduction_factor
+            adjusted = base_position_size * reduction
+            # keep exchange/broker volume rules
+            if positions:
+                sym_info = self.mt5_client.get_symbol_info(symbol)
+                if sym_info:
+                    step = sym_info.volume_step or 0.01
+                    adjusted = round(adjusted / step) * step
+                    adjusted = max(sym_info.volume_min, min(adjusted, sym_info.volume_max))
 
-                logger.debug(
-                    "Position size adjusted for correlation: %.2f -> %.2f (n=%d)",
-                    base_position_size,
-                    adjusted_size,
-                    correlated_count,
-                )
-                return adjusted_size
-
-            return base_position_size
-
+            logger.debug("Correlation size adjust: %.4f -> %.4f (soft=%.2f, hard=%.2f)",
+                        base_position_size, adjusted, soft, hard)
+            return float(adjusted)
         except Exception as e:
             logger.error(f"Error adjusting position size for correlation: {e}")
             return base_position_size
 
-    def _get_correlation(
-        self,
-        symbol1: str,
-        symbol2: str,
-        overrides: Optional[Dict[str, float]] = None,
-    ) -> Optional[float]:
-        """Calculate Pearson correlation between two symbols."""
+
+    def _get_correlation(self, symbol1: str, symbol2: str, overrides: Optional[Dict[str, float]] = None) -> Optional[float]:
+        """Correlation between symbols using log-returns with EWMA weighting."""
         overrides = overrides or {}
         try:
             lookback = int(self._resolve_setting(
@@ -293,30 +303,22 @@ class RiskManager:
                 default=self.correlation_lookback_period,
             ) or self.correlation_lookback_period)
 
-            data1 = self.mt5_client.copy_rates_from_pos(symbol1, 'M15', 0, lookback)
-            if data1 is None:
-                logger.warning(f"Cannot get data for {symbol1} correlation check")
+            # Pull closes (same TF as before)
+            d1 = self.mt5_client.copy_rates_from_pos(symbol1, 'M15', 0, lookback)
+            d2 = self.mt5_client.copy_rates_from_pos(symbol2, 'M15', 0, lookback)
+            if d1 is None or d2 is None:
+                logger.warning(f"Cannot get data for {symbol1} or {symbol2} correlation check")
                 return None
 
-            df1 = pd.DataFrame(data1)
-            close1 = df1['close'].values
+            c1 = pd.DataFrame(d1)['close'].values
+            c2 = pd.DataFrame(d2)['close'].values
 
-            data2 = self.mt5_client.copy_rates_from_pos(symbol2, 'M15', 0, lookback)
-            if data2 is None:
-                logger.warning(f"Cannot get data for {symbol2} correlation check")
-                return None
-
-            df2 = pd.DataFrame(data2)
-            close2 = df2['close'].values
-
-            N = min(len(close1), len(close2), lookback)
-            if N >= 10:
-                a = close1[-N:]
-                b = close2[-N:]
-                if np.std(a) > 0 and np.std(b) > 0:
-                    corr_matrix = np.corrcoef(a, b)
-                    return float(corr_matrix[0, 1])
-            return 0.0
+            r1 = self._series_returns(c1)
+            r2 = self._series_returns(c2)
+            # EWMA decay: use slightly slower decay for intraday (e.g., 0.97–0.99)
+            lam = float(self._resolve_setting('correlation_ewma_lambda', overrides, default=0.97))
+            corr = self._ewma_corr(r1, r2, lam=lam)
+            return float(corr) if corr is not None else 0.0
         except Exception as e:
             logger.error(f"Error calculating correlation: {e}")
             return None
@@ -356,6 +358,7 @@ class RiskManager:
         except Exception as e:
             logger.error(f"Error calculating risk metrics: {e}")
             return {}
+        
     def validate_trade_parameters(self, symbol: str, volume: float, stop_loss: float, take_profit: float, order_type: int = None) -> bool:
         """Validate trade parameters before execution."""
         try:
@@ -404,3 +407,46 @@ class RiskManager:
         except Exception as e:
             logger.error(f"Error validating trade parameters: {e}")
             return False
+        
+    def validate_stop_loss(
+        self,
+        symbol_info: Any,
+        entry_price: float,
+        stop_loss: float,
+        min_sl_pips: float,
+        overrides: Optional[Dict[str, float]] = None,
+    ) -> bool:
+        """
+        Validate that stop-loss distance meets minimum requirements.
+
+        Args:
+            symbol: Trading symbol
+            entry_price: Current execution price
+            stop_loss: Proposed stop-loss price
+            min_sl_pips: Floor for stop-loss distance (from config or overrides)
+            pip_size: Pip size for the symbol
+        """
+        try:
+            precision = get_symbol_precision(symbol_info, overrides=overrides)
+            tick_size = precision.tick_size or 0.0
+            pip_size = precision.pip_size or tick_size
+
+            if pip_size <= 0 or tick_size <= 0:
+                logger.warning(f"{symbol_info.name}: Unable to validate stop-loss due to missing precision data")
+                return False
+
+            sl_distance = abs(entry_price - stop_loss)
+            sl_distance_ticks = sl_distance / tick_size
+            sl_distance_pips = sl_distance / pip_size
+
+            if sl_distance_pips < min_sl_pips:
+                logger.warning(
+                    f"{symbol_info.name}: Stop-loss too tight ({sl_distance_pips:.1f} < {min_sl_pips:.1f} pips)"
+                )
+                return False
+            return True
+        except Exception as e:
+            logger.error(f"Error validating stop-loss for {symbol_info.name}: {e}")
+            return False
+
+

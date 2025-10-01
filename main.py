@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 """
 Forex Trading Bot - Main Application
 Pure Price Action Strategy with MetaTrader 5 Integration
@@ -15,8 +15,9 @@ from typing import Dict, List, Optional
 import sys
 
 from strategy import TradingSignal
-from utils import get_pip_size, is_trading_paused
+from utils import get_tick_size, get_symbol_precision, is_trading_paused
 from symbol_runtime import SymbolRuntimeContext, load_symbol_profile
+from market_session import MarketSession
 
 # Configure logging
 logging.basicConfig(
@@ -38,77 +39,106 @@ class Config:
         self.load_config()
         
     def load_config(self):
-        """Load configuration from JSON file and apply CLI overrides"""
+        """Load configuration from JSON file and apply CLI overrides."""
+        # Helper to force required keys to exist
+        def _req(d, key, section_name):
+            if key not in d:
+                raise ValueError(f"Missing required key '{key}' in section '{section_name}' of {self.config_path}")
+            return d[key]
+
         try:
-            with open(self.config_path, 'r') as f:
+            with open(self.config_path, 'r', encoding='utf-8') as f:
                 config_data = json.load(f)
-            
-            # Trading settings
-            trading = config_data.get('trading_settings', {})
-            self.max_period = trading.get('max_period', 50)
-            self.main_loop_interval = trading.get('main_loop_interval_seconds', 60)
-            self.order_retry_attempts = trading.get('order_retry_attempts', 3)
-            self.lookback_period = trading.get('lookback_period', 20)
-            self.swing_window = trading.get('swing_window', 5)
-            self.breakout_threshold = trading.get('breakout_threshold_pips', 5)
-            self.min_peak_rank = trading.get('min_peak_rank', 2)
-            self.proximity_threshold = trading.get('proximity_threshold_pips', 10)
-            self.min_stop_loss_pips = trading.get('min_stop_loss_pips', 20)
-            self.stop_loss_buffer_pips = trading.get('stop_loss_buffer_pips', 15)
-            self.min_range_pips = trading.get('min_range_pips', 10)
-            self.atr_period = trading.get('atr_period', 14)
-            self.atr_tp_multiplier = trading.get('atr_tp_multiplier', 4.0)
-            self.session_based_tp = trading.get('session_based_tp', True)
-            self.volatility_adjustment = trading.get('volatility_adjustment', True)
-            self.enable_news_filter = trading.get('enable_news_filter', True)
-            
-            # Risk management
-            risk = config_data.get('risk_management', {})
-            self.risk_per_trade = risk.get('risk_per_trade', 0.02)
-            self.fixed_lot_size = risk.get('fixed_lot_size', None)
-            self.max_drawdown = risk.get('max_drawdown_percentage', 0.1)
-            self.risk_reward_ratio = risk.get('risk_reward_ratio', 2.0)
-            self.correlation_threshold = risk.get('correlation_threshold', 0.7)
-            self.correlation_lookback_period = risk.get('correlation_lookback_period', 30)
-            self.risk_management_settings = risk
-            
-            # Symbols and timeframes
-            symbols_data = config_data.get('symbols', [])
+
+            # --- Trading settings (required) ---
+            trading = config_data.get('trading_settings') or {}
+            self.max_period               = _req(trading, 'max_period', 'trading_settings')
+            self.main_loop_interval       = _req(trading, 'main_loop_interval_seconds', 'trading_settings')
+            self.order_retry_attempts     = _req(trading, 'order_retry_attempts', 'trading_settings')
+            self.lookback_period          = _req(trading, 'lookback_period', 'trading_settings')
+            self.swing_window             = _req(trading, 'swing_window', 'trading_settings')
+            self.breakout_threshold       = _req(trading, 'breakout_threshold_pips', 'trading_settings')
+            self.min_peak_rank            = _req(trading, 'min_peak_rank', 'trading_settings')
+            self.proximity_threshold      = _req(trading, 'proximity_threshold_pips', 'trading_settings')
+            self.min_stop_loss_pips       = _req(trading, 'min_stop_loss_pips', 'trading_settings')
+            self.stop_loss_buffer_pips    = _req(trading, 'stop_loss_buffer_pips', 'trading_settings')
+            self.stop_loss_atr_multiplier = float(trading.get('stop_loss_atr_multiplier', 0.8))
+            self.min_range_pips           = _req(trading, 'min_range_pips', 'trading_settings')
+            self.atr_period               = _req(trading, 'atr_period', 'trading_settings')
+            self.atr_tp_multiplier        = _req(trading, 'atr_tp_multiplier', 'trading_settings')
+            self.session_based_tp         = _req(trading, 'session_based_tp', 'trading_settings')
+            self.volatility_adjustment    = _req(trading, 'volatility_adjustment', 'trading_settings')
+            self.enable_news_filter       = _req(trading, 'enable_news_filter', 'trading_settings')
+
+            # --- Risk management (required) ---
+            risk = config_data.get('risk_management') or {}
+            self.risk_per_trade               = _req(risk, 'risk_per_trade', 'risk_management')
+            self.fixed_lot_size               = risk.get('fixed_lot_size')  # may be None by design
+            self.max_drawdown                 = _req(risk, 'max_drawdown_percentage', 'risk_management')
+            self.risk_reward_ratio            = _req(risk, 'risk_reward_ratio', 'risk_management')
+            self.correlation_threshold        = _req(risk, 'correlation_threshold', 'risk_management')
+            self.correlation_lookback_period  = _req(risk, 'correlation_lookback_period', 'risk_management')
+            self.risk_management_settings     = dict(risk)  # keep the dict for RiskManager init
+
+            # --- Symbols (required) ---
+            symbols_data = config_data.get('symbols')
+            if not isinstance(symbols_data, list) or not symbols_data:
+                raise ValueError(f"'symbols' must be a non-empty list in {self.config_path}")
+            # enforce presence of name + timeframes in each symbol
             self.symbols = []
             for sym in symbols_data:
-                self.symbols.append({
-                    'name': sym['name'],
-                    'timeframes': sym.get('timeframes', ['M15'])
-                })
-            
-            # Trading sessions
-            sessions_data = config_data.get('trading_sessions', [])
+                name = _req(sym, 'name', 'symbols[]')
+                tfs  = _req(sym, 'timeframes', 'symbols[]')
+                if not isinstance(tfs, list) or not tfs:
+                    raise ValueError("Each symbol must have a non-empty 'timeframes' list")
+                self.symbols.append({'name': name, 'timeframes': tfs})
+
+            # --- Trading sessions (optional) ---
+            sessions_data = config_data.get('trading_sessions') or []
             self.trading_sessions = []
             for session in sessions_data:
-                self.trading_sessions.append({
-                    'name': session['name'],
-                    'start_time': datetime.strptime(session['start_time'], '%H:%M').time(),
-                    'end_time': datetime.strptime(session['end_time'], '%H:%M').time()
-                })
-            
-            paths_cfg = config_data.get('paths', {})
-            base_dir = self.config_path.parent
-            self.symbol_config_dir = (base_dir / paths_cfg.get('symbol_config_dir', 'symbol_configs')).resolve()
-            self.calibrator_state_dir = (base_dir / paths_cfg.get('calibrator_state_dir', 'calibrator_states')).resolve()
-            self.optimizer_state_dir = (base_dir / paths_cfg.get('optimizer_state_dir', 'optimizer_states')).resolve()
-            self.calibration_settings = dict(config_data.get('calibration', {}))
+                # if you want sessions enforced, swap to _req(...) here
+                name  = session.get('name')
+                start = session.get('start_time')
+                end   = session.get('end_time')
+                if name and start and end:
+                    self.trading_sessions.append({
+                        'name': name,
+                        'start_time': datetime.strptime(start, '%H:%M').time(),
+                        'end_time': datetime.strptime(end, '%H:%M').time(),
+                    })
 
-            # Apply command-line overrides
+            # --- Paths (optional but recommended in JSON) ---
+            paths_cfg = config_data.get('paths') or {}
+            base_dir = self.config_path.parent
+            self.symbol_config_dir   = (base_dir / (paths_cfg.get('symbol_config_dir') or 'symbol_configs')).resolve()
+            self.calibrator_state_dir= (base_dir / (paths_cfg.get('calibrator_state_dir') or 'calibrator_states')).resolve()
+            self.optimizer_state_dir = (base_dir / (paths_cfg.get('optimizer_state_dir') or 'optimizer_states')).resolve()
+
+            # --- Calibration & pattern settings (optional) ---
+            self.calibration_settings = dict(config_data.get('calibration') or {})
+
+            pattern_cfg = config_data.get('pattern_settings') or {}
+            # Using bool() on .get(...) avoids embedding a hard-coded default
+            self.pattern_only_momentum              = bool(pattern_cfg.get('pattern_only_momentum'))
+            self.pattern_mitigate_direction         = True if pattern_cfg.get('mitigate_direction') is None else bool(pattern_cfg.get('mitigate_direction'))
+            self.pattern_indecision_penalty_per_hit = float(pattern_cfg.get('indecision_penalty_per_hit') or 0.06)
+            self.pattern_indecision_penalty_cap     = float(pattern_cfg.get('indecision_penalty_cap') or 0.12)
+            self.pattern_strength_map               = dict(pattern_cfg.get('strength_map') or {})
+
+            # --- Apply CLI overrides (optional) ---
             if self.args:
-                if self.args.risk_per_trade:
+                if getattr(self.args, 'risk_per_trade', None) is not None:
                     self.risk_per_trade = self.args.risk_per_trade
-                if self.args.symbol:
+                    self.risk_management_settings['risk_per_trade'] = self.risk_per_trade
+                if getattr(self.args, 'symbol', None):
                     self.symbols = [{'name': self.args.symbol, 'timeframes': ['M15']}]
-                if self.args.timeframe:
+                if getattr(self.args, 'timeframe', None):
                     for sym in self.symbols:
                         sym['timeframes'] = [self.args.timeframe]
-                        
-            if isinstance(getattr(self, 'risk_management_settings', None), dict):
+
+            # Keep risk_management_settings in sync with any flattened attrs
+            if isinstance(self.risk_management_settings, dict):
                 self.risk_management_settings.update({
                     'risk_per_trade': self.risk_per_trade,
                     'fixed_lot_size': self.fixed_lot_size,
@@ -119,107 +149,12 @@ class Config:
                 })
 
             logger.info(f"Configuration loaded successfully from {self.config_path}")
-            
+
         except FileNotFoundError:
-            logger.error(f"Configuration file {self.config_path} not found")
-            self.set_defaults()
+            # No silent fallbacks fail fast so configs stay the single source of truth
+            raise
         except json.JSONDecodeError as e:
-            logger.error(f"Error parsing configuration file: {e}")
-            self.set_defaults()
-    
-    def set_defaults(self):
-        """Set default configuration values"""
-        self.max_period = 50
-        self.main_loop_interval = 60
-        self.order_retry_attempts = 3
-        self.lookback_period = 20
-        self.swing_window = 5
-        self.breakout_threshold = 5
-        self.min_peak_rank = 2
-        self.proximity_threshold = 10
-        self.risk_per_trade = 0.02
-        self.fixed_lot_size = None
-        self.max_drawdown = 0.1
-        self.risk_reward_ratio = 1.25
-        self.correlation_threshold = 0.7
-        self.correlation_lookback_period = 30
-        self.risk_management_settings = {
-            'risk_per_trade': self.risk_per_trade,
-            'fixed_lot_size': self.fixed_lot_size,
-            'max_drawdown_percentage': self.max_drawdown,
-            'risk_reward_ratio': self.risk_reward_ratio,
-            'correlation_threshold': self.correlation_threshold,
-            'correlation_lookback_period': self.correlation_lookback_period,
-        }
-        self.symbols = [{'name': 'EURUSD', 'timeframes': ['M15']}]
-        self.trading_sessions = []
-        self.min_stop_loss_pips = 20
-        self.stop_loss_buffer_pips = 15
-        self.min_range_pips = 10
-        self.atr_period = 14
-        self.atr_tp_multiplier = 4.0
-        self.session_based_tp = True
-        self.volatility_adjustment = True
-        self.enable_news_filter = True
-
-        base_dir = self.config_path.parent
-        self.symbol_config_dir = (base_dir / 'symbol_configs').resolve()
-        self.calibrator_state_dir = (base_dir / 'calibrator_states').resolve()
-        self.optimizer_state_dir = (base_dir / 'optimizer_states').resolve()
-        self.calibration_settings = {}
-
-class TradingSession:
-    """Manages trading session times"""
-    
-    def __init__(self, config: Config):
-        self.config = config
-        # Log session info on creation for clarity
-        try:
-            self.log_session_info()
-        except Exception:
-            pass
-        
-    def is_trading_time(self) -> bool:
-        """Check if current time is within any defined trading session"""
-        if not self.config.trading_sessions:
-            return True  # Trade 24/7 if no sessions defined
-        
-        current_time = datetime.now().time()
-        
-        for session in self.config.trading_sessions:
-            start = session['start_time']
-            end = session['end_time']
-            
-            # Handle sessions that cross midnight
-            if start <= end:
-                if start <= current_time <= end:
-                    logger.debug(f"Within {session['name']} session")
-                    return True
-            else:
-                if current_time >= start or current_time <= end:
-                    logger.debug(f"Within {session['name']} session")
-                    return True
-        
-        return False
-
-    def log_session_info(self):
-        """Log configured sessions and local time zone info"""
-        try:
-            now_local = datetime.now().astimezone()
-            tzname = now_local.tzname()
-            offset = now_local.utcoffset()
-            logger.info(
-                f"Session timezone: {tzname} (UTC offset {offset}) | Local time: {now_local.strftime('%Y-%m-%d %H:%M:%S')}"
-            )
-            if not self.config.trading_sessions:
-                logger.info("No trading sessions configured (24/7 mode)")
-                return
-            for sess in self.config.trading_sessions:
-                logger.info(
-                    f"Session configured: {sess['name']} {sess['start_time']}â€“{sess['end_time']} (interpreted in local time)"
-                )
-        except Exception as e:
-            logger.debug(f"Failed to log session info: {e}")
+            raise ValueError(f"Invalid JSON in {self.config_path}: {e}") from e
 
 class TradingBot:
     """Main trading bot orchestrator"""
@@ -235,7 +170,7 @@ class TradingBot:
         self.recent_closures = {} 
         self.symbol_contexts: Dict[str, SymbolRuntimeContext] = {}
         self.load_memory_state()
-        self.session_manager = TradingSession(config)
+        self.session_manager = MarketSession(config)
         self.running = False
         self.initial_balance = None
         
@@ -256,11 +191,7 @@ class TradingBot:
             
             self.market_data = MarketData(self.mt5_client, self.config)
             self.strategy = PurePriceActionStrategy(self.config)
-            # Disable M1 confirmation for now
-            try:
-                self.strategy.m1_confirmation_enabled = False
-            except Exception:
-                pass
+            # M1 confirmation removed from system
             self.risk_manager = RiskManager(self.config.risk_management_settings, self.mt5_client)
             from pathlib import Path as _P; self.trade_logger = TradeLogger(str((_P(__file__).parent / 'trades.log').resolve()))
 
@@ -306,8 +237,9 @@ class TradingBot:
         base_defaults = {
             'min_stop_loss_pips': float(getattr(self.strategy, 'min_stop_loss_pips', getattr(self.config, 'min_stop_loss_pips', 20))),
             'stop_loss_buffer_pips': float(getattr(self.strategy, 'stop_loss_buffer_pips', getattr(self.config, 'stop_loss_buffer_pips', 10))),
+            'stop_loss_atr_multiplier': float(getattr(self.strategy, 'stop_loss_atr_multiplier', getattr(self.config, 'stop_loss_atr_multiplier', 0.8))),
             'risk_reward_ratio': float(getattr(self.config, 'risk_reward_ratio', 1.5)),
-            'min_confidence': float(getattr(self.strategy, 'min_confidence', 0.5)),
+            'min_confidence': float(getattr(self.strategy, 'min_confidence', 0.6)),
         }
 
         self.symbol_contexts.clear()
@@ -400,8 +332,12 @@ class TradingBot:
             f"Confidence={signal.confidence:.2f}{trend_suffix}, "
             f"Calib={gating.get('probability', 0.0):.2f}/{gating.get('threshold', 0.0):.2f}"
         )
-        if not self.session_manager.is_trading_time():
-            logger.info("Outside trading session, signal ignored")
+        
+        phase = self.session_manager.get_phase()
+        if not self.session_manager.is_trade_window():
+            logger.info(
+                f"Outside trade window, current phase={phase.name}, session={phase.session}"
+            )
             return
         result = await self.execute_trade(signal, symbol, risk_overrides)
         if result:
@@ -415,24 +351,6 @@ class TradingBot:
                 if (now - ts).total_seconds() < 1800
             ]
             self.save_memory_state()
-
-    async def check_drawdown(self) -> bool:
-        """Check if maximum drawdown has been reached"""
-        if not self.initial_balance:
-            return False
-        
-        account_info = self.mt5_client.get_account_info()
-        if not account_info:
-            return False
-        
-        current_balance = account_info.balance
-        drawdown = (self.initial_balance - current_balance) / self.initial_balance
-        
-        if drawdown >= self.config.max_drawdown:
-            logger.warning(f"Maximum drawdown reached: {drawdown:.2%}")
-            return True
-        
-        return False
     
     async def execute_trade(self, signal: TradingSignal, symbol: str, risk_overrides: Optional[Dict[str, float]] = None):
         """
@@ -440,13 +358,18 @@ class TradingBot:
         """
         risk_overrides = risk_overrides or {}
         try:
-            # Get symbol info for pip calculations
+            # Get symbol info for tick/pip calculations
             symbol_info = self.mt5_client.get_symbol_info(symbol)
             if not symbol_info:
                 logger.error(f"Failed to get symbol info for {symbol}")
                 return
             
-            pip_size = get_pip_size(symbol_info)
+            precision = get_symbol_precision(symbol_info, overrides=risk_overrides)
+            tick_size = precision.tick_size or 0.0
+            pip_size = precision.pip_size or tick_size
+            if tick_size <= 0 or pip_size <= 0:
+                logger.error(f"{symbol}: Unable to determine pip/tick precision")
+                return
             
             # Get current tick
             tick = self.mt5_client.get_symbol_info_tick(symbol)
@@ -460,10 +383,13 @@ class TradingBot:
             else:  # SELL
                 execution_price = tick.bid
             
-            # CRITICAL: Check price drift from signal (relative to risk)
+            # --- Drift validation ---
             price_drift = abs(execution_price - signal.entry_price)
-            # Estimate SL distance in pips with current execution price
-            provisional_sl_pips = abs(execution_price - signal.stop_loss) / pip_size
+
+            # Calculate provisional stop loss distances
+            provisional_sl_ticks = abs(execution_price - signal.stop_loss) / tick_size
+            provisional_sl_pips  = abs(execution_price - signal.stop_loss) / pip_size
+
             # Allow drift up to 25% of SL, bounded [2, 10] pips
             dynamic_max_drift_pips = max(2.0, min(10.0, 0.25 * provisional_sl_pips))
 
@@ -472,32 +398,30 @@ class TradingBot:
                     f"{symbol}: Price drifted too far\n"
                     f"  Signal: {signal.entry_price:.5f}\n"
                     f"  Current: {execution_price:.5f}\n"
-                    f"  Drift: {price_drift/pip_size:.1f} pips (limit {dynamic_max_drift_pips:.1f})\n"
-                    f"  TRADE SKIPPED"
+                    f"  Drift: {price_drift/tick_size:.1f} ticks (approx {price_drift/pip_size:.1f} pips)\n"
+                    f"  Limit: {dynamic_max_drift_pips:.1f} pips\n"
+                    "  TRADE SKIPPED"
                 )
-                return
-            
-            # Recalculate position size with ACTUAL entry price
+            # --- Recalculate SL distance at actual entry price ---
             actual_sl_distance = abs(execution_price - signal.stop_loss)
-            actual_sl_pips = actual_sl_distance / pip_size
+            sl_ticks = actual_sl_distance / tick_size
+            sl_pips  = actual_sl_distance / pip_size
             
             # Validate minimum stop loss
-            min_sl_floor = self.config.min_stop_loss_pips
-            if isinstance(signal.parameters, dict):
-                try:
-                    min_sl_floor = float(signal.parameters.get('min_stop_loss_pips', min_sl_floor))
-                except (TypeError, ValueError):
-                    pass
-            if actual_sl_pips < min_sl_floor:
-                logger.warning(
-                    f"{symbol}: SL too tight after drift ({actual_sl_pips:.1f} pips < {min_sl_floor:.1f}) - skipping"
-                )
+            min_sl_floor = (
+                float(signal.parameters.get('min_stop_loss_pips', self.config.min_stop_loss_pips))
+                if isinstance(signal.parameters, dict) else self.config.min_stop_loss_pips
+            )
+
+            if not self.risk_manager.validate_stop_loss(
+                symbol_info, execution_price, signal.stop_loss, min_sl_floor, overrides=risk_overrides
+            ):
                 return
             
-            # Calculate position size
+            # --- Position sizing ---
             position_size = self.risk_manager.calculate_position_size(
                 symbol=symbol,
-                stop_loss_pips=actual_sl_pips,
+                stop_loss_pips=sl_pips,  # pass display pips to risk manager
                 overrides=risk_overrides
             )
             
@@ -505,7 +429,7 @@ class TradingBot:
                 logger.warning(f"{symbol}: Invalid position size calculated")
                 return
             
-            # Final validation
+            # --- Final parameter validation ---
             if not self.risk_manager.validate_trade_parameters(
                 symbol=symbol,
                 volume=position_size,
@@ -515,12 +439,12 @@ class TradingBot:
                 logger.warning(f"{symbol}: Trade parameters validation failed")
                 return
             
-            # Check risk limits
+            # --- Risk limits ---
             if not self.risk_manager.check_risk_limits(symbol, signal.type, overrides=risk_overrides):
                 logger.info(f"{symbol}: Risk limits prevent trading")
                 return
             
-            # EXECUTE THE TRADE
+            # --- EXECUTE THE TRADE ---
             result = self.mt5_client.place_order(
                 symbol=symbol,
                 order_type=signal.type,
@@ -542,41 +466,45 @@ class TradingBot:
                 elif features_snapshot:
                     calibrator_meta = {'features': features_snapshot}
 
-                
-                # Try to capture the live position ticket for robust closure tracking
+                # Capture live position ticket for robust closure tracking
+                pos_id = None
                 try:
                     pos_list = self.mt5_client.get_positions(symbol)
                     if pos_list and len(pos_list) >= 1:
-                        pos_id = None
                         for pos in pos_list:
                             if getattr(pos, 'type', None) == signal.type:
                                 pos_id = getattr(pos, 'ticket', None)
                                 break
                         if pos_id is None:
                             pos_id = getattr(pos_list[0], 'ticket', None)
-                        if pos_id is not None:
-                            trade_details['position_ticket'] = int(pos_id)
-                except Exception:
-                    pass
+                except Exception as _e:
+                    logger.debug(f"Failed to capture position ticket for {symbol}: {_e}")
 
                 trade_details = {
                     'timestamp': datetime.now(),
-
                     'symbol': symbol,
                     'order_type': 'BUY' if signal.type == 0 else 'SELL',
                     'entry_price': result.price,
                     'signal_price': signal.entry_price,  # Track signal vs execution
                     'volume': position_size,
                     'stop_loss': signal.stop_loss,
-                    'stop_loss_pips': signal.stop_loss_pips,
+                    'stop_loss_ticks': sl_ticks,
+                    'stop_loss_pips': sl_pips,
                     'take_profit': signal.take_profit,
                     'ticket': result.order,
                     'reason': signal.reason,
                     'confidence': signal.confidence,
                     'signal_time': signal.timestamp,
+                    'drift_ticks': price_drift / tick_size,
                     'drift_pips': price_drift / pip_size,
-                    'pip_size': pip_size,
+                    'tick_size': tick_size,
                 }
+
+                if pos_id is not None:
+                    try:
+                        trade_details['position_ticket'] = int(pos_id)
+                    except Exception:
+                        trade_details['position_ticket'] = pos_id
 
                 if parameter_snapshot:
                     trade_details['parameters'] = parameter_snapshot
@@ -597,13 +525,13 @@ class TradingBot:
                 
                 logger.info(
                     f"*** TRADE EXECUTED ***\n"
-                    f"  Symbol: {symbol}\n"
+                    f"Symbol: {symbol}\n"
                     f"  Type: {'BUY' if signal.type == 0 else 'SELL'}\n"
                     f"  Executed: {result.price:.5f}\n"
                     f"  Signal was: {signal.entry_price:.5f}\n"
-                    f"  Drift: {price_drift/pip_size:.1f} pips\n"
+                    f"  Drift: {price_drift/tick_size:.1f} ticks (~{price_drift/pip_size:.1f} pips)\n"
                     f"  Volume: {position_size:.2f}\n"
-                    f"  Risk: {actual_sl_pips:.1f} pips\n"
+                    f"  Risk: {sl_ticks:.1f} ticks (~{sl_pips:.1f} pips)\n"
                     f"  Ticket: {result.order}"
                 )
                 return result
@@ -612,10 +540,10 @@ class TradingBot:
                 logger.error(f"{symbol}: Trade execution failed - {error_msg}")
                 return None
             
-            
         except Exception as e:
             logger.error(f"Error executing trade for {symbol}: {e}", exc_info=True)
             return None
+
                 
     async def process_symbol(self, symbol_config: Dict):
         """
@@ -647,77 +575,49 @@ class TradingBot:
         if not symbol_info:
             logger.error(f"Failed to get symbol info for {symbol}")
             return
-        pip_size = get_pip_size(symbol_info)
+        
+        precision = get_symbol_precision(symbol_info, overrides=risk_overrides)
+        tick_size = precision.tick_size or 0.0
+        pip_size = precision.pip_size or tick_size
 
-        # Check if symbol is in cooldown with IMPROVED logic (different times for TP/SL)
+
+        # Check if symbol is in cooldown (different times for TP/SL closures)
         if symbol in self.recent_closures:
             closure_time, exit_price, status = self.recent_closures[symbol]
             time_since_close = (datetime.now() - closure_time).total_seconds()
-            
-            # Different cooldowns based on how trade closed
+
             if status == 'CLOSED_TP':
-                cooldown_period = 900  # 15 minutes after TP (market digesting the move)
+                cooldown_period = 900  # 15 minutes after TP
             elif status == 'CLOSED_SL':
-                cooldown_period = 300  # 5 minutes after SL (failed move, can retry sooner)
+                cooldown_period = 300  # 5 minutes after SL
             else:  # CLOSED_MANUAL or CLOSED_UNKNOWN
                 cooldown_period = 600  # 10 minutes default
-            
+
             if time_since_close < cooldown_period:
-                logger.info(f"{symbol} in cooldown for {cooldown_period-time_since_close:.0f}s more (closed {status} {time_since_close/60:.1f} min ago)")
+                logger.info(
+                    f"{symbol} in cooldown for {cooldown_period-time_since_close:.0f}s more "
+                    f"(closed {status} {time_since_close/60:.1f} min ago)"
+                )
                 return
-        
-        # NEW: Check consumed breakouts BEFORE signal generation to save computation
-        if symbol in self.consumed_breakouts:
-            current_time = datetime.now()
-            symbol_info = self.mt5_client.get_symbol_info(symbol)
-            if symbol_info:
-                pip_size = get_pip_size(symbol_info)
-                
-                # Get current price for comparison
-                tick = self.mt5_client.get_symbol_info_tick(symbol)
-                if tick:
-                    # Clean old entries and check if current price is near recently traded levels
-                    active_breakouts = []
-                    for level, direction, timestamp in self.consumed_breakouts[symbol]:
-                        age = (current_time - timestamp).total_seconds()
-                        
-                        if age < 1800:  # Keep for 30 minutes
-                            active_breakouts.append((level, direction, timestamp))
-                            
-                            # Check if we're still near this consumed breakout level
-                            if age < 900:  # Block re-entry for 15 minutes
-                                current_price = tick.bid if direction == 'bearish' else tick.ask
-                                distance_pips = abs(current_price - level) / pip_size
-                                
-                                # If price is still near the consumed level, skip
-                                if distance_pips < 20:  # Within 20 pips of consumed level
-                                    logger.info(
-                                        f"{symbol}: Already traded {direction} breakout at {level:.5f} "
-                                        f"({age/60:.1f} min ago). Current price {current_price:.5f} still near level. Skipping."
-                                    )
-                                    return
-                    
-                    # Update with only non-expired breakouts
-                    self.consumed_breakouts[symbol] = active_breakouts
-        
+
         try:
             # Fetch multi-timeframe data
             mtf_data = await self.market_data.fetch_multi_timeframe_data(symbol)
-            
+
             if not mtf_data:
                 logger.warning(f"No data available for {symbol}")
                 return
-            
-            # Use H1 for trend, M15 for signal timing
+
+            # --- Case 1: H1 + M15 available ---
             if 'H1' in mtf_data and 'M15' in mtf_data:
-                # Get H1 trend direction using existing function
                 h1_trend = self.market_data.identify_trend(mtf_data['H1'])
                 logger.debug(f"{symbol} H1 trend: {h1_trend}")
-                
-                # Generate M15 signal with trend context
+
                 m15_signal = self.strategy.generate_signal(mtf_data['M15'], symbol, trend=h1_trend)
-                
+
                 if m15_signal:
+                    if self._is_recent_breakout_duplicate(symbol, m15_signal, pip_size):
+                        return
                     await self._handle_generated_signal(
                         symbol,
                         m15_signal,
@@ -729,16 +629,17 @@ class TradingBot:
                     )
                 else:
                     logger.debug(f"No signal generated for {symbol}")
-            
-            # FALLBACK: Single timeframe processing (if only one timeframe available)
+
+            # --- Case 2: Only M15 available ---
             elif 'M15' in mtf_data:
-                # Use M15 data for both trend and signal
                 m15_data = mtf_data['M15']
                 m15_trend = self.market_data.identify_trend(m15_data)
-                
+
                 signal = self.strategy.generate_signal(m15_data, symbol, trend=m15_trend)
-                
+
                 if signal:
+                    if self._is_recent_breakout_duplicate(symbol, signal, pip_size):
+                        return
                     await self._handle_generated_signal(
                         symbol,
                         signal,
@@ -749,54 +650,45 @@ class TradingBot:
                     )
                 else:
                     logger.debug(f"No signal generated for {symbol}")
-            
+
+            # --- Case 3: Only H1 available ---
             elif 'H1' in mtf_data:
-                # Use H1 data for both trend and signal
                 h1_data = mtf_data['H1']
                 h1_trend = self.market_data.identify_trend(h1_data)
-                
+
                 signal = self.strategy.generate_signal(h1_data, symbol, trend=h1_trend)
-                
+
                 if signal:
-                    # Check consumed breakouts (same logic)
-                    if symbol in self.consumed_breakouts:
-                        symbol_info = self.mt5_client.get_symbol_info(symbol)
-                        if symbol_info:
-                            pip_size = get_pip_size(symbol_info)
-                            for level, direction, timestamp in self.consumed_breakouts[symbol]:
-                                age = (datetime.now() - timestamp).total_seconds()
-                                if age < 900:
-                                    signal_direction = 'bullish' if signal.type == 0 else 'bearish'
-                                    if direction == signal_direction:
-                                        level_distance_pips = abs(signal.breakout_level - level) / pip_size
-                                        if level_distance_pips < 5:
-                                            logger.info(f"{symbol}: Duplicate breakout detected, skipping.")
-                                            return
-                    
+                    if self._is_recent_breakout_duplicate(symbol, signal, pip_size):
+                        return
+
                     logger.info(
                         f"Signal generated for {symbol}: "
                         f"Type={'BUY' if signal.type == 0 else 'SELL'}, "
                         f"Confidence={signal.confidence:.2f}"
                     )
-                    
-                    if self.session_manager.is_trading_time():
+
+                    if self.session_manager.is_trade_window():
                         result = await self.execute_trade(signal, symbol, risk_overrides)
-                        
+
                         if result:
                             if symbol not in self.consumed_breakouts:
                                 self.consumed_breakouts[symbol] = []
-                            
+
                             direction = 'bullish' if signal.type == 0 else 'bearish'
                             self.consumed_breakouts[symbol].append(
                                 (signal.breakout_level, direction, datetime.now())
                             )
-                            
+
                             self.save_memory_state()
                     else:
-                        logger.info("Outside trading session, signal ignored")
+                        phase = self.session_manager.get_phase()
+                        logger.info(
+                            f"Outside trade window, current phase={phase.name}, session={phase.session}"
+                        )
                 else:
                     logger.debug(f"No signal generated for {symbol}")
-                        
+
         except Exception as e:
             logger.error(f"Error processing {symbol}: {e}", exc_info=True)
                 
@@ -806,107 +698,114 @@ class TradingBot:
             return
             
         try:
-            open_trades = [t for t in self.trade_logger.get_all_trades() 
-                        if t.get('status') == 'OPEN']
+            # Treat any trade not marked CLOSED as open candidate (handles restarts)
+            open_trades = [
+                t for t in self.trade_logger.get_all_trades()
+                if not str(t.get('status', 'OPEN')).upper().startswith('CLOSED')
+            ]
+            logger.debug(f"sync_trade_status: {len(open_trades)} candidate trades to reconcile")
             
             if not open_trades:
                 return
                 
             # Get current positions
             current_positions = self.mt5_client.get_all_positions()
-            current_tickets = {pos.ticket for pos in current_positions}
+            current_tickets = {getattr(pos, 'ticket', None) for pos in current_positions}
             
             for trade in open_trades:
+                # Prefer position_ticket; if missing, try to map by symbol to a live position
                 ticket = trade.get('position_ticket') or trade.get('ticket')
+                if 'position_ticket' not in trade or not trade.get('position_ticket'):
+                    try:
+                        sym = trade.get('symbol')
+                        match = next((p for p in current_positions if getattr(p, 'symbol', None) == sym), None)
+                        if match:
+                            ticket = getattr(match, 'ticket', ticket)
+                    except Exception as _e:
+                        logger.debug(f"Symbol-to-position mapping skipped: {_e}")
                 if ticket and ticket not in current_tickets:
                     # Position was closed
-                    logger.info(f"Position {ticket} closed, fetching details...")
+                    logger.info(f"Position {ticket} no longer in open positions. Resolving closure from history...")
                     
-                    # Get the closing deal information
                     end_time = datetime.now()
                     start_time = datetime.fromisoformat(trade['timestamp'])
                     
-                    # Get history of deals
-                    deals = self.mt5_client.get_history_deals(start_time, end_time)
-                    
-                    exit_price = 0
-                    profit = 0
-                    commission = 0
-                    
-                    # Find ALL deals related to this position (prefer position_ticket)
-                    deals = None
+                    exit_price = 0.0
+                    profit = 0.0
+                    commission = 0.0
+                    status = 'CLOSED_UNKNOWN'
+
+                    # Try MT5 deals by position first
+                    deals_by_pos = None
                     try:
-                        deals = self.mt5_client.get_history_deals_by_position(ticket)
-                    except Exception:
-                        deals = None
-                    
-                    if deals:
-                        for deal in deals:
-                            if hasattr(deal, 'entry') and deal.entry == 1:  # DEAL_ENTRY_OUT
-                                exit_price = deal.price
-                                profit += deal.profit + getattr(deal, 'commission', 0) + getattr(deal, 'swap', 0)
-                                
-                                # Determine closure reason
-                                reason = getattr(deal, 'reason', 0)
-                                if reason == 4:
-                                    status = 'CLOSED_SL'
-                                elif reason == 5:
-                                    status = 'CLOSED_TP'
-                                else:
-                                    status = 'CLOSED_MANUAL'
-                                break
-                    
-                    status = 'CLOSED_UNKNOWN'  # Default status
-                    if exit_price == 0:
-                        # Fallback if no exit deal found (e.g., manual closure, partial close)
-                        logger.warning(f"No exit deal found for position {ticket}, trying to infer status.")
-                        
-                        # Check history again with a wider time range
-                        history_orders = self.mt5_client.get_history_orders(ticket)
-                        if history_orders:
-                            for order in history_orders:
-                                if order.type == 1:  # Sell order for a buy position
-                                    exit_price = order.price_done
-                                    break
-                                elif order.type == 0:  # Buy order for a sell position
-                                    exit_price = order.price_done
-                                    break
-                        
-                        if exit_price != 0:
-                            logger.info(f"Inferred exit price {exit_price} from order history.")
-                        else:
-                            logger.error(f"Could not determine exit price for {ticket}. Status remains UNKNOWN.")
+                        deals_by_pos = self.mt5_client.get_history_deals_by_position(int(ticket))
+                    except Exception as _e:
+                        logger.debug(f"get_history_deals_by_position({ticket}) failed: {_e}")
 
-                    # Determine closure status from deal reason if possible
-                    if deals:
-                        for deal in deals:
-                            if deal.entry == 1:  # Out-deal
-                                reason = getattr(deal, 'reason', 0)
-                                if reason == 4: # DEAL_REASON_SL
+                    if deals_by_pos:
+                        exit_deals = [d for d in deals_by_pos if getattr(d, 'entry', None) == 1]
+                        if exit_deals:
+                            d = sorted(exit_deals, key=lambda x: getattr(x, 'time', 0))[-1]
+                            exit_price = float(getattr(d, 'price', 0.0) or 0.0)
+                            profit = float(getattr(d, 'profit', 0.0) or 0.0)
+                            commission = float(getattr(d, 'commission', 0.0) or 0.0) + float(getattr(d, 'swap', 0.0) or 0.0)
+                            r = getattr(d, 'reason', 0)
+                            if r == 4:
+                                status = 'CLOSED_SL'
+                            elif r == 5:
+                                status = 'CLOSED_TP'
+                            else:
+                                status = 'CLOSED_MANUAL'
+                        else:
+                            logger.info(f"No exit deal found in deals_by_position for {ticket}")
+
+                    # Fallback: scan the general history window and filter by symbol
+                    if exit_price == 0.0:
+                        all_deals = []
+                        try:
+                            all_deals = self.mt5_client.get_history_deals(start_time, end_time)
+                        except Exception as _e:
+                            logger.debug(f"get_history_deals window failed: {_e}")
+                        symbol = trade.get('symbol')
+                        if all_deals and symbol:
+                            exit_candidates = [d for d in all_deals if getattr(d, 'entry', None) == 1 and getattr(d, 'symbol', None) == symbol]
+                            if exit_candidates:
+                                d = sorted(exit_candidates, key=lambda x: getattr(x, 'time', 0))[-1]
+                                exit_price = float(getattr(d, 'price', 0.0) or 0.0)
+                                profit = float(getattr(d, 'profit', 0.0) or 0.0)
+                                commission = float(getattr(d, 'commission', 0.0) or 0.0) + float(getattr(d, 'swap', 0.0) or 0.0)
+                                r = getattr(d, 'reason', 0)
+                                if r == 4:
                                     status = 'CLOSED_SL'
-                                elif reason == 5: # DEAL_REASON_TP
+                                elif r == 5:
                                     status = 'CLOSED_TP'
                                 else:
                                     status = 'CLOSED_MANUAL'
-                                break # Exit after finding the main closing deal
+                            else:
+                                logger.warning(f"No exit deals found for {symbol} within history window")
+
+                    if exit_price == 0.0:
+                        logger.warning(f"Unable to determine exit for ticket {ticket}; will retry next cycle")
+                        continue
                     
-                    # If status is still unknown, try to infer from price
+                    # If status is still unknown, try to infer from price proximity to SL/TP
                     if status == 'CLOSED_UNKNOWN' and exit_price != 0:
-                        pip_size = get_pip_size(self.mt5_client.get_symbol_info(trade['symbol']))
-                        
-                        # Check against SL/TP with a tolerance
-                        sl_diff = abs(exit_price - trade['stop_loss'])
-                        tp_diff = abs(exit_price - trade['take_profit'])
-                        
-                        logger.info(f"Inferring close reason for {ticket}: exit_price={exit_price}, tp={trade['take_profit']}, sl={trade['stop_loss']}")
-                        logger.info(f"TP diff: {tp_diff}, SL diff: {sl_diff}, tolerance: {10 * pip_size}")
+                        sym_info = self.mt5_client.get_symbol_info(trade['symbol'])
+                        tick_size = get_tick_size(sym_info) if sym_info else 0.0001
+                        sl = trade.get('stop_loss')
+                        tp = trade.get('take_profit')
+                        sl_diff = abs(exit_price - sl) if sl is not None else float('inf')
+                        tp_diff = abs(exit_price - tp) if tp is not None else float('inf')
+                        tol = 10 * tick_size
+                        logger.info(f"Inferring close reason for {ticket}: exit_price={exit_price}, tp={tp}, sl={sl}")
+                        logger.info(f"TP diff: {tp_diff}, SL diff: {sl_diff}, tolerance: {tol}")
 
-                        if sl_diff < 10 * pip_size:
-                            status = 'CLOSED_SL'
-                        elif tp_diff < 10 * pip_size:
+                        if tp is not None and tp_diff < tol:
                             status = 'CLOSED_TP'
+                        elif sl is not None and sl_diff < tol:
+                            status = 'CLOSED_SL'
                         else:
-                            status = 'CLOSED_MANUAL' # If not near SL/TP, likely manual
+                            status = 'CLOSED_MANUAL'
 
 
                     self.trade_logger.update_trade(
@@ -1063,11 +962,6 @@ class TradingBot:
                         logger.debug(f"Trading is paused: {reason}. Skipping this cycle.")
                         await asyncio.sleep(self.config.main_loop_interval)
                         continue
-
-                # Check for maximum drawdown
-                if await self.check_drawdown():
-                    logger.error("Maximum drawdown reached, stopping bot")
-                    break
                 
                 # Sync trade status with MT5
                 await self.sync_trade_status()                
@@ -1149,3 +1043,8 @@ if __name__ == "__main__":
     except Exception as e:
         logger.error(f"Unhandled exception: {e}")
         sys.exit(1)
+
+
+
+
+
