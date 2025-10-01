@@ -30,6 +30,22 @@
   "pattern_settings": {
     "pattern_only_momentum": false
   },
+  "breakout_confirmation": {
+  "enabled": true,
+  "modes": ["time_above", "retest_hold", "body_close"],
+  "min_votes": 1,
+  "zone_atr_mult": 0.15,
+  "min_zone_pips": 2.0,
+  "instant_buffer_mult": 0.10,
+  "close_buffer_mult": 0.12,
+  "retest_tol_mult": 0.08,
+  "min_buffer_pips": 0.3,
+  "time_above_seconds": 45,
+  "retest_max_lookahead": 5,
+  "min_excursion_mult": 0.30,
+  "entry_style": "market_on_confirm"
+}
+,
   "calibration": {
     "enabled": true,
     "margin": 0.15,

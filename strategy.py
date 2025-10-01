@@ -80,8 +80,27 @@ class PurePriceActionStrategy:
         self.backtest_mode = getattr(config, "backtest_mode", False)
 
         # Optional: require last closed candle to confirm beyond the level
-        self.require_close_breakout = getattr(config, "require_close_breakout", False)
-        self.close_breakout_buffer_pips = getattr(config, "close_breakout_buffer_pips", 0.2)
+        self.require_close_breakout = getattr(config, "require_close_breakout", 0.0)
+        self.breakout_confirmation = {
+            "enabled": True,
+            "modes": ["time_above", "retest_hold", "body_close"],
+            "min_votes": 1,
+            "zone_atr_mult": 0.15,
+            "min_zone_pips": 2.0,
+            "instant_buffer_mult": 0.10,
+            "close_buffer_mult": 0.12,
+            "retest_tol_mult": 0.08,
+            "min_buffer_pips": 0.3,
+            "time_above_seconds": 45,
+            "retest_max_lookahead": 5,
+            "min_excursion_mult": 0.30,
+            "entry_style": "market_on_confirm"
+        }
+        bc = getattr(config, "breakout_confirmation", None)
+        if isinstance(bc, dict):
+            self.breakout_confirmation.update(bc)
+        self._brk_state = {}  # per-symbol FSM state
+        
         self.min_clv_no_pattern = getattr(config, "min_clv_no_pattern", 0.55)  # optional sanity check
 
         # Candlestick patterns influence (configurable, soft)
@@ -121,6 +140,149 @@ class PurePriceActionStrategy:
             return bool(val >= 0.5)
         except Exception:
             return bool(default)
+        
+        # ---------- Breakout Confirmation (FSM) helpers ----------
+    def _bcfg(self, key, default=None):
+        """Read breakout_confirmation config key with a default."""
+        return self.breakout_confirmation.get(key, default)
+
+    def _zone_bounds(self, level: float, atr: float, pip_size: float) -> Tuple[float, float]:
+        """Compute breakout acceptance zone around the S/R level."""
+        min_zone = self._bcfg("min_zone_pips", 2.0) * pip_size if pip_size > 0 else 0.0
+        atr_zone = (atr or 0.0) * self._bcfg("zone_atr_mult", 0.15)
+        w = max(min_zone, atr_zone)
+        return level - w / 2.0, level + w / 2.0
+
+    def _buf(self, kind: str, spread: float, atr: float, pip_size: float) -> float:
+        """
+        Get adaptive buffer for 'instant', 'close', or 'retest_tol' checks.
+        Uses max(min_buffer_pips, spread, atr * mult).
+        """
+        if kind == "instant_buffer":
+            mult = self._bcfg("instant_buffer_mult", 0.10)
+        elif kind == "close_buffer":
+            mult = self._bcfg("close_buffer_mult", 0.12)
+        elif kind == "retest_tol":
+            mult = self._bcfg("retest_tol_mult", 0.08)
+        else:
+            mult = 0.10
+
+        min_buf = self._bcfg("min_buffer_pips", 0.3) * (pip_size if pip_size > 0 else 1.0)
+        return max(min_buf, float(spread or 0.0), float(atr or 0.0) * float(mult))
+
+    def _arm_breakout(
+        self,
+        symbol: str,
+        direction: str,           # "bullish" or "bearish"
+        level: float,
+        price: float,
+        spread: float,
+        atr: float,
+        pip_size: float,
+        now_ts: float,
+    ) -> bool:
+        """Arm the FSM when price trades beyond the zone + instant buffer."""
+        lo, hi = self._zone_bounds(level, atr, pip_size)
+        buf = self._buf("instant_buffer", spread, atr, pip_size)
+
+        if direction == "bullish" and price >= hi + buf:
+            self._brk_state[symbol] = {
+                "armed": {"dir": "long", "level": level, "lo": lo, "hi": hi, "max_exc": 0.0, "armed_ts": now_ts},
+                "dwell_start": None,
+                "last_touch_ts": None,
+            }
+            logger.info(f"{symbol}: FSM ARMED long zone=({lo:.5f},{hi:.5f}) price={price:.5f}")
+            return True
+
+        if direction == "bearish" and price <= lo - buf:
+            self._brk_state[symbol] = {
+                "armed": {"dir": "short", "level": level, "lo": lo, "hi": hi, "max_exc": 0.0, "armed_ts": now_ts},
+                "dwell_start": None,
+                "last_touch_ts": None,
+            }
+            logger.info(f"{symbol}: FSM ARMED short zone=({lo:.5f},{hi:.5f}) price={price:.5f}")
+            return True
+
+        return False
+
+    def _update_acceptance(
+        self,
+        symbol: str,
+        completed_data: pd.DataFrame,  # closed candles (last row = last closed)
+        forming_row: pd.Series,        # current forming candle
+        spread: float,
+        atr: float,
+        pip_size: float,
+        now_ts: float,
+    ) -> Optional[Dict[str, float]]:
+        """
+        Accrue acceptance 'votes' after arming, then confirm if votes >= min_votes
+        and minimum excursion is satisfied.
+        """
+        st = self._brk_state.get(symbol)
+        if not st or not st.get("armed"):
+            return None
+
+        a = st["armed"]
+        lo, hi = a["lo"], a["hi"]
+
+        # Track excursion using forming candle
+        if a["dir"] == "long":
+            a["max_exc"] = max(a["max_exc"], max(0.0, float(forming_row["high"]) - hi))
+        else:
+            a["max_exc"] = max(a["max_exc"], max(0.0, lo - float(forming_row["low"])))
+
+        # Voting modes
+        votes = 0
+        modes = set(self._bcfg("modes", []))
+        min_votes = int(self._bcfg("min_votes", 1))
+        close_buf = self._buf("close_buffer", spread, atr, pip_size)
+
+        # 1) body_close: any last closed candle beyond zone + buffer
+        if "body_close" in modes and len(completed_data) > 0:
+            lc = float(completed_data.iloc[-1]["close"])
+            if (a["dir"] == "long" and lc > hi + close_buf) or (a["dir"] == "short" and lc < lo - close_buf):
+                votes += 1
+
+        # 2) time_above: dwell time beyond the zone on the forming bar
+        if "time_above" in modes:
+            in_ctrl = (a["dir"] == "long" and float(forming_row["low"]) >= hi) or \
+                      (a["dir"] == "short" and float(forming_row["high"]) <= lo)
+            if in_ctrl and st["dwell_start"] is None:
+                st["dwell_start"] = now_ts
+            if not in_ctrl:
+                st["dwell_start"] = None
+            dwell_needed = float(self._bcfg("time_above_seconds", 45))
+            if st["dwell_start"] is not None and (now_ts - st["dwell_start"]) >= dwell_needed:
+                votes += 1
+
+        # 3) retest_hold: first pullback touches the zone but does NOT close back inside
+        if "retest_hold" in modes and len(completed_data) > 0:
+            last = completed_data.iloc[-1]
+            retest_ok = False
+            if a["dir"] == "long":
+                touched = float(last["low"]) <= hi and float(last["low"]) >= lo
+                held = float(last["close"]) >= hi  # close remains above zone
+                retest_ok = touched and held
+            else:
+                touched = float(last["high"]) >= lo and float(last["high"]) <= hi
+                held = float(last["close"]) <= lo  # close remains below zone
+                retest_ok = touched and held
+            if retest_ok:
+                votes += 1
+
+        # Guard: require a minimum excursion away from the zone to avoid stop-runs
+        min_exc = float(self._bcfg("min_excursion_mult", 0.30)) * float(atr or 0.0)
+        if atr is not None and atr > 0 and a["max_exc"] < min_exc:
+            return None
+
+        if votes >= min_votes:
+            self._brk_state[symbol]["confirmed"] = {"dir": a["dir"], "level": a["level"], "lo": lo, "hi": hi}
+            logger.info(f"{symbol}: FSM CONFIRMED dir={a['dir']} votes={votes} exc={a['max_exc']:.5f}")
+            return self._brk_state[symbol]["confirmed"]
+
+        return None
+
 
     def _build_calibrator_features(
         self,
@@ -612,18 +774,26 @@ class PurePriceActionStrategy:
                 f"distance={breakout.distance_pips:.1f}p, strength={breakout.strength_score:.2f}"
             )
 
-            # Optional: require last closed candle to have closed beyond the broken level (softens false breaks)
-            if self._flag('require_close_breakout', self.require_close_breakout) and len(completed_data) > 0:
-                last_closed = completed_data.iloc[-1]
-                buffer = self.close_breakout_buffer_pips * pip_size
-                if breakout.type == 'bullish':
-                    if not (last_closed['close'] > breakout.level + buffer):
-                        logger.info(f"{symbol}: Last close not beyond level (bullish); skipping by close-confirm rule.")
+            use_fsm = float(self._flag('require_close_breakout', self.require_close_breakout) or 0.0) >= 0.5
+            if use_fsm and self._bcfg("enabled", True):
+                spread = (tick.ask - tick.bid) if tick else 0.0
+                pip_size = precision.pip_size or (precision.tick_size or 0.0001)
+                now_ts = float(getattr(tick, "time", 0))
+                if symbol not in self._brk_state or not self._brk_state[symbol].get("armed"):
+                    self._arm_breakout(symbol,
+                                    "bullish" if breakout.type == "bullish" else "bearish",
+                                    breakout.level, breakout.entry_price,
+                                    spread, atr or 0.0, pip_size, now_ts)
+                    if not self._brk_state.get(symbol, {}).get("armed"):
                         return None
-                else:
-                    if not (last_closed['close'] < breakout.level - buffer):
-                        logger.info(f"{symbol}: Last close not beyond level (bearish); skipping by close-confirm rule.")
-                        return None
+                confirmed = self._update_acceptance(symbol, completed_data, forming_candle,
+                                                    spread, atr or 0.0, pip_size, now_ts)
+                if not confirmed:
+                    return None
+                if self._bcfg("entry_style") == "limit_on_retest":
+                    breakout = (breakout._replace(entry_price=confirmed["hi"])
+                                if breakout.type == "bullish" else
+                                breakout._replace(entry_price=confirmed["lo"]))
             
             # Structure distance check
             res_levels = sorted(resistance_levels)
@@ -780,6 +950,10 @@ class PurePriceActionStrategy:
                 'stop_loss_atr_multiplier': float(stop_loss_atr_multiplier),
                 'risk_reward_ratio': float(risk_reward_ratio),
                 'min_confidence': float(min_confidence),
+                'breakout_threshold_pips': float(self._param('breakout_threshold_pips', self.breakout_threshold_pips)),
+                'min_peak_rank': float(self._param('min_peak_rank', self.min_peak_rank)),
+                'proximity_threshold_pips': float(self._param('proximity_threshold_pips', self.proximity_threshold)),
+                'require_close_breakout': float(self._param('require_close_breakout', self.require_close_breakout)),
             }
             # Include patterns and settings for logging/traceability
             parameter_snapshot['patterns'] = list(patterns_found) if patterns_found else []
@@ -897,4 +1071,3 @@ class PurePriceActionStrategy:
                 consolidated_levels.append(price)
 
         return sorted(consolidated_levels)
-
