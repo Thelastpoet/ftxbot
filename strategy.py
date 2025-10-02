@@ -14,7 +14,7 @@ except Exception:
     TALIB_AVAILABLE = False
 
 import logging
-from typing import Dict, List, Optional, Tuple, NamedTuple
+from typing import Any, Dict, List, Optional, Tuple, NamedTuple
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
@@ -70,11 +70,6 @@ class PurePriceActionStrategy:
         self.min_confidence = getattr(config, "min_confidence", 0.5)
         self.proximity_threshold = getattr(config, "proximity_threshold", 20)  # in pips
         self.min_peak_rank = getattr(config, "min_peak_rank", 2)  # min confirmations
-
-        # M1 confirmation settings (default off to avoid over-restriction)
-        self.m1_confirmation_enabled = getattr(config, "m1_confirmation_enabled", False)
-        self.m1_confirmation_candles = getattr(config, "m1_confirmation_candles", 1)
-        self.m1_confirmation_buffer_pips = getattr(config, "m1_confirmation_buffer_pips", 0.5)
 
         # Backtest mode: disables real-time age/close filters
         self.backtest_mode = getattr(config, "backtest_mode", False)
@@ -141,7 +136,7 @@ class PurePriceActionStrategy:
         except Exception:
             return bool(default)
         
-        # ---------- Breakout Confirmation (FSM) helpers ----------
+    # ---------- Breakout Confirmation (FSM) helpers ----------
     def _bcfg(self, key, default=None):
         """Read breakout_confirmation config key with a default."""
         return self.breakout_confirmation.get(key, default)
@@ -169,6 +164,32 @@ class PurePriceActionStrategy:
 
         min_buf = self._bcfg("min_buffer_pips", 0.3) * (pip_size if pip_size > 0 else 1.0)
         return max(min_buf, float(spread or 0.0), float(atr or 0.0) * float(mult))
+
+    def _price_scale(self, pip_size: float, tick_size: float) -> float:
+        """Return price scaling unit, defaulting to pip->tick->1.0."""
+        if pip_size and pip_size > 0:
+            return pip_size
+        if tick_size and tick_size > 0:
+            return tick_size
+        return 1.0
+
+    def _distance_requirements(self, atr: Optional[float], pip_size: float, tick_size: float) -> Tuple[float, float, float]:
+        """Return (min_distance, max_extension, price_scale) for breakout validation."""
+        price_scale = self._price_scale(pip_size, tick_size)
+        threshold = self._param('breakout_threshold_pips', self.breakout_threshold_pips) * price_scale
+        if atr and atr > 0:
+            min_distance = max(threshold, float(atr) * self.min_extension_atr)
+            max_extension = float(atr) * self.max_extension_atr
+        else:
+            min_distance = threshold
+            max_extension = price_scale * 20.0
+        return float(min_distance), float(max_extension), float(price_scale)
+
+    def _breakout_strength(self, distance: float, atr: Optional[float], price_scale: float) -> float:
+        if atr and atr > 0:
+            return float(np.clip(distance / atr, 0.0, 1.0))
+        base_scale = price_scale if price_scale > 0 else 1.0
+        return float(np.clip(distance / (10.0 * base_scale), 0.0, 1.0))
 
     def _arm_breakout(
         self,
@@ -282,7 +303,6 @@ class PurePriceActionStrategy:
             return self._brk_state[symbol]["confirmed"]
 
         return None
-
 
     def _build_calibrator_features(
         self,
@@ -438,34 +458,18 @@ class PurePriceActionStrategy:
         """
         tick_size = precision.tick_size or 0.0
         pip_size = precision.pip_size or tick_size
-
-        if atr:
-            pip_threshold = self._param('breakout_threshold_pips', self.breakout_threshold_pips) * pip_size
-            vol_threshold = atr * self.min_extension_atr
-            threshold = max(pip_threshold, vol_threshold)
-            max_extension = atr * self.max_extension_atr
-        else:
-            threshold = self._param('breakout_threshold_pips', self.breakout_threshold_pips) * pip_size
-            scale = pip_size if pip_size > 0 else (tick_size if tick_size > 0 else 1.0)
-            max_extension = 20 * scale
+        if pip_size <= 0:
+            return None
+        if not atr:
             logger.warning("Running without ATR - using fixed thresholds")
-
-        scale = pip_size if pip_size > 0 else (tick_size if tick_size > 0 else 1.0)
-
+        min_distance, max_extension, price_scale = self._distance_requirements(atr, pip_size, tick_size)
         for resistance in resistance_levels:
-            if tick.ask > resistance + threshold:
+            if tick.ask > resistance + min_distance:
                 distance = tick.ask - resistance
-
-                if distance > max_extension:
-                    continue  # Too extended
-
-                if atr:
-                    strength = min(distance / atr, 1.0)
-                else:
-                    strength = min(distance / (10 * scale), 1.0)
-
-                distance_pips = distance / scale
-
+                if max_extension and distance > max_extension:
+                    continue
+                strength = self._breakout_strength(distance, atr, price_scale)
+                distance_pips = distance / price_scale if price_scale > 0 else 0.0
                 return BreakoutInfo(
                     type='bullish',
                     level=resistance,
@@ -474,21 +478,13 @@ class PurePriceActionStrategy:
                     distance_pips=distance_pips,
                     strength_score=strength
                 )
-
         for support in support_levels:
-            if tick.bid < support - threshold:
+            if tick.bid < support - min_distance:
                 distance = support - tick.bid
-
-                if distance > max_extension:
+                if max_extension and distance > max_extension:
                     continue
-
-                if atr:
-                    strength = min(distance / atr, 1.0)
-                else:
-                    strength = min(distance / (10 * scale), 1.0)
-
-                distance_pips = distance / scale
-
+                strength = self._breakout_strength(distance, atr, price_scale)
+                distance_pips = distance / price_scale if price_scale > 0 else 0.0
                 return BreakoutInfo(
                     type='bearish',
                     level=support,
@@ -497,8 +493,8 @@ class PurePriceActionStrategy:
                     distance_pips=distance_pips,
                     strength_score=strength
                 )
+        return None
 
-        return None   
 
     def _calculate_confidence(
         self,
@@ -562,7 +558,6 @@ class PurePriceActionStrategy:
         confidence = max(0.0, min(1.0, confidence))
 
         return float(confidence), (confidence >= float(min_confidence))
-
 
     def _calculate_stop_loss(
         self,
@@ -757,7 +752,7 @@ class PurePriceActionStrategy:
                 return None
             
             # Calculate S/R levels
-            resistance_levels, support_levels = self.calculate_support_resistance(completed_data, swing_highs, swing_lows, symbol)
+            resistance_levels, support_levels = self.calculate_support_resistance(completed_data, swing_highs, swing_lows, symbol, symbol_info=symbol_info, precision=precision)
             
             if not resistance_levels and not support_levels:
                 logger.debug(f"{symbol}: No S/R levels found")
@@ -795,6 +790,40 @@ class PurePriceActionStrategy:
                                 if breakout.type == "bullish" else
                                 breakout._replace(entry_price=confirmed["lo"]))
             
+            # Refresh tick to align entry with current price
+            fresh_tick = mt5.symbol_info_tick(symbol)
+            if not fresh_tick:
+                logger.error(f"Failed to refresh tick for {symbol} after confirmation")
+                return None
+
+            tick = fresh_tick
+            entry_price = tick.ask if breakout.type == 'bullish' else tick.bid
+            price_scale = self._price_scale(pip_size, tick_size)
+            min_distance, max_extension, price_scale = self._distance_requirements(atr, pip_size, tick_size)
+
+            distance = abs(entry_price - breakout.level)
+            if distance < max(min_distance, 0.0):
+                logger.debug(f"{symbol}: Breakout price reverted inside threshold after refresh")
+                return None
+            if max_extension and distance > max_extension:
+                logger.debug(f"{symbol}: Breakout extension too large after refresh")
+                return None
+
+            distance_pips = distance / price_scale if price_scale > 0 else 0.0
+            strength = self._breakout_strength(distance, atr, price_scale)
+
+            breakout = breakout._replace(
+                entry_price=entry_price,
+                distance=distance,
+                distance_pips=distance_pips,
+                strength_score=strength,
+            )
+
+            spread_ticks = (tick.ask - tick.bid) / tick_size if tick_size > 0 else 0.0
+            if tick.ask - tick.bid > max_spread:
+                logger.debug(f"{symbol}: Spread too high on refresh ({spread_ticks:.1f} ticks)")
+                return None
+
             # Structure distance check
             res_levels = sorted(resistance_levels)
             sup_levels = sorted(support_levels)
@@ -929,7 +958,7 @@ class PurePriceActionStrategy:
                 stop_loss = round(stop_loss, int(digits))
                 take_profit = round(take_profit, int(digits))
             
-            features = self._build_calibrator_features(
+            calibrator_features = self._build_calibrator_features(
                 breakout=breakout,
                 body_ratio=body_ratio,
                 is_bullish_candle=is_bullish_candle,
@@ -940,10 +969,11 @@ class PurePriceActionStrategy:
                 atr=atr,
                 pattern_strength=pattern_strength,
             )
-            # Add pattern-derived diagnostics to features
-            features['pattern_strength'] = float(pattern_strength)
-            features['pattern_conf_hits'] = float(pattern_conf_hits)
-            features['pattern_indecision_hits'] = float(pattern_indec_hits)
+            pattern_metrics = {
+                'pattern_strength': float(pattern_strength),
+                'pattern_conf_hits': float(pattern_conf_hits),
+                'pattern_indecision_hits': float(pattern_indec_hits),
+            }
             parameter_snapshot = {
                 'min_stop_loss_pips': float(min_stop_loss_pips),
                 'stop_loss_buffer_pips': float(stop_loss_buffer_pips),
@@ -957,6 +987,7 @@ class PurePriceActionStrategy:
             }
             # Include patterns and settings for logging/traceability
             parameter_snapshot['patterns'] = list(patterns_found) if patterns_found else []
+            parameter_snapshot['pattern_metrics'] = pattern_metrics
             parameter_snapshot['pattern_only_momentum'] = bool(self.pattern_only_momentum)
             # Create signal
             signal = TradingSignal(
@@ -969,7 +1000,7 @@ class PurePriceActionStrategy:
                 confidence=confidence,
                 timestamp=datetime.now(timezone.utc),
                 breakout_level=breakout.level,
-                features=features,
+                features=calibrator_features,
                 parameters=parameter_snapshot,
             )
             
@@ -993,7 +1024,16 @@ class PurePriceActionStrategy:
             logger.error(f"Error generating signal for {symbol}: {e}", exc_info=True)
             return None
 
-    def calculate_support_resistance(self, data: pd.DataFrame, swing_highs: np.ndarray, swing_lows: np.ndarray, symbol: str) -> Tuple[List[float], List[float]]:
+    def calculate_support_resistance(
+        self,
+        data: pd.DataFrame,
+        swing_highs: np.ndarray,
+        swing_lows: np.ndarray,
+        symbol: str,
+        *,
+        symbol_info: Optional[Any] = None,
+        precision: Optional[SymbolPrecision] = None,
+    ) -> Tuple[List[float], List[float]]:
         """
         Calculate support and resistance levels based on clustered swing points.
         """
@@ -1014,13 +1054,15 @@ class PurePriceActionStrategy:
         recent_high = float(data['high'].tail(20).max())
         recent_low = float(data['low'].tail(20).min())
 
-        symbol_info = mt5.symbol_info(symbol)
+        if symbol_info is None:
+            symbol_info = mt5.symbol_info(symbol)
         if not symbol_info:
             logger.error(f"Failed to get symbol info for {symbol} in S/R calculation")
             return [], []
 
-        symbol_overrides = self._symbol_config(symbol)
-        precision = get_symbol_precision(symbol_info, overrides=symbol_overrides)
+        if precision is None:
+            symbol_overrides = self._symbol_config(symbol)
+            precision = get_symbol_precision(symbol_info, overrides=symbol_overrides)
         pip_size = precision.pip_size or (precision.tick_size or 0.0)
         if pip_size <= 0:
             return resistance_levels[:3], support_levels[:3]

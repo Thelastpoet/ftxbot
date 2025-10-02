@@ -32,12 +32,12 @@ logger = logging.getLogger(__name__)
 
 class Config:
     """Configuration management for the trading bot"""
-    
+
     def __init__(self, config_path: str = 'config.json', args: Optional[argparse.Namespace] = None):
         self.config_path = Path(config_path)
         self.args = args
         self.load_config()
-        
+
     def load_config(self):
         """Load configuration from JSON file and apply CLI overrides."""
         # Helper to force required keys to exist
@@ -108,7 +108,7 @@ class Config:
                         'end_time': datetime.strptime(end, '%H:%M').time(),
                     })
 
-            # --- Paths (optional but recommended in JSON) ---
+            # --- Paths ---
             paths_cfg = config_data.get('paths') or {}
             base_dir = self.config_path.parent
             self.symbol_config_dir   = (base_dir / (paths_cfg.get('symbol_config_dir') or 'symbol_configs')).resolve()
@@ -158,7 +158,7 @@ class Config:
 
 class TradingBot:
     """Main trading bot orchestrator"""
-    
+
     def __init__(self, config: Config):
         self.config = config
         self.mt5_client = None
@@ -173,7 +173,7 @@ class TradingBot:
         self.session_manager = MarketSession(config)
         self.running = False
         self.initial_balance = None
-        
+
     async def initialize(self):
         """Initialize all bot components"""
         try:
@@ -183,26 +183,25 @@ class TradingBot:
             from strategy import PurePriceActionStrategy
             from risk_manager import RiskManager
             from trade_logger import TradeLogger
-            
+
             # Initialize components
             self.mt5_client = MetaTrader5Client()
             if not self.mt5_client.initialized:
                 raise Exception("Failed to initialize MetaTrader5 connection")
-            
+
             self.market_data = MarketData(self.mt5_client, self.config)
             self.strategy = PurePriceActionStrategy(self.config)
-            # M1 confirmation removed from system
             self.risk_manager = RiskManager(self.config.risk_management_settings, self.mt5_client)
-            from pathlib import Path as _P; self.trade_logger = TradeLogger(str((_P(__file__).parent / 'trades.log').resolve()))
+            self.trade_logger = TradeLogger(str((Path(__file__).parent / 'trades.log').resolve()))
 
             self._init_symbol_contexts()
-            
+
             # Get initial account balance
             account_info = self.mt5_client.get_account_info()
             if account_info:
                 self.initial_balance = account_info.balance
                 logger.info(f"Initial account balance: {self.initial_balance}")
-            
+
             logger.info("Trading bot initialized successfully")
 
             # Warm up M1 history so confirmation has data (live only)
@@ -216,11 +215,11 @@ class TradingBot:
                     logger.info("M1 history warmup complete")
             except Exception as _e:
                 logger.debug(f"M1 warmup skipped: {_e}")
-            
+
         except Exception as e:
             logger.error(f"Failed to initialize trading bot: {e}")
             raise
-    
+
     def _init_symbol_contexts(self) -> None:
         """Initialize per-symbol runtime contexts."""
         if not self.strategy:
@@ -269,30 +268,52 @@ class TradingBot:
                 results.append(trade)
         return results
 
+    def _prune_consumed_breakouts(self, symbol: str, now: Optional[datetime] = None, *, horizon_seconds: int = 1800) -> list:
+        """Prune stale breakout entries and return the active list."""
+        entries = self.consumed_breakouts.get(symbol, []) or []
+        if not entries:
+            return []
+        now = now or datetime.now()
+        active = []
+        cutoff = max(0, int(horizon_seconds))
+        for level, direction, timestamp in entries:
+            try:
+                age = (now - timestamp).total_seconds()
+            except Exception:
+                age = cutoff + 1
+            if age < cutoff:
+                active.append((level, direction, timestamp))
+        if active:
+            self.consumed_breakouts[symbol] = active
+        else:
+            self.consumed_breakouts.pop(symbol, None)
+        return active
     def _is_recent_breakout_duplicate(self, symbol: str, signal: TradingSignal, pip_size: Optional[float]) -> bool:
-        if symbol not in self.consumed_breakouts or not pip_size:
+        if not pip_size:
+            return False
+        active = self._prune_consumed_breakouts(symbol)
+        if not active:
             return False
         now = datetime.now()
-        filtered = []
         duplicate = False
-        for level, direction, timestamp in self.consumed_breakouts.get(symbol, []):
-            age = (now - timestamp).total_seconds()
-            if age < 1800:
-                filtered.append((level, direction, timestamp))
-            if duplicate:
+        signal_direction = 'bullish' if signal.type == 0 else 'bearish'
+        for level, direction, timestamp in active:
+            try:
+                age = (now - timestamp).total_seconds()
+            except Exception:
                 continue
-            if age < 900:
-                signal_direction = 'bullish' if signal.type == 0 else 'bearish'
-                if direction == signal_direction:
-                    level_distance_pips = abs(signal.breakout_level - level) / pip_size
-                    if level_distance_pips < 5:
-                        logger.info(
-                            f"{symbol}: Breakout at {level:.5f} already traded {age/60:.1f} min ago; skipping duplicate."
-                        )
-                        duplicate = True
-        self.consumed_breakouts[symbol] = filtered
+            if age >= 900:
+                continue
+            if direction != signal_direction:
+                continue
+            level_distance_pips = abs(signal.breakout_level - level) / pip_size
+            if level_distance_pips < 5:
+                logger.info(
+                    f"{symbol}: Breakout at {level:.5f} already traded {age/60:.1f} min ago; skipping duplicate."
+                )
+                duplicate = True
+                break
         return duplicate
-
     async def _handle_generated_signal(
         self,
         symbol: str,
@@ -332,7 +353,7 @@ class TradingBot:
             f"Confidence={signal.confidence:.2f}{trend_suffix}, "
             f"Calib={gating.get('probability', 0.0):.2f}/{gating.get('threshold', 0.0):.2f}"
         )
-        
+
         phase = self.session_manager.get_phase()
         if not self.session_manager.is_trade_window():
             logger.info(
@@ -346,12 +367,9 @@ class TradingBot:
             now = datetime.now()
             direction = 'bullish' if signal.type == 0 else 'bearish'
             self.consumed_breakouts[symbol].append((signal.breakout_level, direction, now))
-            self.consumed_breakouts[symbol] = [
-                (lvl, dirn, ts) for lvl, dirn, ts in self.consumed_breakouts[symbol]
-                if (now - ts).total_seconds() < 1800
-            ]
+            self._prune_consumed_breakouts(symbol, now)
             self.save_memory_state()
-    
+
     async def execute_trade(self, signal: TradingSignal, symbol: str, risk_overrides: Optional[Dict[str, float]] = None):
         """
         Execute trade with live price validation for FOREX
@@ -363,26 +381,26 @@ class TradingBot:
             if not symbol_info:
                 logger.error(f"Failed to get symbol info for {symbol}")
                 return
-            
+
             precision = get_symbol_precision(symbol_info, overrides=risk_overrides)
             tick_size = precision.tick_size or 0.0
             pip_size = precision.pip_size or tick_size
             if tick_size <= 0 or pip_size <= 0:
                 logger.error(f"{symbol}: Unable to determine pip/tick precision")
                 return
-            
+
             # Get current tick
             tick = self.mt5_client.get_symbol_info_tick(symbol)
             if not tick:
                 logger.error(f"Failed to get tick for {symbol}")
                 return
-            
+
             # Get execution price based on order type
             if signal.type == 0:  # BUY
                 execution_price = tick.ask
             else:  # SELL
                 execution_price = tick.bid
-            
+
             # --- Drift validation ---
             price_drift = abs(execution_price - signal.entry_price)
 
@@ -402,33 +420,38 @@ class TradingBot:
                     f"  Limit: {dynamic_max_drift_pips:.1f} pips\n"
                     "  TRADE SKIPPED"
                 )
+                return
             # --- Recalculate SL distance at actual entry price ---
             actual_sl_distance = abs(execution_price - signal.stop_loss)
             sl_ticks = actual_sl_distance / tick_size
             sl_pips  = actual_sl_distance / pip_size
-            
+
             # Validate minimum stop loss
             min_sl_floor = (
                 float(signal.parameters.get('min_stop_loss_pips', self.config.min_stop_loss_pips))
                 if isinstance(signal.parameters, dict) else self.config.min_stop_loss_pips
-            )
 
+            )
             if not self.risk_manager.validate_stop_loss(
-                symbol_info, execution_price, signal.stop_loss, min_sl_floor, overrides=risk_overrides
+                symbol_info,
+                execution_price,
+                signal.stop_loss,
+                min_sl_floor,
+                overrides=risk_overrides,
             ):
                 return
-            
+
             # --- Position sizing ---
             position_size = self.risk_manager.calculate_position_size(
                 symbol=symbol,
                 stop_loss_pips=sl_pips,  # pass display pips to risk manager
                 overrides=risk_overrides
+
             )
-            
             if position_size <= 0:
                 logger.warning(f"{symbol}: Invalid position size calculated")
                 return
-            
+
             # --- Final parameter validation ---
             if not self.risk_manager.validate_trade_parameters(
                 symbol=symbol,
@@ -438,24 +461,31 @@ class TradingBot:
             ):
                 logger.warning(f"{symbol}: Trade parameters validation failed")
                 return
-            
+
             # --- Risk limits ---
             if not self.risk_manager.check_risk_limits(symbol, signal.type, overrides=risk_overrides):
                 logger.info(f"{symbol}: Risk limits prevent trading")
                 return
-            
+
             # --- EXECUTE THE TRADE ---
             result = self.mt5_client.place_order(
                 symbol=symbol,
                 order_type=signal.type,
                 volume=position_size,
+                price=execution_price,
                 sl=signal.stop_loss,
                 tp=signal.take_profit,
                 comment=f"LIVE_{signal.reason}"
+
             )
-            
             if result and result.retcode == self.mt5_client.mt5.TRADE_RETCODE_DONE:
-                # Log successful trade
+                fill_price = float(getattr(result, 'price', execution_price) or execution_price)
+                request_drift_ticks = price_drift / tick_size if tick_size > 0 else 0.0
+                request_drift_pips = price_drift / pip_size if pip_size > 0 else 0.0
+                actual_drift = abs(fill_price - signal.entry_price)
+                drift_ticks = actual_drift / tick_size if tick_size > 0 else 0.0
+                drift_pips = actual_drift / pip_size if pip_size > 0 else 0.0
+
                 parameter_snapshot = dict(signal.parameters) if isinstance(signal.parameters, dict) else {}
                 calibrator_meta = parameter_snapshot.pop('calibrator', None)
                 features_snapshot = signal.features if isinstance(signal.features, dict) else {}
@@ -465,6 +495,10 @@ class TradingBot:
                         calibrator_meta['features'] = features_snapshot
                 elif features_snapshot:
                     calibrator_meta = {'features': features_snapshot}
+
+                actual_sl_distance = abs(fill_price - signal.stop_loss)
+                sl_ticks = actual_sl_distance / tick_size
+                sl_pips = actual_sl_distance / pip_size
 
                 # Capture live position ticket for robust closure tracking
                 pos_id = None
@@ -484,8 +518,8 @@ class TradingBot:
                     'timestamp': datetime.now(),
                     'symbol': symbol,
                     'order_type': 'BUY' if signal.type == 0 else 'SELL',
-                    'entry_price': result.price,
-                    'signal_price': signal.entry_price,  # Track signal vs execution
+                    'entry_price': fill_price,
+                    'signal_price': signal.entry_price,
                     'volume': position_size,
                     'stop_loss': signal.stop_loss,
                     'stop_loss_ticks': sl_ticks,
@@ -495,8 +529,11 @@ class TradingBot:
                     'reason': signal.reason,
                     'confidence': signal.confidence,
                     'signal_time': signal.timestamp,
-                    'drift_ticks': price_drift / tick_size,
-                    'drift_pips': price_drift / pip_size,
+                    'drift_ticks': drift_ticks,
+                    'drift_pips': drift_pips,
+                    'request_drift_ticks': request_drift_ticks,
+                    'request_drift_pips': request_drift_pips,
+                    'pip_size': pip_size,
                     'tick_size': tick_size,
                 }
 
@@ -522,14 +559,15 @@ class TradingBot:
                     trade_details['risk_overrides'] = dict(risk_overrides)
 
                 self.trade_logger.log_trade(trade_details)
-                
+
                 logger.info(
                     f"*** TRADE EXECUTED ***\n"
                     f"Symbol: {symbol}\n"
                     f"  Type: {'BUY' if signal.type == 0 else 'SELL'}\n"
-                    f"  Executed: {result.price:.5f}\n"
+                    f"  Executed: {fill_price:.5f}\n"
                     f"  Signal was: {signal.entry_price:.5f}\n"
-                    f"  Drift: {price_drift/tick_size:.1f} ticks (~{price_drift/pip_size:.1f} pips)\n"
+                    f"  Drift (fill): {drift_ticks:.1f} ticks (~{drift_pips:.1f} pips)\n"
+                    f"  Drift (request): {request_drift_ticks:.1f} ticks (~{request_drift_pips:.1f} pips)\n"
                     f"  Volume: {position_size:.2f}\n"
                     f"  Risk: {sl_ticks:.1f} ticks (~{sl_pips:.1f} pips)\n"
                     f"  Ticket: {result.order}"
@@ -539,12 +577,12 @@ class TradingBot:
                 error_msg = getattr(result, 'comment', 'Unknown error') if result else 'No result'
                 logger.error(f"{symbol}: Trade execution failed - {error_msg}")
                 return None
-            
+
         except Exception as e:
             logger.error(f"Error executing trade for {symbol}: {e}", exc_info=True)
             return None
 
-                
+
     async def process_symbol(self, symbol_config: Dict):
         """
         Process a single symbol for trading opportunities
@@ -575,7 +613,7 @@ class TradingBot:
         if not symbol_info:
             logger.error(f"Failed to get symbol info for {symbol}")
             return
-        
+
         precision = get_symbol_precision(symbol_info, overrides=risk_overrides)
         tick_size = precision.tick_size or 0.0
         pip_size = precision.pip_size or tick_size
@@ -616,8 +654,6 @@ class TradingBot:
                 m15_signal = self.strategy.generate_signal(mtf_data['M15'], symbol, trend=h1_trend)
 
                 if m15_signal:
-                    if self._is_recent_breakout_duplicate(symbol, m15_signal, pip_size):
-                        return
                     await self._handle_generated_signal(
                         symbol,
                         m15_signal,
@@ -638,8 +674,6 @@ class TradingBot:
                 signal = self.strategy.generate_signal(m15_data, symbol, trend=m15_trend)
 
                 if signal:
-                    if self._is_recent_breakout_duplicate(symbol, signal, pip_size):
-                        return
                     await self._handle_generated_signal(
                         symbol,
                         signal,
@@ -659,8 +693,6 @@ class TradingBot:
                 signal = self.strategy.generate_signal(h1_data, symbol, trend=h1_trend)
 
                 if signal:
-                    if self._is_recent_breakout_duplicate(symbol, signal, pip_size):
-                        return
 
                     logger.info(
                         f"Signal generated for {symbol}: "
@@ -674,12 +706,10 @@ class TradingBot:
                         if result:
                             if symbol not in self.consumed_breakouts:
                                 self.consumed_breakouts[symbol] = []
-
+                            now = datetime.now()
                             direction = 'bullish' if signal.type == 0 else 'bearish'
-                            self.consumed_breakouts[symbol].append(
-                                (signal.breakout_level, direction, datetime.now())
-                            )
-
+                            self.consumed_breakouts[symbol].append((signal.breakout_level, direction, now))
+                            self._prune_consumed_breakouts(symbol, now)
                             self.save_memory_state()
                     else:
                         phase = self.session_manager.get_phase()
@@ -691,27 +721,27 @@ class TradingBot:
 
         except Exception as e:
             logger.error(f"Error processing {symbol}: {e}", exc_info=True)
-                
+
     async def sync_trade_status(self):
         """Trade status synchronization"""
         if not self.trade_logger:
             return
-            
+
         try:
             # Treat any trade not marked CLOSED as open candidate (handles restarts)
-            open_trades = [
-                t for t in self.trade_logger.get_all_trades()
-                if not str(t.get('status', 'OPEN')).upper().startswith('CLOSED')
-            ]
+            open_trades = []
+            for t in self.trade_logger.get_all_trades():
+                status_str = str(t.get('status', 'OPEN')).upper()
+                if not status_str.startswith('CLOSED'):
+                    open_trades.append(t)
             logger.debug(f"sync_trade_status: {len(open_trades)} candidate trades to reconcile")
-            
             if not open_trades:
                 return
-                
+
             # Get current positions
             current_positions = self.mt5_client.get_all_positions()
             current_tickets = {getattr(pos, 'ticket', None) for pos in current_positions}
-            
+
             for trade in open_trades:
                 # Prefer position_ticket; if missing, try to map by symbol to a live position
                 ticket = trade.get('position_ticket') or trade.get('ticket')
@@ -726,10 +756,10 @@ class TradingBot:
                 if ticket and ticket not in current_tickets:
                     # Position was closed
                     logger.info(f"Position {ticket} no longer in open positions. Resolving closure from history...")
-                    
+
                     end_time = datetime.now()
                     start_time = datetime.fromisoformat(trade['timestamp'])
-                    
+
                     exit_price = 0.0
                     profit = 0.0
                     commission = 0.0
@@ -787,7 +817,7 @@ class TradingBot:
                     if exit_price == 0.0:
                         logger.warning(f"Unable to determine exit for ticket {ticket}; will retry next cycle")
                         continue
-                    
+
                     # If status is still unknown, try to infer from price proximity to SL/TP
                     if status == 'CLOSED_UNKNOWN' and exit_price != 0:
                         sym_info = self.mt5_client.get_symbol_info(trade['symbol'])
@@ -813,8 +843,8 @@ class TradingBot:
                         exit_price,
                         profit - commission,
                         status
+
                     )
-                    
                     symbol = trade.get('symbol')
                     if symbol and hasattr(self, 'symbol_contexts'):
                         context = self.symbol_contexts.get(symbol)
@@ -839,18 +869,20 @@ class TradingBot:
                             except Exception:
                                 logger.debug(f"{symbol}: Failed to record trade result for optimizer")
                     if exit_price and symbol:
+                        closure_timestamp = datetime.now()
                         self.recent_closures[symbol] = (
-                            datetime.now(),
+                            closure_timestamp,
                             exit_price,
                             status  # This will be 'CLOSED_TP', 'CLOSED_SL', or 'CLOSED_MANUAL'
                         )
                         self.save_memory_state()
-                        
-                        logger.info(f"Recorded {symbol} closure at {exit_price} ({status})")
-                                    
+                        logger.info(
+                            f"Recorded recent closure: {symbol} at {exit_price} ({status})"
+                        )
+
         except Exception as e:
             logger.error(f"Error syncing trade status: {e}", exc_info=True)
-            
+
     def save_memory_state(self):
         """Save consumed breakouts and recent closures to file"""
         memory_state = {
@@ -858,7 +890,7 @@ class TradingBot:
             'recent_closures': {},
             'last_updated': datetime.now().isoformat()
         }
-        
+
         # Convert consumed breakouts to JSON-serializable format
         for symbol, breakouts in self.consumed_breakouts.items():
             memory_state['consumed_breakouts'][symbol] = [
@@ -869,7 +901,6 @@ class TradingBot:
                 }
                 for level, direction, timestamp in breakouts
             ]
-        
         # Convert recent closures to JSON-serializable format
         for symbol, (timestamp, exit_price, status) in self.recent_closures.items():
             memory_state['recent_closures'][symbol] = {
@@ -877,7 +908,7 @@ class TradingBot:
                 'exit_price': exit_price,
                 'status': status
             }
-        
+
         # Save to file atomically
         memory_path = Path('bot_memory.json')
         tmp_path = memory_path.with_suffix('.json.tmp')
@@ -893,40 +924,42 @@ class TradingBot:
         if not os.path.exists('bot_memory.json'):
             logger.info("No memory state file found, starting fresh")
             return
-        
+
         try:
             with open('bot_memory.json', 'r') as f:
                 content = f.read()
-                
+
                 # Check if file is empty or just whitespace
                 if not content.strip():
                     logger.info("Memory state file is empty, starting fresh")
                     return
-                    
+
                 memory_state = json.loads(content)
-            
+
             current_time = datetime.now()
-            
+
             # Load consumed breakouts (only those less than 30 minutes old)
             for symbol, breakouts in memory_state.get('consumed_breakouts', {}).items():
                 self.consumed_breakouts[symbol] = []
                 for b in breakouts:
                     timestamp = datetime.fromisoformat(b['timestamp'])
                     age_seconds = (current_time - timestamp).total_seconds()
-                    
+
                     # Only load if less than 30 minutes old
                     if age_seconds < 1800:
                         self.consumed_breakouts[symbol].append(
                             (b['level'], b['direction'], timestamp)
                         )
-                        logger.info(f"Loaded consumed breakout: {symbol} {b['direction']} "
-                                f"at {b['level']} ({age_seconds/60:.1f} min old)")
-            
+                        logger.info(
+                            f"Loaded consumed breakout: {symbol} {b['direction']} "
+                            f"at {b['level']} ({age_seconds/60:.1f} min old)"
+                        )
+
             # Load recent closures (only those less than 5 minutes old)
             for symbol, closure in memory_state.get('recent_closures', {}).items():
                 timestamp = datetime.fromisoformat(closure['timestamp'])
                 age_seconds = (current_time - timestamp).total_seconds()
-                
+
                 # Only load if less than 5 minutes old
                 if age_seconds < 300:
                     self.recent_closures[symbol] = (
@@ -934,12 +967,14 @@ class TradingBot:
                         closure['exit_price'],
                         closure['status']
                     )
-                    logger.info(f"Loaded recent closure: {symbol} at {closure['exit_price']} "
-                            f"({age_seconds:.0f}s ago)")
-            
+                    logger.info(
+                        f"Loaded recent closure: {symbol} at {closure['exit_price']} "
+                        f"({age_seconds:.0f}s ago)"
+                    )
+
             logger.info(f"Memory state loaded: {len(self.consumed_breakouts)} symbols with consumed breakouts, "
                     f"{len(self.recent_closures)} recent closures")
-                    
+
         except json.JSONDecodeError as e:
             logger.error(f"Invalid JSON in memory state file: {e}")
             logger.info("Starting with fresh memory state")
@@ -947,12 +982,12 @@ class TradingBot:
         except Exception as e:
             logger.error(f"Error loading memory state: {e}")
             # Don't clear the dictionaries - they're already initialized
-        
+
     async def run(self):
         """Main trading loop"""
         self.running = True
         logger.info("Starting main trading loop")
-        
+
         while self.running:
             try:
                 # Check for news-related trading pause
@@ -962,30 +997,30 @@ class TradingBot:
                         logger.debug(f"Trading is paused: {reason}. Skipping this cycle.")
                         await asyncio.sleep(self.config.main_loop_interval)
                         continue
-                
+
                 # Sync trade status with MT5
                 await self.sync_trade_status()                
                 # Process each symbol
                 for symbol_config in self.config.symbols:
                     await self.process_symbol(symbol_config)
-                
+
                 # Wait for next iteration
                 await asyncio.sleep(self.config.main_loop_interval)
-                
+
             except KeyboardInterrupt:
                 logger.info("Keyboard interrupt received")
                 break
             except Exception as e:
                 logger.error(f"Error in main loop: {e}")
                 await asyncio.sleep(self.config.main_loop_interval)
-    
+
     async def shutdown(self):
         """Graceful shutdown"""
         logger.info("Shutting down trading bot")
         self.running = False
-        
+
         self.save_memory_state()
-        
+
         # Positions should be managed according to their stop loss and take profit
         if self.mt5_client:
             positions = self.mt5_client.get_all_positions()
@@ -993,7 +1028,7 @@ class TradingBot:
                 logger.info(f"Note: {len(positions)} positions remain open and will be managed by their SL/TP")
                 for position in positions:
                     logger.info(f"Open position: {position.symbol} - Volume: {position.volume} - Profit: {position.profit}")
-        
+
         logger.info("Trading bot shutdown complete")
 
 def parse_arguments():
@@ -1015,16 +1050,16 @@ def parse_arguments():
 async def main():
     """Main entry point"""
     args = parse_arguments()
-    
+
     # Set logging level
     logging.getLogger().setLevel(getattr(logging, args.log_level))
-    
+
     # Load configuration
     config = Config(args.config, args)
-    
+
     # Create and run bot
     bot = TradingBot(config)
-    
+
     try:
         await bot.initialize()
         await bot.run()
@@ -1043,6 +1078,7 @@ if __name__ == "__main__":
     except Exception as e:
         logger.error(f"Unhandled exception: {e}")
         sys.exit(1)
+
 
 
 

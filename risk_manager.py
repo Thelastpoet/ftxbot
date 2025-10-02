@@ -6,7 +6,7 @@ Handles position sizing and risk management calculations
 import numpy as np
 import pandas as pd
 import logging
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
 
 from utils import get_symbol_precision, get_pip_value
 
@@ -23,6 +23,10 @@ class RiskManager:
         self.max_drawdown = self._get_config_value('max_drawdown_percentage', 0.05)
         self.correlation_threshold = self._get_config_value('correlation_threshold', 0.7)
         self.correlation_lookback_period = self._get_config_value('correlation_lookback_period', 30)
+
+        # Correlation workspace cache to avoid duplicate MT5 fetches per decision
+        self._correlation_cache: Dict[Tuple[str, str], Optional[float]] = {}
+        self._correlation_cache_anchor: Optional[str] = None
 
     # ------------------------------------------------------------------
     # Core helpers
@@ -92,6 +96,14 @@ class RiskManager:
         if v1 <= 0 or v2 <= 0:
             return None
         return cov / (v1**0.5 * v2**0.5)
+    def _start_correlation_window(self, anchor_symbol: str) -> None:
+        """Reset correlation cache for the current symbol decision."""
+        self._correlation_cache = {}
+        self._correlation_cache_anchor = anchor_symbol
+
+    def _correlation_key(self, symbol1: str, symbol2: str) -> Tuple[str, str]:
+        return tuple(sorted((symbol1, symbol2)))
+
 
 
     # ------------------------------------------------------------------
@@ -207,6 +219,7 @@ class RiskManager:
         """Prevent highly correlated duplicates; soft cases are handled via size reduction."""
         overrides = overrides or {}
         try:
+            self._start_correlation_window(new_symbol)
             positions = self.mt5_client.get_all_positions()
             if not positions:
                 return True
@@ -249,6 +262,8 @@ class RiskManager:
         """Continuously reduce size as correlated overlaps grow; avoid full block unless 'hard' hit."""
         overrides = overrides or {}
         try:
+            if self._correlation_cache_anchor != symbol:
+                self._start_correlation_window(symbol)
             positions = self.mt5_client.get_all_positions()
             if not positions:
                 return base_position_size
@@ -292,10 +307,12 @@ class RiskManager:
             logger.error(f"Error adjusting position size for correlation: {e}")
             return base_position_size
 
-
     def _get_correlation(self, symbol1: str, symbol2: str, overrides: Optional[Dict[str, float]] = None) -> Optional[float]:
         """Correlation between symbols using log-returns with EWMA weighting."""
         overrides = overrides or {}
+        key = self._correlation_key(symbol1, symbol2)
+        if key in self._correlation_cache:
+            return self._correlation_cache[key]
         try:
             lookback = int(self._resolve_setting(
                 'correlation_lookback_period', overrides,
@@ -308,6 +325,7 @@ class RiskManager:
             d2 = self.mt5_client.copy_rates_from_pos(symbol2, 'M15', 0, lookback)
             if d1 is None or d2 is None:
                 logger.warning(f"Cannot get data for {symbol1} or {symbol2} correlation check")
+                self._correlation_cache[key] = None
                 return None
 
             c1 = pd.DataFrame(d1)['close'].values
@@ -318,9 +336,12 @@ class RiskManager:
             # EWMA decay: use slightly slower decay for intraday (e.g., 0.97–0.99)
             lam = float(self._resolve_setting('correlation_ewma_lambda', overrides, default=0.97))
             corr = self._ewma_corr(r1, r2, lam=lam)
-            return float(corr) if corr is not None else 0.0
+            value = float(corr) if corr is not None else 0.0
+            self._correlation_cache[key] = value
+            return value
         except Exception as e:
             logger.error(f"Error calculating correlation: {e}")
+            self._correlation_cache[key] = None
             return None
 
     def calculate_risk_metrics(self) -> Dict[str, float]:
@@ -448,5 +469,3 @@ class RiskManager:
         except Exception as e:
             logger.error(f"Error validating stop-loss for {symbol_info.name}: {e}")
             return False
-
-

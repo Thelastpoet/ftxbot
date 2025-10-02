@@ -1,7 +1,7 @@
 ﻿"""
 Lightweight online logistic calibrator for trade decision gating.
 
-Computes p_hat = sigmoid(wÂ·x + b) from a small feature vector and
+Computes p_hat = sigmoid(w·x + b) from a small feature vector and
 optionally updates weights online after outcomes are observed.
 """
 
@@ -14,7 +14,6 @@ from dataclasses import dataclass, field
 from typing import Dict, List
 
 import numpy as np
-
 
 @dataclass
 class CalibratorConfig:
@@ -31,10 +30,8 @@ class CalibratorConfig:
         "spread_impact",  # dimensionless (spread/ATR, clipped)
     ])
 
-
 class OnlineLogisticCalibrator:
     """Simple logistic model with online updates and JSON persistence."""
-
     def __init__(self, cfg: CalibratorConfig) -> None:
         self.cfg = cfg
         self.n = len(cfg.feature_names)
@@ -130,5 +127,3 @@ class OnlineLogisticCalibrator:
         base = 1.0 / (1.0 + rr_ratio)
         thr = base + self.cfg.margin
         return float(np.clip(thr, 0.0, 1.0))
-
-
