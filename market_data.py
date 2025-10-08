@@ -7,8 +7,7 @@ import pandas as pd
 import numpy as np
 import logging
 from talib import ATR, LINEARREG_ANGLE, LINEARREG_SLOPE, STDDEV
-from typing import Optional, Dict, Any
-from collections import OrderedDict
+from typing import Optional, Dict, Any, Tuple
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
@@ -19,7 +18,7 @@ class MarketData:
     def __init__(self, mt5_client, config):
         self.mt5_client = mt5_client
         self.config = config
-        self.data_cache = OrderedDict()
+        self.data_cache = {}
         self.cache_expiry = 60  # seconds
         
     async def fetch_data(self, symbol: str, timeframe: str, num_candles: int) -> Optional[pd.DataFrame]:
@@ -59,7 +58,9 @@ class MarketData:
             # Clean old cache entries
             max_cache_entries = len(self.config.symbols) * 3  # Allow 3 timeframes per symbol
             if len(self.data_cache) > max_cache_entries:
-                self.data_cache.popitem(last=False)
+                oldest_key = min(self.data_cache.keys(), 
+                                key=lambda k: self.data_cache[k][1])
+                del self.data_cache[oldest_key]
             
             return df
             
@@ -136,6 +137,7 @@ class MarketData:
     def identify_trend(self, data: pd.DataFrame, period: int = 20, symbol: str = None) -> str:
         """
         Adaptive trend detection using linear regression + ATR scaling.
+        Uses self.calculate_atr() for consistency.
         """
         if len(data) < period:
             return 'ranging'
@@ -153,7 +155,7 @@ class MarketData:
             atr = atr_series.iloc[-1] if len(atr_series) > 0 else 0.0
 
             # --- Adaptive thresholds ---
-            base_angle = 3.0 
+            base_angle = 3.0     # more sensitive than 5.0
             slope_threshold = max(0.00002, 0.15 * atr / period)  
 
             # --- Classification ---
@@ -187,6 +189,26 @@ class MarketData:
         volatility = STDDEV(data['close'].pct_change().dropna(), timeperiod=period).iloc[-1]
         
         return volatility
+    
+    def get_recent_high_low(self, data: pd.DataFrame, period: int = 20) -> Tuple[float, float]:
+        """
+        Get recent high and low prices
+        
+        Args:
+            data: DataFrame with OHLC data
+            period: Period to look back
+            
+        Returns:
+            Tuple of (recent_high, recent_low)
+        """
+        if len(data) < period:
+            return None, None
+        
+        recent_data = data.tail(period)
+        recent_high = recent_data['high'].max()
+        recent_low = recent_data['low'].min()
+        
+        return recent_high, recent_low
     
     def clear_cache(self):
         """Clear data cache"""

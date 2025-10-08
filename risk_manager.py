@@ -3,32 +3,33 @@ Risk Manager Module
 Handles position sizing and risk management calculations
 """
 
+from talib import CORREL
 import numpy as np
 import pandas as pd
 import logging
-from typing import Any, Dict, Optional, Tuple
+from typing import  Any, Dict, Optional, Tuple
 
-from utils import get_symbol_precision, get_pip_value
+from utils import get_pip_size
 
 logger = logging.getLogger(__name__)
 
 class RiskManager:
-    """Manages risk and position sizing with optional per-symbol overrides."""
+    """Manages risk and position sizing"""
 
-    def __init__(self, risk_management: dict, mt5_client):
-        self.config = risk_management or {}
+    def __init__(self, config, mt5_client):
+        self.config = config
         self.mt5_client = mt5_client
-        self.risk_per_trade = self._get_config_value('risk_per_trade', 0.01)
-        self.fixed_lot_size = self._get_config_value('fixed_lot_size')
-        self.max_drawdown = self._get_config_value('max_drawdown_percentage', 0.05)
+        self.risk_per_trade = config.risk_per_trade
+        self.fixed_lot_size = config.fixed_lot_size
+        self.max_drawdown = config.max_drawdown
         self.correlation_threshold = self._get_config_value('correlation_threshold', 0.7)
         self.correlation_lookback_period = self._get_config_value('correlation_lookback_period', 30)
 
         # Correlation workspace cache to avoid duplicate MT5 fetches per decision
         self._correlation_cache: Dict[Tuple[str, str], Optional[float]] = {}
         self._correlation_cache_anchor: Optional[str] = None
-
-    # ------------------------------------------------------------------
+        
+         # ------------------------------------------------------------------
     # Core helpers
     # ------------------------------------------------------------------
     def _get_config_value(self, key: str, default: Any = None) -> Any:
@@ -96,6 +97,7 @@ class RiskManager:
         if v1 <= 0 or v2 <= 0:
             return None
         return cov / (v1**0.5 * v2**0.5)
+    
     def _start_correlation_window(self, anchor_symbol: str) -> None:
         """Reset correlation cache for the current symbol decision."""
         self._correlation_cache = {}
@@ -104,20 +106,20 @@ class RiskManager:
     def _correlation_key(self, symbol1: str, symbol2: str) -> Tuple[str, str]:
         return tuple(sorted((symbol1, symbol2)))
 
+    def calculate_position_size(self, symbol: str, stop_loss_pips: float) -> float:
+        """
+        Calculate position size based on risk parameters
 
+        Args:
+            symbol: Trading symbol
+            stop_loss_pips: Stop loss distance in pips
 
-    # ------------------------------------------------------------------
-    def calculate_position_size(
-        self,
-        symbol: str,
-        stop_loss_pips: float,
-        overrides: Optional[Dict[str, float]] = None,
-    ) -> float:
-        """Calculate position size based on risk parameters."""
-        overrides = overrides or {}
-        fixed_lot = self._resolve_setting('fixed_lot_size', overrides, default=self.fixed_lot_size)
-        if fixed_lot is not None:
-            return float(fixed_lot)
+        Returns:
+            Position size in lots
+        """
+        # If fixed lot size is specified, use it
+        if self.fixed_lot_size is not None:
+            return self.fixed_lot_size
 
         try:
             account_info = self.mt5_client.get_account_info()
@@ -130,33 +132,25 @@ class RiskManager:
                 logger.error(f"Failed to get symbol info for {symbol}")
                 return 0.0
 
-            risk_per_trade = self._resolve_setting('risk_per_trade', overrides, default=self.risk_per_trade)
-            if not risk_per_trade or risk_per_trade <= 0:
-                logger.warning("risk_per_trade not positive; skipping position sizing")
-                return 0.0
-
             account_balance = account_info.balance
-            risk_amount = account_balance * float(risk_per_trade)
+            risk_amount = account_balance * self.risk_per_trade
 
-            pip_value = get_pip_value(symbol_info, overrides=overrides)
+            pip_value = self._calculate_pip_value(symbol_info)
 
             if stop_loss_pips > 0 and pip_value > 0:
+                # Risk per lot = stop_loss_pips * pip_value
                 position_size = risk_amount / (stop_loss_pips * pip_value)
-                position_size = self.adjust_position_size_for_correlation(symbol, position_size, overrides)
 
-                lot_step = symbol_info.volume_step or 0.01
+                # Round to symbol’s lot step
+                lot_step = symbol_info.volume_step
                 position_size = round(position_size / lot_step) * lot_step
 
+                # Apply min/max constraints
                 position_size = max(symbol_info.volume_min,
                                     min(position_size, symbol_info.volume_max))
 
-                logger.debug(
-                    "%s position size: %.4f lots (risk_per_trade=%.4f)",
-                    symbol,
-                    position_size,
-                    float(risk_per_trade),
-                )
-                return float(position_size)
+                logger.info(f"Calculated position size for {symbol}: {position_size} lots")
+                return position_size
             else:
                 logger.warning(f"Invalid stop loss or pip value for {symbol}")
                 return 0.0
@@ -165,15 +159,57 @@ class RiskManager:
             logger.error(f"Error calculating position size: {e}")
             return 0.0
 
+    def _calculate_pip_value(self, symbol_info: Any) -> float:
+        """
+        Calculate pip value per standard lot using MT5 native values
 
-    def check_risk_limits(
-        self,
-        symbol: str,
-        signal_type: int = None,
-        overrides: Optional[Dict[str, float]] = None,
-    ) -> bool:
-        """Check if trading is allowed based on risk limits."""
-        overrides = overrides or {}
+        Args:
+            symbol_info: Symbol information from MT5
+
+        Returns:
+            Pip value per lot
+        """
+        try:
+            if symbol_info.trade_tick_size > 0:
+                # Convert native tick value per tick-size to value per pip
+                pip_size = get_pip_size(symbol_info)
+                per_price_unit = symbol_info.trade_tick_value / symbol_info.trade_tick_size
+                pip_value = per_price_unit * pip_size
+                return float(pip_value)
+            else:
+                return 0.0
+        except Exception as e:
+            logger.error(f"Error calculating pip value: {e}")
+            return 0.0
+
+    def calculate_stop_loss_pips(self, entry_price: float, stop_loss: float, symbol_info: Any) -> float:
+        """
+        Calculate stop loss in clean pip units
+
+        Args:
+            entry_price: Trade entry price
+            stop_loss: Stop loss price
+            symbol_info: MT5 symbol info
+
+        Returns:
+            Stop loss distance in pips
+        """
+        try:
+            if not symbol_info:
+                return 0.0
+            
+            pip_size = get_pip_size(symbol_info)
+            
+            if pip_size <= 0:
+                return 0.0
+            
+            return abs(entry_price - stop_loss) / pip_size
+        except Exception as e:
+            logger.error(f"Error calculating stop loss pips: {e}")
+            return 0.0
+
+    def check_risk_limits(self, symbol: str, signal_type: int = None, overrides: Optional[Dict[str, float]] = None,) -> bool:
+        """Check if trading is allowed based on risk limits"""
         try:
             account_info = self.mt5_client.get_account_info()
             if not account_info:
@@ -182,12 +218,9 @@ class RiskManager:
             equity = account_info.equity
             balance = account_info.balance
 
-            max_drawdown = self._resolve_setting(
-                'max_drawdown_percentage', overrides, attr_key='max_drawdown', default=self.max_drawdown
-            )
-            if balance > 0 and max_drawdown is not None:
+            if balance > 0:
                 current_drawdown = (balance - equity) / balance
-                if current_drawdown >= float(max_drawdown):
+                if current_drawdown >= self.max_drawdown:
                     logger.warning(f"Maximum drawdown exceeded: {current_drawdown:.2%}")
                     return False
 
@@ -199,17 +232,17 @@ class RiskManager:
             if len(all_positions) >= 20:
                 logger.warning(f"Maximum total positions reached: {len(all_positions)}")
                 return False
-
+            
             if signal_type is not None:
                 if not self.check_correlation_risk(symbol, signal_type, overrides=overrides):
                     return False
-            
+                
             return True
 
         except Exception as e:
             logger.error(f"Error checking risk limits: {e}")
             return False
-
+        
     def check_correlation_risk(
         self,
         new_symbol: str,
@@ -252,7 +285,7 @@ class RiskManager:
         except Exception as e:
             logger.error(f"Error checking correlation risk: {e}")
             return False
-
+        
     def adjust_position_size_for_correlation(
         self,
         symbol: str,
@@ -339,6 +372,7 @@ class RiskManager:
             value = float(corr) if corr is not None else 0.0
             self._correlation_cache[key] = value
             return value
+        
         except Exception as e:
             logger.error(f"Error calculating correlation: {e}")
             self._correlation_cache[key] = None
@@ -379,9 +413,9 @@ class RiskManager:
         except Exception as e:
             logger.error(f"Error calculating risk metrics: {e}")
             return {}
-        
-    def validate_trade_parameters(self, symbol: str, volume: float, stop_loss: float, take_profit: float, order_type: int = None) -> bool:
-        """Validate trade parameters before execution."""
+
+    def validate_trade_parameters(self, symbol: str, volume: float, stop_loss: float, take_profit: float) -> bool:
+        """Validate trade parameters before execution"""
         try:
             symbol_info = self.mt5_client.get_symbol_info(symbol)
             if not symbol_info:
@@ -395,77 +429,19 @@ class RiskManager:
             if not tick:
                 return False
 
-            min_stop_distance = float(symbol_info.trade_stops_level) * float(symbol_info.point)
+            current_price = tick.ask
+            min_stop_distance = symbol_info.trade_stops_level * symbol_info.point
 
-            if order_type is not None:
-                if order_type == 0:  # BUY
-                    current_price = float(tick.ask)
-                    if not (stop_loss < current_price - min_stop_distance):
-                        logger.error("Stop loss invalid for BUY (too close or above current price)")
-                        return False
-                    if not (take_profit > current_price + min_stop_distance):
-                        logger.error("Take profit invalid for BUY (too close or below current price)")
-                        return False
-                else:  # SELL
-                    current_price = float(tick.bid)
-                    if not (stop_loss > current_price + min_stop_distance):
-                        logger.error("Stop loss invalid for SELL (too close or below current price)")
-                        return False
-                    if not (take_profit < current_price - min_stop_distance):
-                        logger.error("Take profit invalid for SELL (too close or above current price)")
-                        return False
-            else:
-                current_price = float(tick.ask)
-                if abs(current_price - stop_loss) < min_stop_distance:
-                    logger.error("Stop loss too close to current price")
-                    return False
-                if abs(current_price - take_profit) < min_stop_distance:
-                    logger.error("Take profit too close to current price")
-                    return False
+            if abs(current_price - stop_loss) < min_stop_distance:
+                logger.error(f"Stop loss too close to current price")
+                return False
+
+            if abs(current_price - take_profit) < min_stop_distance:
+                logger.error(f"Take profit too close to current price")
+                return False
 
             return True
 
         except Exception as e:
             logger.error(f"Error validating trade parameters: {e}")
-            return False
-        
-    def validate_stop_loss(
-        self,
-        symbol_info: Any,
-        entry_price: float,
-        stop_loss: float,
-        min_sl_pips: float,
-        overrides: Optional[Dict[str, float]] = None,
-    ) -> bool:
-        """
-        Validate that stop-loss distance meets minimum requirements.
-
-        Args:
-            symbol: Trading symbol
-            entry_price: Current execution price
-            stop_loss: Proposed stop-loss price
-            min_sl_pips: Floor for stop-loss distance (from config or overrides)
-            pip_size: Pip size for the symbol
-        """
-        try:
-            precision = get_symbol_precision(symbol_info, overrides=overrides)
-            tick_size = precision.tick_size or 0.0
-            pip_size = precision.pip_size or tick_size
-
-            if pip_size <= 0 or tick_size <= 0:
-                logger.warning(f"{symbol_info.name}: Unable to validate stop-loss due to missing precision data")
-                return False
-
-            sl_distance = abs(entry_price - stop_loss)
-            sl_distance_ticks = sl_distance / tick_size
-            sl_distance_pips = sl_distance / pip_size
-
-            if sl_distance_pips < min_sl_pips:
-                logger.warning(
-                    f"{symbol_info.name}: Stop-loss too tight ({sl_distance_pips:.1f} < {min_sl_pips:.1f} pips)"
-                )
-                return False
-            return True
-        except Exception as e:
-            logger.error(f"Error validating stop-loss for {symbol_info.name}: {e}")
             return False

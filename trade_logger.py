@@ -1,372 +1,214 @@
-"""
-Trade Logger Module - Robust JSONL event log with consolidation
-- Appends 'open' and 'update' events to an append-only JSON Lines file
-- Consolidates events into latest trade states for querying/reporting
-"""
-
-from __future__ import annotations
-
 import json
-import logging
-from datetime import datetime
-from decimal import Decimal
+import csv
+import os
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Tuple
-
-logger = logging.getLogger(__name__)
-
-
-# -------------------------
-# JSON helpers
-# -------------------------
-
-class DateTimeEncoder(json.JSONEncoder):
-    """JSON encoder for datetime and Decimal objects."""
-    def default(self, obj: Any) -> Any:
-        if isinstance(obj, datetime):
-            return obj.isoformat()
-        if isinstance(obj, Decimal):
-            return float(obj)
-        return super().default(obj)
+from threading import RLock
+from typing import Any, Dict, List, Optional
+from datetime import datetime
 
 
-def _to_datetime(value: Any) -> Optional[datetime]:
-    if value is None:
-        return None
-    if isinstance(value, datetime):
-        return value
-    try:
-        # Accept both with/without timezone
-        return datetime.fromisoformat(str(value))
-    except Exception:
-        return None
+class _DateTimeEncoder(json.JSONEncoder):
+    """JSON encoder that renders datetime objects as ISO strings."""
+    def default(self, o: Any) -> Any:
+        if isinstance(o, datetime):
+            return o.isoformat()
+        return super().default(o)
 
-
-def _deepcopy_jsonable(obj: Any) -> Any:
-    # Ensure we store a JSON-friendly copy (no datetimes/decimals leaking through)
-    return json.loads(json.dumps(obj, cls=DateTimeEncoder))
-
-
-def _first_non_none(*vals):
-    for v in vals:
-        if v is not None:
-            return v
-    return None
-
-
-# -------------------------
-# Trade Logger
-# -------------------------
 
 class TradeLogger:
     """
-    Persistent trade logging as JSON Lines (JSONL).
-    Each line is one event:
-      - {"event_type":"open", "timestamp":"...", "trade": {...}}
-      - {"event_type":"update", "timestamp":"...", "update": {...}}
+    Single-source-of-truth trade logger for a live trading bot.
 
-    Public API:
-      - log_trade(trade_details)    -> append 'open'
-      - update_trade(ticket, exit_price, profit, status, **kw) -> append 'update'
-      - get_all_trades()            -> consolidated list of latest trade states
+    - Keeps all trades in memory: self.trades (List[Dict]).
+    - Centralizes persistence via persist_all(): writes JSON & CSV snapshots atomically.
+    - No JSON re-load on each append/update.
+    - Backwards compatible with main.py usage:
+        TradeLogger('trades.log')
+        log_trade({...})
+        update_trade(ticket, exit_price, profit, status)  # positional ok
     """
 
-    def __init__(self, log_file: str = "trades.log"):
-        self.log_path = Path(log_file)
-        self.log_path.parent.mkdir(parents=True, exist_ok=True)
-        if not self.log_path.exists():
-            # Use JSONL (append-only). Start as empty file.
-            self.log_path.write_text("", encoding="utf-8")
-
-    # ----------- Append operations -----------
-
-    def log_trade(self, trade_details: Dict[str, Any]) -> None:
+    def __init__(self, base_path: str,
+                 json_path: Optional[str] = None,
+                 csv_path: Optional[str] = None) -> None:
         """
-        Append a new OPEN event. trade_details should be a flat dict of the trade fields.
-        We'll wrap it under {"event_type":"open", "timestamp":..., "trade":{...}}.
+        Args:
+            base_path: Passed as 'trades.log' in your code; we derive .json/.csv alongside it.
+            json_path, csv_path: Optional explicit paths if you want to override.
         """
-        try:
-            payload = {
-                "event_type": "open",
-                "timestamp": datetime.now().isoformat(),
-                "trade": _deepcopy_jsonable(trade_details),
-            }
-            with self.log_path.open("a", encoding="utf-8") as f:
-                f.write(json.dumps(payload, cls=DateTimeEncoder))
-                f.write("\n")
+        base = Path(base_path)
+        stem = base.stem or "trades"
 
-            # Console summary (shows both ticks & pips if available)
-            t = trade_details
-            sl_ticks = t.get("stop_loss_ticks")
-            sl_pips  = t.get("stop_loss_pips")
-            drift_ticks = t.get("drift_ticks")
-            drift_pips  = t.get("drift_pips")
+        # Files used for persistence
+        self.json_file: Path = Path(json_path) if json_path else base.with_name(f"{stem}.json")
+        self.csv_file: Path = Path(csv_path) if csv_path else base.with_name(f"{stem}.csv")
 
-            msg = [
-                f"TRADE LOGGED (OPEN): {t.get('symbol')} {t.get('order_type')} @ {t.get('entry_price')}",
-                f"  Volume: {t.get('volume')}"
-            ]
-            if sl_ticks is not None and sl_pips is not None:
-                msg.append(f"  Stop Loss: {sl_ticks:.1f} ticks (~{sl_pips:.1f} pips)")
-            if drift_ticks is not None and drift_pips is not None:
-                msg.append(f"  Drift: {drift_ticks:.1f} ticks (~{drift_pips:.1f} pips)")
-            logger.info("\n".join(msg))
+        # In-memory store (source of truth)
+        self.trades: List[Dict[str, Any]] = []
 
-        except Exception as e:
-            logger.error(f"Failed to log trade: {e}", exc_info=True)
+        # Simple lock to serialize writes in async/multi-thread contexts
+        self._lock = RLock()
 
-    def update_trade(
-        self,
-        ticket: Any,
-        exit_price: float,
-        profit: float,
-        status: str,
-        *,
-        exit_time: Optional[datetime] = None,
-        duration: Optional[str] = None,
-        extra: Optional[Dict[str, Any]] = None,
-    ) -> None:
+        # One-time load of existing trades (if JSON exists)
+        self._load_once()
+
+    # -------------------------------------------------------------------------
+    # Public API
+    # -------------------------------------------------------------------------
+    def log_trade(self, trade: Dict[str, Any]) -> None:
         """
-        Append an UPDATE event for a given ticket (or position_ticket).
-        If exit_time/duration not provided, they will be inferred if possible.
+        Append a new trade record and persist snapshots.
+        Expected keys typically include:
+          timestamp (datetime), symbol, order_type, entry_price, stop_loss, take_profit,
+          ticket, reason, confidence, signal_time, drift_pips, volume, etc.
         """
-        try:
-            if exit_time is None:
-                exit_time = datetime.now()
+        with self._lock:
+            self.trades.append(trade)
+            self.persist_all()
 
-            update_block: Dict[str, Any] = {
-                "ticket": ticket,
-                "exit_price": exit_price,
-                "profit": profit,
-                "status": status,
-                "exit_time": exit_time.isoformat(),
-            }
-            if duration is not None:
-                update_block["duration"] = duration
-            if isinstance(extra, dict) and extra:
-                update_block.update(_deepcopy_jsonable(extra))
-
-            payload = {
-                "event_type": "update",
-                "timestamp": datetime.now().isoformat(),
-                "update": update_block,
-            }
-
-            with self.log_path.open("a", encoding="utf-8") as f:
-                f.write(json.dumps(payload, cls=DateTimeEncoder))
-                f.write("\n")
-
-            logger.info(
-                f"TRADE LOGGED (UPDATE): ticket={ticket} status={status} exit_price={exit_price} profit={profit}"
-            )
-
-        except Exception as e:
-            logger.error(f"Failed to update trade: {e}", exc_info=True)
-
-    # ----------- Read / Consolidate -----------
-
-    def _iter_events(self) -> Iterable[Dict[str, Any]]:
-        """Yield each JSON object (event) from the JSONL file."""
-        try:
-            with self.log_path.open("r", encoding="utf-8") as f:
-                for line in f:
-                    line = line.strip()
-                    if not line:
-                        continue
-                    try:
-                        obj = json.loads(line)
-                        if isinstance(obj, dict):
-                            yield obj
-                    except Exception:
-                        continue
-        except FileNotFoundError:
-            return
-
-    def get_all_trades(self) -> List[Dict[str, Any]]:
+    def update_trade(self,
+                     ticket: Optional[int] = None,
+                     exit_price: Optional[float] = None,
+                     profit: Optional[float] = None,
+                     status: Optional[str] = None,
+                     **fields: Any) -> None:
         """
-        Return a consolidated list of latest trade states.
-        - Start from each OPEN event's 'trade' dict.
-        - Apply any UPDATE events on top (match by ticket or position_ticket).
+        Update a trade in-memory, then persist snapshots.
+
+        Backward-compatible with positional usage:
+            update_trade(ticket, exit_price, profit, status)
+
+        Also supports keyword usage:
+            update_trade(ticket=123, exit_price=1.2345, profit=42.0, status='CLOSED_TP')
+
+        You can pass extra fields via **fields (e.g., commission, swap, close_time).
         """
-        # Map by a canonical key (prefer 'position_ticket', fallback to 'ticket')
-        def key_of(trade_like: Dict[str, Any]) -> Optional[str]:
-            tkt = trade_like.get("position_ticket")
-            if tkt is None:
-                tkt = trade_like.get("ticket")
-            return str(tkt) if tkt is not None else None
+        with self._lock:
+            target = None
 
-        latest: Dict[str, Dict[str, Any]] = {}
+            if ticket is not None:
+                for t in self.trades:
+                    if t.get("ticket") == ticket:
+                        target = t
+                        break
 
-        for ev in self._iter_events():
-            et = ev.get("event_type")
-            if et == "open":
-                trade = ev.get("trade") or {}
-                # Normalize
-                trade = dict(trade)
-                trade.setdefault("status", "OPEN")
-                # Some sources keep the entry timestamp inside 'trade'
-                # If absent, use event's timestamp
-                trade.setdefault("timestamp", ev.get("timestamp"))
-                k = key_of(trade)
-                if k:
-                    latest[k] = trade
+            # If not found by ticket but some identifying fields were provided,
+            # try the first record that matches all of them.
+            if target is None and fields:
+                for t in self.trades:
+                    if all(t.get(k) == v for k, v in fields.items() if v is not None):
+                        target = t
+                        break
 
-            elif et == "update":
-                upd = ev.get("update") or {}
-                # Find existing trade by ticket / position_ticket
-                k = _first_non_none(upd.get("ticket"), upd.get("position_ticket"))
-                k = str(k) if k is not None else None
-                if not k:
-                    continue
-                base = latest.get(k, {"ticket": k, "status": "OPEN"})
-                # Apply update fields
-                for fld in ("exit_price", "profit", "status", "exit_time", "duration"):
-                    if fld in upd and upd[fld] is not None:
-                        base[fld] = upd[fld]
-                # Ensure symbol is present if we can infer (not strictly required)
-                if "symbol" not in base and "symbol" in upd:
-                    base["symbol"] = upd["symbol"]
-                latest[k] = base
+            if target is None:
+                # Not found — nothing to update (intentionally silent for live safety)
+                return
 
-            else:
-                # Backward compatibility: a flat trade dict line (rare)
-                if "symbol" in ev and "entry_price" in ev:
-                    trade = dict(ev)
-                    trade.setdefault("status", "OPEN")
-                    k = key_of(trade)
-                    if k:
-                        latest[k] = trade
+            if exit_price is not None:
+                target["exit_price"] = exit_price
+            if profit is not None:
+                target["profit"] = profit
+            if status is not None:
+                target["status"] = status
 
-        # Return as list
-        return list(latest.values())
+            # Apply any additional updates provided
+            for k, v in fields.items():
+                if v is not None:
+                    target[k] = v
 
-    # ----------- Metrics / Reporting -----------
+            self.persist_all()
 
+    def persist_all(self) -> None:
+        """
+        Single serialization path:
+        - Writes full JSON snapshot of self.trades.
+        - Writes full CSV snapshot of self.trades.
+        Both writes are atomic (tmp + replace).
+        """
+        self._write_json_snapshot(self.trades)
+        self._write_csv_snapshot(self.trades)
+
+    # Optional convenience: quick metrics without touching I/O
     def get_performance_metrics(self) -> Dict[str, Any]:
         """
-        Compute basic performance metrics from consolidated trades.
-        Counts only those with a CLOSED_* status for PnL stats.
+        Read-only analytics over in-memory trades. Safe to keep; not required by the bot.
         """
-        trades = self.get_all_trades()
+        closed = [t for t in self.trades if str(t.get("status", "")).startswith("CLOSED")]
+        if not closed:
+            return {
+                "total_trades": 0,
+                "win_rate": 0.0,
+                "avg_win": 0.0,
+                "avg_loss": 0.0,
+                "net_profit": 0.0,
+                "expectancy": 0.0,
+            }
 
-        total = len(trades)
-        closed = [t for t in trades if str(t.get("status", "")).upper().startswith("CLOSED")]
-        open_trades = [t for t in trades if not str(t.get("status", "OPEN")).upper().startswith("CLOSED")]
+        profits = [float(t.get("profit", 0.0) or 0.0) for t in closed]
+        wins = [p for p in profits if p > 0]
+        losses = [p for p in profits if p <= 0]
 
-        wins = [t for t in closed if float(t.get("profit", 0) or 0) > 0]
-        losses = [t for t in closed if float(t.get("profit", 0) or 0) <= 0]
-
-        gross_profit = sum(float(t.get("profit", 0) or 0) for t in wins)
-        gross_loss = sum(abs(float(t.get("profit", 0) or 0)) for t in losses)
-
-        win_rate = (len(wins) / len(closed)) if closed else 0.0
-        profit_factor = (gross_profit / gross_loss) if gross_loss > 0 else float("inf") if gross_profit > 0 else 0.0
-        net_profit = gross_profit - gross_loss
-
-        # Simple running equity & max drawdown estimate (based on closed PnL only)
-        equity = 0.0
-        peak = 0.0
-        max_dd = 0.0
-        for t in closed:
-            equity += float(t.get("profit", 0) or 0)
-            peak = max(peak, equity)
-            dd = (peak - equity)
-            max_dd = max(max_dd, dd)
-
-        avg_win = (gross_profit / len(wins)) if wins else 0.0
-        avg_loss = (-gross_loss / len(losses)) if losses else 0.0
-        max_win = max((float(t.get("profit", 0) or 0) for t in closed), default=0.0)
-        max_loss = min((float(t.get("profit", 0) or 0) for t in closed), default=0.0)
+        total = len(closed)
+        win_rate = (len(wins) / total) if total else 0.0
+        avg_win = (sum(wins) / len(wins)) if wins else 0.0
+        avg_loss = (sum(losses) / len(losses)) if losses else 0.0
+        net_profit = sum(profits)
+        expectancy = (net_profit / total) if total else 0.0
 
         return {
             "total_trades": total,
-            "closed_trades": len(closed),
-            "open_trades": len(open_trades),
             "win_rate": win_rate,
-            "profit_factor": profit_factor,
-            "net_profit": net_profit,
-            "gross_profit": gross_profit,
-            "gross_loss": -gross_loss,
             "avg_win": avg_win,
             "avg_loss": avg_loss,
-            "max_win": max_win,
-            "max_loss": max_loss,
-            "max_drawdown": max_dd,
+            "net_profit": net_profit,
+            "expectancy": expectancy,
         }
 
-    def generate_performance_report(self, output_file: str = "performance_report.txt") -> str:
-        """
-        Produce a simple text report from current logs (closed trades only).
-        """
-        m = self.get_performance_metrics()
-        lines = [
-            "=" * 60,
-            "PERFORMANCE REPORT",
-            "=" * 60,
-            f"Total Trades: {m.get('total_trades', 0)}",
-            f"Closed Trades: {m.get('closed_trades', 0)}",
-            f"Open Trades: {m.get('open_trades', 0)}",
-            f"Win Rate: {m.get('win_rate', 0):.2%}",
-            f"Profit Factor: {m.get('profit_factor', 0):.2f}",
-            f"Net Profit: {m.get('net_profit', 0):.2f}",
-            f"Gross Profit: {m.get('gross_profit', 0):.2f}",
-            f"Gross Loss: {m.get('gross_loss', 0):.2f}",
-            f"Avg Win: {m.get('avg_win', 0):.2f}",
-            f"Avg Loss: {m.get('avg_loss', 0):.2f}",
-            f"Max Win: {m.get('max_win', 0):.2f}",
-            f"Max Loss: {m.get('max_loss', 0):.2f}",
-            f"Max Drawdown: {m.get('max_drawdown', 0):.2f}",
-            "=" * 60,
-        ]
-        report_text = "\n".join(lines)
+    # -------------------------------------------------------------------------
+    # Internals (I/O)
+    # -------------------------------------------------------------------------
+    def _load_once(self) -> None:
+        """Load existing trades from JSON once at startup (if present and valid)."""
         try:
-            Path(output_file).write_text(report_text, encoding="utf-8")
-            logger.info(f"Performance report generated: {output_file}")
-        except Exception as e:
-            logger.error(f"Failed to write performance report: {e}")
-        return report_text
+            if self.json_file.exists():
+                raw = self.json_file.read_text(encoding="utf-8")
+                if raw.strip():
+                    self.trades = json.loads(raw)
+                else:
+                    self.trades = []
+            else:
+                self.trades = []
+        except Exception:
+            # On corrupt JSON, start fresh (optionally back up here)
+            self.trades = []
 
+    def _write_json_snapshot(self, rows: List[Dict[str, Any]]) -> None:
+        """Atomic JSON snapshot write."""
+        tmp = self.json_file.with_suffix(self.json_file.suffix + ".tmp")
+        with tmp.open("w", encoding="utf-8") as f:
+            json.dump(rows, f, indent=2, cls=_DateTimeEncoder, ensure_ascii=False)
+        os.replace(tmp, self.json_file)
 
-    def generate_report(self, output_file: str = 'performance_report.txt'):
-        """
-        Generate a performance report.
-        """
-        metrics = self.get_performance_metrics()
-        
-        report = [
-            "=" * 60,
-            "TRADING PERFORMANCE REPORT",
-            "=" * 60,
-            f"Generated: {datetime.now()}",
-            "",
-            "TRADE STATISTICS",
-            "-" * 40,
-            f"Total Trades: {metrics.get('total_trades', 0)}",
-            f"Open Trades: {metrics.get('open_trades', 0)}",
-            f"Closed Trades: {metrics.get('closed_trades', 0)}",
-            f"Winning Trades: {metrics.get('winning_trades', 0)}",
-            f"Losing Trades: {metrics.get('losing_trades', 0)}",
-            f"Win Rate: {metrics.get('win_rate', 0):.2%}",
-            "",
-            "PROFIT METRICS",
-            "-" * 40,
-            f"Total Profit: ${metrics.get('total_profit', 0):.2f}",
-            f"Average Profit: ${metrics.get('average_profit', 0):.2f}",
-            f"Average Win: ${metrics.get('average_win', 0):.2f}",
-            f"Average Loss: ${metrics.get('average_loss', 0):.2f}",
-            f"Profit Factor: {metrics.get('profit_factor', 0):.2f}",
-            f"Max Win: ${metrics.get('max_win', 0):.2f}",
-            f"Max Loss: ${metrics.get('max_loss', 0):.2f}",
-            f"Max Drawdown: {metrics.get('max_drawdown', 0):.2%}",
-            "=" * 60,
-        ]
-        
-        report_text = "\n".join(report)
-        try:
-            with open(output_file, 'w') as f:
-                f.write(report_text)
-            logger.info(f"Performance report generated: {output_file}")
-        except Exception as e:
-            logger.error(f"Failed to write performance report: {e}")
-            
-        return report_text
+    def _write_csv_snapshot(self, rows: List[Dict[str, Any]]) -> None:
+        """Atomic CSV snapshot write with header = union of keys across rows."""
+        tmp = self.csv_file.with_suffix(self.csv_file.suffix + ".tmp")
+
+        if not rows:
+            # Create/clear file to empty (headerless) CSV
+            with tmp.open("w", newline="", encoding="utf-8") as f:
+                pass
+            os.replace(tmp, self.csv_file)
+            return
+
+        # Stable, schema-safe header
+        header = sorted({k for r in rows for k in r.keys()})
+
+        with tmp.open("w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=header, extrasaction="ignore")
+            writer.writeheader()
+            for r in rows:
+                # Convert datetimes to ISO in CSV as well
+                safe_row = {k: (v.isoformat() if isinstance(v, datetime) else v) for k, v in r.items()}
+                writer.writerow(safe_row)
+
+        os.replace(tmp, self.csv_file)
