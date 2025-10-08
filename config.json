@@ -24,6 +24,14 @@
     "close_only_profitable": true,
     "cooldown_seconds": 60
   },
+  "m1_confirmation": {
+    "enabled": true,
+    "candles": 1,
+    "buffer_pips": 0.5,
+    "dynamic_buffer": true,
+    "min_buffer_pips": 0.5,
+    "spread_multiplier": 1.2
+  },
   "enable_position_manager": false,
   "risk_management": {
     "risk_per_trade": 0.01,
@@ -31,40 +39,19 @@
     "max_drawdown_percentage": 0.05,
     "risk_reward_ratio": 2.0
   },
-  "symbols": [
-    {
-      "name": "EURUSD",
-      "timeframes": ["M15", "H1"]
-    },
-    {
-      "name": "GBPUSD",
-      "timeframes": ["M15", "H1"]
-    },
-    {
-      "name": "USDJPY",
-      "timeframes": ["M15", "H1"]
-    },
-    {
-      "name": "NZDUSD",
-      "timeframes": ["M15", "H1"]
-    },
-    {
-      "name": "USDCHF",
-      "timeframes": ["M15", "H1"]
-    },
-    {
-      "name": "XAUUSD",
-      "timeframes": ["M15", "H1"],
-      "min_stop_loss_pips": 500,
-      "stop_loss_buffer_pips": 100,
-      "breakout_threshold_pips": 200,
-      "risk_reward_ratio": 1.5,
-      "duplicate_breakout_distance_pips": 200,
-      "duplicate_breakout_window_seconds": 1800,
-      "drift_max_pips": 100,
-      "drift_fraction_of_sl": 0.5
-    }
-  ],
+    "symbols": [
+    { "name": "EURUSD",  "timeframes": ["M15", "H1"] },
+    { "name": "GBPUSD",  "timeframes": ["M15", "H1"] },
+    { "name": "USDJPY",  "timeframes": ["M15", "H1"] },
+    { "name": "NZDUSD",  "timeframes": ["M15", "H1"] },
+    { "name": "USDCHF",  "timeframes": ["M15", "H1"] },
+    { "name": "XAUUSD",  "timeframes": ["M15", "H1"] },
+    { "name": "AUDUSD",  "timeframes": ["M15", "H1"] },
+    { "name": "USDCAD",  "timeframes": ["M15", "H1"] },
+    { "name": "EURJPY",  "timeframes": ["M15", "H1"] },
+    { "name": "EURGBP",  "timeframes": ["M15", "H1"] },
+    { "name": "EURAUD",  "timeframes": ["M15", "H1"] }
+  ],  
   "trading_sessions": [
     { "name": "Asia",    "start_time": "03:00", "end_time": "12:00" },
     { "name": "London",  "start_time": "10:00", "end_time": "20:00" },

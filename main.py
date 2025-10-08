@@ -68,6 +68,16 @@ class Config:
             self.max_drawdown = risk.get('max_drawdown_percentage', 0.1)
             self.risk_reward_ratio = risk.get('risk_reward_ratio', 2.0)
 
+            # M1 confirmation (configurable at top-level under "m1_confirmation" or via trading_settings fallbacks)
+            m1 = config_data.get('m1_confirmation', {}) or {}
+            self.m1_confirmation_enabled = bool(m1.get('enabled', trading.get('m1_confirmation_enabled', False)))
+            self.m1_confirmation_candles = int(m1.get('candles', trading.get('m1_confirmation_candles', 1)))
+            self.m1_confirmation_buffer_pips = float(m1.get('buffer_pips', trading.get('m1_confirmation_buffer_pips', 0.5)))
+            self.m1_confirmation_dynamic_buffer = bool(m1.get('dynamic_buffer', True))
+            # If min_buffer not provided, default to buffer_pips
+            self.m1_confirmation_min_buffer_pips = float(m1.get('min_buffer_pips', self.m1_confirmation_buffer_pips))
+            self.m1_confirmation_spread_multiplier = float(m1.get('spread_multiplier', 1.2))
+
             # Basket take profit (close only profitable positions on net threshold)
             btp = config_data.get('basket_take_profit', {}) or {}
             self.basket_take_profit = {
@@ -253,11 +263,6 @@ class TradingBot:
             
             self.market_data = MarketData(self.mt5_client, self.config)
             self.strategy = PurePriceActionStrategy(self.config)
-            # Disable M1 confirmation for now
-            try:
-                self.strategy.m1_confirmation_enabled = False
-            except Exception:
-                pass
             self.risk_manager = RiskManager(self.config, self.mt5_client)
             self.trade_logger = TradeLogger('trades.log')
             
@@ -616,6 +621,8 @@ class TradingBot:
                     'signal_price': signal.entry_price,  # Track signal vs execution
                     'volume': position_size,
                     'stop_loss': signal.stop_loss,
+                    'status': 'OPEN',
+                    'order_id': getattr(result, 'order', None),
                     'take_profit': signal.take_profit,
                     'ticket': result.order,
                     'reason': signal.reason,

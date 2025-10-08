@@ -75,6 +75,10 @@ class PurePriceActionStrategy:
         self.m1_confirmation_enabled = getattr(config, "m1_confirmation_enabled", False)
         self.m1_confirmation_candles = getattr(config, "m1_confirmation_candles", 1)  # number of closed M1 candles beyond level
         self.m1_confirmation_buffer_pips = getattr(config, "m1_confirmation_buffer_pips", 0.5)  # small buffer beyond level
+        # Dynamic buffer controls (useful for high-spread/volatile instruments)
+        self.m1_confirmation_dynamic_buffer = getattr(config, "m1_confirmation_dynamic_buffer", True)
+        self.m1_confirmation_min_buffer_pips = getattr(config, "m1_confirmation_min_buffer_pips", 0.5)
+        self.m1_confirmation_spread_multiplier = getattr(config, "m1_confirmation_spread_multiplier", 1.2)
 
         # Backtest mode: disables real-time age/close filters
         self.backtest_mode = getattr(config, "backtest_mode", False)
@@ -211,7 +215,19 @@ class PurePriceActionStrategy:
             if len(closed) < need_closed:
                 return False, "not_enough_closed_m1"
 
-            buffer = self.m1_confirmation_buffer_pips * pip_size
+            # Compute confirmation buffer (optionally dynamic w.r.t. current spread)
+            try:
+                spread_pips = (tick.ask - tick.bid) / pip_size if pip_size else 0.0
+            except Exception:
+                spread_pips = 0.0
+
+            if self.m1_confirmation_dynamic_buffer:
+                buffer_pips = max(self.m1_confirmation_min_buffer_pips,
+                                   spread_pips * float(self.m1_confirmation_spread_multiplier))
+            else:
+                buffer_pips = float(self.m1_confirmation_buffer_pips)
+
+            buffer = buffer_pips * pip_size
 
             if breakout.type == 'bullish':
                 # Check last N closed candles closed beyond level
@@ -435,6 +451,7 @@ class PurePriceActionStrategy:
             # QUICK FILTERS
             # 1. Spread filter
             max_spread = (atr * self.max_spread_atr_ratio) if atr else (self.max_spread_pips * pip_size)
+            spread_pips = ((tick.ask - tick.bid) / pip_size) if pip_size else 0.0
             if tick.ask - tick.bid > max_spread:
                 logger.debug(f"{symbol}: Spread too high ({spread_pips:.1f} pips)")
                 return None
@@ -465,6 +482,9 @@ class PurePriceActionStrategy:
             candle_body = abs(forming_candle['close'] - forming_candle['open'])
             candle_range = max(forming_candle['high'] - forming_candle['low'], 1e-12)
             body_ratio = candle_body / candle_range
+
+            # Base direction from the current timeframe (e.g., M15)
+            is_bullish_candle = forming_candle['close'] > forming_candle['open']
             
             min_body_ratio = self.min_body_ratio
             if atr and (atr / pip_size) < 10:
@@ -570,8 +590,7 @@ class PurePriceActionStrategy:
                         f"{symbol}: Limited room after breakout ({distance_to_next/pip_size:.1f}p < {room_req/pip_size:.1f}p). Skipping.")
                     return None
             
-            # Calculate confidence
-            is_bullish_candle = forming_candle['close'] > forming_candle['open']
+            # Calculate confidence (use possibly overridden M1 momentum/direction if confirmation was used)
             spread = tick.ask - tick.bid
             confidence, should_trade = self._calculate_confidence(
                 breakout, candle_body, candle_range, is_bullish_candle,
