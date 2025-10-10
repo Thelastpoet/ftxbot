@@ -138,7 +138,7 @@ class MetaTrader5Client:
             return None
         
         return rates
-    
+
     def place_order(self, symbol: str, order_type: int, volume: float, 
                    price: Optional[float] = None, sl: Optional[float] = None, 
                    tp: Optional[float] = None, comment: str = "") -> Optional[Any]:
@@ -162,18 +162,9 @@ class MetaTrader5Client:
         volume = round(volume / lot_step) * lot_step
         volume = max(symbol_info.volume_min, min(volume, symbol_info.volume_max))
         
-        # --- Pick supported filling mode dynamically ---
-        filling_modes = []
-        if hasattr(symbol_info, 'filling_mode'):
-            filling_modes.append(symbol_info.filling_mode)
-        if hasattr(symbol_info, 'filling_modes') and symbol_info.filling_modes:
-            filling_modes.extend(symbol_info.filling_modes)
-            
-        if not filling_modes:
-            type_filling = filling_modes[0]
-        else:
-            type_filling = mt5.ORDER_FILLING_FOK
-        
+        # --- Build candidate filling modes ---
+        candidates: List[int] = self._fill_candidates(symbol)
+
         # Prepare request
         request = {
             "action": mt5.TRADE_ACTION_DEAL,
@@ -185,7 +176,7 @@ class MetaTrader5Client:
             "magic": 234000,  # Magic number for identification
             "comment": comment,
             "type_time": mt5.ORDER_TIME_GTC,
-            "type_filling": type_filling,
+            # type_filling will be set during send attempts
         }
         
         # Add stop loss if specified
@@ -196,18 +187,11 @@ class MetaTrader5Client:
         if tp is not None:
             request["tp"] = tp
         
-        # Send order
-        result = mt5.order_send(request)
-        
+        # Send order with filling mode fallbacks
+        result = self._order_send_with_fill_fallback(request, candidates)
         if result is None:
-            logger.error("Order send failed: No result returned")
             return None
-        
-        if result.retcode != mt5.TRADE_RETCODE_DONE:
-            logger.error(f"Order failed: {result.retcode} - {result.comment}")
-            return None
-        
-        logger.info(f"Order placed successfully: {result.order}")
+        logger.info(f"Order placed successfully: {getattr(result, 'order', None)}")
         return result
     
     def get_positions(self, symbol: Optional[str] = None) -> List[Any]:
@@ -256,18 +240,8 @@ class MetaTrader5Client:
         
         price = tick.bid if close_type == mt5.ORDER_TYPE_SELL else tick.ask
         
-        # --- Pick supported filling mode dynamically ---
-        symbol_info = self.get_symbol_info(position.symbol)
-        filling_modes = []
-        if hasattr(symbol_info, "filling_mode"):
-            filling_modes.append(symbol_info.filling_mode)
-        if hasattr(symbol_info, "filling_modes") and symbol_info.filling_modes:
-            filling_modes.extend(symbol_info.filling_modes)
-        
-        if filling_modes:
-            type_filling = filling_modes[0]  # choose the first available
-        else:
-            type_filling = mt5.ORDER_FILLING_FOK  # fallback
+        # --- Build candidate filling modes ---
+        candidates: List[int] = self._fill_candidates(position.symbol)
         
         # Prepare close request
         request = {
@@ -281,20 +255,13 @@ class MetaTrader5Client:
             "magic": 234000,
             "comment": f"Close position {ticket}",
             "type_time": mt5.ORDER_TIME_GTC,
-            "type_filling": type_filling,
+            # type_filling will be set during send attempts
         }
         
-        # Send close order
-        result = mt5.order_send(request)
-        
+        # Send close order with filling mode fallbacks
+        result = self._order_send_with_fill_fallback(request, candidates)
         if result is None:
-            logger.error("Close order failed: No result returned")
             return None
-        
-        if result.retcode != mt5.TRADE_RETCODE_DONE:
-            logger.error(f"Close order failed: {result.retcode} - {result.comment}")
-            return None
-        
         logger.info(f"Position {ticket} closed successfully")
         return result
     
@@ -372,3 +339,73 @@ class MetaTrader5Client:
             return []
         
         return list(deals)
+
+    # ---------- Internal helpers ----------
+    def _order_send_with_fill_fallback(self, request: dict, candidates: List[int]) -> Optional[Any]:
+        """Attempt order_send with a list of filling modes.
+
+        Tries the provided filling mode candidates in order. If the server
+        rejects with unsupported filling mode (retcode 10030), it retries with
+        the next candidate. Returns the successful result, or None on failure.
+        """
+        invalid_fill_code = getattr(mt5, 'TRADE_RETCODE_INVALID_FILL', 10030)
+
+        last_result = None
+        for idx, fm in enumerate(candidates, start=1):
+            req = dict(request)
+            req['type_filling'] = fm
+            try:
+                result = mt5.order_send(req)
+            except Exception as e:
+                logger.error(f"order_send exception on attempt {idx} with filling={fm}: {e}")
+                continue
+
+            if result is None:
+                logger.error(f"Order send failed (attempt {idx}) with filling={fm}: No result returned")
+                continue
+
+            # Success
+            if getattr(result, 'retcode', None) == getattr(mt5, 'TRADE_RETCODE_DONE', 10009):
+                return result
+
+            # If unsupported filling, try next candidate
+            if getattr(result, 'retcode', None) == invalid_fill_code:
+                logger.error(f"Unsupported filling mode (retcode {result.retcode}) with filling={fm}; retrying next mode")
+                last_result = result
+                continue
+
+            # Other error: log and stop trying
+            logger.error(f"Order failed (attempt {idx}) with filling={fm}: {result.retcode} - {getattr(result, 'comment', '')}")
+            return None
+
+        # Exhausted all candidates
+        if last_result is not None:
+            logger.error(f"Order failed: unsupported filling modes for all candidates: {candidates}")
+        return None
+
+    def _fill_candidates(self, symbol: str) -> List[int]:
+        """Return preferred filling modes for a symbol, with sensible fallbacks.
+
+        Order: [symbol's configured mode if available] + [IOC, FOK, RETURN] (deduped).
+        """
+        candidates: List[int] = []
+        try:
+            info = self.get_symbol_info(symbol)
+        except Exception:
+            info = None
+
+        try:
+            if info is not None and hasattr(info, 'filling_mode') and info.filling_mode is not None:
+                candidates.append(int(info.filling_mode))
+        except Exception:
+            pass
+
+        for fm in (
+            getattr(mt5, 'ORDER_FILLING_IOC', 1),
+            getattr(mt5, 'ORDER_FILLING_FOK', 0),
+            getattr(mt5, 'ORDER_FILLING_RETURN', 2),
+        ):
+            if fm not in candidates:
+                candidates.append(fm)
+
+        return candidates

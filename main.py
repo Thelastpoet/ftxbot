@@ -60,6 +60,10 @@ class Config:
             self.atr_tp_multiplier = trading.get('atr_tp_multiplier', 4.0)
             self.session_based_tp = trading.get('session_based_tp', True)
             self.volatility_adjustment = trading.get('volatility_adjustment', True)
+
+            # Adaptive SL configuration (top-level keys with sensible defaults)
+            self.stop_loss_atr_multiplier = float(config_data.get('stop_loss_atr_multiplier', 1.0))
+            self.spread_floor_multiplier = float(config_data.get('spread_floor_multiplier', 1.1))
             
             # Risk management
             risk = config_data.get('risk_management', {})
@@ -186,6 +190,9 @@ class Config:
         self.atr_tp_multiplier = 4.0
         self.session_based_tp = True
         self.volatility_adjustment = True
+        # Adaptive SL defaults
+        self.stop_loss_atr_multiplier = 1.0
+        self.spread_floor_multiplier = 1.1
         # Basket take profit defaults
         self.basket_take_profit = {
             'enabled': False,
@@ -569,10 +576,31 @@ class TradingBot:
             actual_sl_distance = abs(execution_price - signal.stop_loss)
             actual_sl_pips = actual_sl_distance / pip_size
             
-            # Validate minimum stop loss
-            if actual_sl_pips < self.config.min_stop_loss_pips:
+            # Validate minimum stop loss against microstructure floor (broker + spread cushion)
+            try:
+                point = getattr(symbol_info, 'point', 0.0) or 0.0
+                pip_points = (pip_size / point) if point and point > 0 else 0.0
+                stops_level_points = getattr(symbol_info, 'trade_stops_level', 0) or 0
+                stops_level_pips = (stops_level_points / pip_points) if pip_points > 0 else 0.0
+            except Exception:
+                stops_level_pips = 0.0
+
+            spread_pips = ((tick.ask - tick.bid) / pip_size) if pip_size else 0.0
+
+            # Resolve per-symbol spread floor multiplier
+            spread_floor_mult = float(getattr(self.config, 'spread_floor_multiplier', 1.1))
+            try:
+                for sc in self.config.symbols:
+                    if sc.get('name') == symbol:
+                        spread_floor_mult = float(sc.get('spread_floor_multiplier', spread_floor_mult))
+                        break
+            except Exception:
+                pass
+
+            micro_floor_pips = max(stops_level_pips, spread_pips * spread_floor_mult)
+            if actual_sl_pips < micro_floor_pips:
                 logger.warning(
-                    f"{symbol}: SL too tight after drift ({actual_sl_pips:.1f} pips) - skipping"
+                    f"{symbol}: SL too tight after drift ({actual_sl_pips:.1f} pips < floor {micro_floor_pips:.1f} pips) - skipping"
                 )
                 return
             
@@ -628,7 +656,14 @@ class TradingBot:
                     'reason': signal.reason,
                     'confidence': signal.confidence,
                     'signal_time': signal.timestamp,
-                    'drift_pips': price_drift / pip_size
+                    'drift_pips': price_drift / pip_size,
+                    # Diagnostics for adaptive SL analysis
+                    'stop_loss_pips': actual_sl_pips,
+                    'pip_size': pip_size,
+                    'spread_pips': spread_pips,
+                    'broker_stops_level_pips': stops_level_pips,
+                    'atr_pips': getattr(signal, 'atr_pips', None),
+                    'sl_basis': getattr(signal, 'sl_basis', None),
                 }
                 
                 self.trade_logger.log_trade(trade_details)

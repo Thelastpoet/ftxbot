@@ -24,8 +24,10 @@
     "close_only_profitable": true,
     "cooldown_seconds": 60
   },
+  "stop_loss_atr_multiplier": 1.0,
+  "spread_floor_multiplier": 1.1,
   "m1_confirmation": {
-    "enabled": true,
+    "enabled": false,
     "candles": 1,
     "buffer_pips": 0.5,
     "dynamic_buffer": true,
@@ -37,7 +39,19 @@
     "risk_per_trade": 0.01,
     "fixed_lot_size": null,
     "max_drawdown_percentage": 0.05,
-    "risk_reward_ratio": 2.0
+    "risk_reward_ratio": 2.0,
+    "liquidity_context_enabled": true,
+    "liquidity_context_enforce": true,
+    "liquidity_equal_level_tolerance_pips": 6,
+    "liquidity_cushion_atr_mult": 0.6,
+    "liquidity_cushion_atr_mult_repeat": 0.8,
+    "liquidity_min_cushion_pips": 4,
+    "liquidity_recent_sweep_max_age_bars": 15,
+    "liquidity_sweep_lookback_bars": 40,
+    "liquidity_wick_to_body_ratio_min": 1.5,
+    "liquidity_use_close_back": true,
+    "liquidity_require_confirmation_on_dual_pools": true,
+    "liquidity_max_sl_distance_pips": 600
   },
     "symbols": [
     { "name": "EURUSD",  "timeframes": ["M15", "H1"] },
@@ -47,10 +61,7 @@
     { "name": "USDCHF",  "timeframes": ["M15", "H1"] },
     { "name": "XAUUSD",  "timeframes": ["M15", "H1"] },
     { "name": "AUDUSD",  "timeframes": ["M15", "H1"] },
-    { "name": "USDCAD",  "timeframes": ["M15", "H1"] },
-    { "name": "EURJPY",  "timeframes": ["M15", "H1"] },
-    { "name": "EURGBP",  "timeframes": ["M15", "H1"] },
-    { "name": "EURAUD",  "timeframes": ["M15", "H1"] }
+    { "name": "USDCAD",  "timeframes": ["M15", "H1"] }
   ],  
   "trading_sessions": [
     { "name": "Asia",    "start_time": "03:00", "end_time": "12:00" },

@@ -21,6 +21,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 
 from utils import get_pip_size
+from liquidity_context import build_liquidity_context, LiquidityConfig
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +37,8 @@ class TradingSignal:
     confidence: float
     timestamp: datetime
     breakout_level: float = None
+    atr_pips: Optional[float] = None
+    sl_basis: Optional[str] = None
 
 class BreakoutInfo(NamedTuple):
     """Breakout detection result"""
@@ -57,6 +60,9 @@ class PurePriceActionStrategy:
         self.risk_reward_ratio = config.risk_reward_ratio
         self.min_stop_loss_pips = getattr(config, "min_stop_loss_pips", 15)
         self.stop_loss_buffer_pips = getattr(config, "stop_loss_buffer_pips", 10)
+        # Adaptive SL controls
+        self.stop_loss_atr_multiplier = getattr(config, "stop_loss_atr_multiplier", 1.0)
+        self.spread_floor_multiplier = getattr(config, "spread_floor_multiplier", 1.1)
         
         # Trading thresholds (slightly relaxed to avoid over-filtering)
         self.max_spread_atr_ratio = getattr(config, "max_spread_atr_ratio", 0.35)
@@ -86,6 +92,25 @@ class PurePriceActionStrategy:
         # Optional: require last closed candle to confirm beyond the level
         self.require_close_breakout = getattr(config, "require_close_breakout", False)
         self.close_breakout_buffer_pips = getattr(config, "close_breakout_buffer_pips", 0.2)
+        
+        # --- Liquidity Context (stop-loss memory) ---
+        self.liquidity_context_enabled = getattr(config, "liquidity_context_enabled", True)
+        self.liq_cfg = LiquidityConfig(
+            # Sensible defaults; tune per symbol in your config later if you like
+            equal_level_tolerance_pips=getattr(config, "liquidity_equal_level_tolerance_pips", 6),
+            cushion_atr_mult=getattr(config, "liquidity_cushion_atr_mult", 0.6),
+            cushion_atr_mult_repeat=getattr(config, "liquidity_cushion_atr_mult_repeat", 0.8),
+            min_cushion_pips=getattr(config, "liquidity_min_cushion_pips", 4.0),
+            recent_sweep_max_age_bars=getattr(config, "liquidity_recent_sweep_max_age_bars", 15),
+            sweep_lookback_bars=getattr(config, "liquidity_sweep_lookback_bars", 40),
+            wick_to_body_ratio_min=getattr(config, "liquidity_wick_to_body_ratio_min", 1.5),
+            use_close_back=getattr(config, "liquidity_use_close_back", True),
+            require_confirmation_on_dual_pools=getattr(config, "liquidity_require_confirmation_on_dual_pools", True),
+            max_sl_distance_pips=getattr(config, "liquidity_max_sl_distance_pips", None),  # optional hard cap
+        )
+        # Advisory-only by default: we won’t *change* SL unless you flip this
+        self.liquidity_context_enforce = getattr(config, "liquidity_context_enforce", False)
+
 
     def find_swing_points(self, data: pd.DataFrame) -> Tuple[np.ndarray, np.ndarray]:
         """
@@ -321,7 +346,7 @@ class PurePriceActionStrategy:
         
         return final_confidence, should_trade
 
-    def _calculate_stop_loss(self, breakout: BreakoutInfo, atr: Optional[float], pip_size: float, tick: any, symbol: str) -> float:
+    def _calculate_stop_loss(self, breakout: BreakoutInfo, atr: Optional[float], pip_size: float, tick: any, symbol: str) -> Tuple[float, str]:
         """
         Calculates the stop loss for a given breakout signal, ensuring it's logical and safe.
         
@@ -329,17 +354,35 @@ class PurePriceActionStrategy:
         1. The broken S/R level (structural_sl).
         2. A minimum distance based on volatility (ATR) or a fixed pip value (volatility_sl).
         """
-        # Get symbol-specific min stop loss from config
-        min_stop_loss_pips = self.min_stop_loss_pips
+        # Resolve per-symbol adaptive parameters
+        eff_atr_mult = self.stop_loss_atr_multiplier
+        eff_spread_floor_mult = self.spread_floor_multiplier
         for sym_config in getattr(self.config, "symbols", []):
             if sym_config.get('name') == symbol:
-                min_stop_loss_pips = sym_config.get("min_stop_loss_pips", min_stop_loss_pips)
+                eff_atr_mult = sym_config.get("stop_loss_atr_multiplier", eff_atr_mult)
+                eff_spread_floor_mult = sym_config.get("spread_floor_multiplier", eff_spread_floor_mult)
                 break
 
-        # 1. Determine minimum required SL distance based on config and ATR
-        min_dist_from_config = min_stop_loss_pips * pip_size
-        min_dist_from_atr = (atr * 0.8) if atr else 0.0
-        min_sl_distance = max(min_dist_from_config, min_dist_from_atr)
+        # 1. Determine minimum required SL distance based on ATR and microstructure
+        #    Microstructure floor = max(broker minimum stops level, spread cushion)
+        stops_level_pips = 0.0
+        try:
+            symbol_info = mt5.symbol_info(symbol)
+            if symbol_info and getattr(symbol_info, 'point', 0) and getattr(symbol_info, 'trade_stops_level', None) is not None:
+                point = float(symbol_info.point)
+                pip_points = (pip_size / point) if point > 0 else 0.0
+                if pip_points > 0:
+                    stops_level_pips = float(symbol_info.trade_stops_level) / pip_points
+        except Exception:
+            stops_level_pips = 0.0
+
+        spread = tick.ask - tick.bid
+        spread_pips = (spread / pip_size) if pip_size else 0.0
+        micro_floor_pips = max(stops_level_pips, spread_pips * float(eff_spread_floor_mult))
+
+        atr_floor_price = (float(eff_atr_mult) * atr) if atr else 0.0
+        micro_floor_price = micro_floor_pips * pip_size
+        min_sl_distance = max(atr_floor_price, micro_floor_price)
 
         # 2. Calculate a safety buffer for placing SL behind structure
         spread = tick.ask - tick.bid
@@ -363,25 +406,37 @@ class PurePriceActionStrategy:
             # SL based on minimum volatility/configured distance
             volatility_sl = entry_price - min_sl_distance
             # Use the more conservative (wider/lower) stop loss
-            stop_loss = min(structural_sl, volatility_sl)
+            if structural_sl <= volatility_sl:
+                stop_loss = structural_sl
+                sl_basis = 'structural'
+            else:
+                stop_loss = volatility_sl
+                sl_basis = 'volatility'
         else:  # Bearish
             # SL based on structure (above the broken support)
             structural_sl = broken_level + safety_buffer
             # SL based on minimum volatility/configured distance
             volatility_sl = entry_price + min_sl_distance
             # Use the more conservative (wider/higher) stop loss
-            stop_loss = max(structural_sl, volatility_sl)
+            if structural_sl >= volatility_sl:
+                stop_loss = structural_sl
+                sl_basis = 'structural'
+            else:
+                stop_loss = volatility_sl
+                sl_basis = 'volatility'
             
         # 4. Final safety check to prevent SL from being on the wrong side of entry
         epsilon = pip_size / 10.0
         if breakout.type == 'bullish' and stop_loss >= entry_price - epsilon:
             logger.warning(f"{symbol}: Calculated SL ({stop_loss:.5f}) was too close to entry ({entry_price:.5f}). Forcing volatility SL.")
             stop_loss = entry_price - min_sl_distance
+            sl_basis = 'volatility'
         elif breakout.type == 'bearish' and stop_loss <= entry_price + epsilon:
             logger.warning(f"{symbol}: Calculated SL ({stop_loss:.5f}) was too close to entry ({entry_price:.5f}). Forcing volatility SL.")
             stop_loss = entry_price + min_sl_distance
+            sl_basis = 'volatility'
 
-        return stop_loss
+        return stop_loss, sl_basis
 
     def _calculate_take_profit(self, entry_price: float, stop_loss: float, risk_reward_ratio: float, breakout_type: str) -> float:
         """
@@ -502,6 +557,18 @@ class PurePriceActionStrategy:
                 logger.debug(f"{symbol}: No S/R levels found")
                 return None
             
+            # Build a compact swings table for the liquidity module
+            # (indices are the same as completed_data, which our module uses)
+            shl_rows = []
+            if len(swing_highs) > 0:
+                for i in swing_highs:
+                    shl_rows.append((i, 1, float(completed_data['high'].iloc[i])))
+            if len(swing_lows) > 0:
+                for i in swing_lows:
+                    shl_rows.append((i, -1, float(completed_data['low'].iloc[i])))
+
+            shl_df = pd.DataFrame(shl_rows, columns=["Index", "HighLow", "Level"]).set_index("Index").sort_index()
+            
             # Detect breakout (allow per-symbol override for threshold)
             eff_breakout_thr = self.breakout_threshold_pips
             for sym_config in getattr(self.config, "symbols", []):
@@ -575,8 +642,30 @@ class PurePriceActionStrategy:
                 if candidates: next_structure = max(candidates)
 
             if next_structure is not None:
-                min_sl_pips = self.min_stop_loss_pips
-                min_sl_distance = max(min_sl_pips * pip_size, (atr * 0.8) if atr else 0.0)
+                # Use the same volatility + microstructure floor as SL logic
+                eff_atr_mult = self.stop_loss_atr_multiplier
+                eff_spread_floor_mult = self.spread_floor_multiplier
+                for sym_config in getattr(self.config, "symbols", []):
+                    if sym_config.get('name') == symbol:
+                        eff_atr_mult = sym_config.get("stop_loss_atr_multiplier", eff_atr_mult)
+                        eff_spread_floor_mult = sym_config.get("spread_floor_multiplier", eff_spread_floor_mult)
+                        break
+
+                stops_level_pips = 0.0
+                try:
+                    if symbol_info and getattr(symbol_info, 'point', 0) and getattr(symbol_info, 'trade_stops_level', None) is not None:
+                        point = float(symbol_info.point)
+                        pip_points = (pip_size / point) if point > 0 else 0.0
+                        if pip_points > 0:
+                            stops_level_pips = float(symbol_info.trade_stops_level) / pip_points
+                except Exception:
+                    stops_level_pips = 0.0
+
+                spread_pips = ((tick.ask - tick.bid) / pip_size) if pip_size else 0.0
+                micro_floor_pips = max(stops_level_pips, spread_pips * float(eff_spread_floor_mult))
+
+                min_sl_distance = max((float(eff_atr_mult) * atr) if atr else 0.0,
+                                      micro_floor_pips * pip_size)
                 distance_to_next = abs(next_structure - breakout.entry_price)
                 
                 room_req_pips = getattr(self.config, "min_room_after_breakout_pips", None)
@@ -602,9 +691,68 @@ class PurePriceActionStrategy:
                 return None
             
             # Calculate SL/TP
-            stop_loss = self._calculate_stop_loss(breakout, atr, pip_size, tick, symbol)
+            stop_loss, sl_basis = self._calculate_stop_loss(breakout, atr, pip_size, tick, symbol)
             take_profit = self._calculate_take_profit(breakout.entry_price, stop_loss, risk_reward_ratio, breakout.type)
             sl_distance = abs(breakout.entry_price - stop_loss)
+            
+            # ------- Liquidity Context: advisory first (no behavior change unless enforce is True) -------
+            if self.liquidity_context_enabled:
+                # spread in *pips* for context; use your existing values
+                spread_points = (tick.ask - tick.bid)
+                spread_pips = spread_points / pip_size if pip_size else 0.0
+
+                ctx = build_liquidity_context(
+                    ohlc=completed_data[["open","high","low","close"]],
+                    swing_highs_lows=shl_df[["HighLow","Level"]],
+                    side=("long" if breakout.type == "bullish" else "short"),
+                    entry_price=breakout.entry_price,
+                    broken_level=breakout.level,
+                    structural_sl=stop_loss,      # pass the *planned* SL (structural/volatility — whichever you chose)
+                    atr=(atr or 0.0),
+                    pip=pip_size,
+                    spread_pips=spread_pips,
+                    config=self.liq_cfg,
+                    mode=("realtime" if not self.backtest_mode else "research"),
+                )
+
+                # --- LOGGING ONLY (always) ---
+                # NB: your logger accepts arbitrary fields; these become CSV columns automatically.
+                logger.info(
+                    f"{symbol}: LC | sl_zone_violation={ctx.sl_zone_violation} "
+                    f"rec_cushion_pips={ctx.recommended_cushion_pips:.1f} "
+                    f"buy_sweeps={ctx.buy_sweep_count} sell_sweeps={ctx.sell_sweep_count} "
+                    f"last_buy_sweep_low={ctx.last_buy_sweep_low} last_sell_sweep_high={ctx.last_sell_sweep_high} "
+                    f"explain={ctx.explain}"
+                )
+
+                # ------- Minimal enforcement (optional): push SL beyond sweep extreme with cushion -------
+                if self.liquidity_context_enforce and ctx.sl_zone_violation and (ctx.sweep_zone_extreme is not None):
+                    cushion_price = ctx.recommended_cushion_pips * pip_size
+                    if breakout.type == "bullish":
+                        candidate_sl = ctx.sweep_zone_extreme - cushion_price
+                    else:
+                        candidate_sl = ctx.sweep_zone_extreme + cushion_price
+
+                    # Re-validate with broker min distances & your risk caps
+                    candidate_sl_distance = abs(breakout.entry_price - candidate_sl)
+                    # If you maintain a per-symbol cap, enforce it here (optional):
+                    cap_pips = self.liq_cfg.max_sl_distance_pips
+                    cap_ok = True
+                    if cap_pips is not None:
+                        cap_ok = (candidate_sl_distance / pip_size) <= cap_pips
+
+                    if cap_ok and candidate_sl_distance > 0:
+                        stop_loss = candidate_sl
+                        sl_distance = candidate_sl_distance
+                        # Recompute TP on R:R
+                        take_profit = self._calculate_take_profit(breakout.entry_price, stop_loss, risk_reward_ratio, breakout.type)
+                        sl_basis = f"{sl_basis}+liquidity_cushion"
+                    else:
+                        # If cap not OK, safest is to SKIP (same as your other microstructure vetoes)
+                        logger.info(f"{symbol}: LC enforcement would exceed caps -> skipping trade.")
+                        return None
+            # ------- end Liquidity Context -------
+
 
             # Safety checks for SL distance
             if sl_distance <= 0:
@@ -636,8 +784,21 @@ class PurePriceActionStrategy:
                 reason=f"live_{breakout.type}_breakout",
                 confidence=confidence,
                 timestamp=datetime.now(timezone.utc),
-                breakout_level=breakout.level 
+                breakout_level=breakout.level,
+                atr_pips=(atr / pip_size) if atr else None,
+                sl_basis=sl_basis
             )
+            # NEW (optional) LC telemetry can be attached to signal as attributes if needed:
+            if self.liquidity_context_enabled:
+                signal.lc_sl_zone_violation = ctx.sl_zone_violation
+                signal.lc_rec_cushion_pips = ctx.recommended_cushion_pips
+                signal.lc_has_recent_buy_sweep = ctx.has_recent_buy_sweep
+                signal.lc_has_recent_sell_sweep = ctx.has_recent_sell_sweep
+                signal.lc_buy_sweep_count = ctx.buy_sweep_count
+                signal.lc_sell_sweep_count = ctx.sell_sweep_count
+                signal.lc_sweep_zone_extreme = ctx.sweep_zone_extreme
+                signal.lc_equal_highs_nearby = ctx.equal_highs_nearby
+                signal.lc_equal_lows_nearby = ctx.equal_lows_nearby
             
             time_remaining_str = (
                 f"  Time remaining in candle: {time_remaining:.0f}s" if time_remaining is not None else ""
