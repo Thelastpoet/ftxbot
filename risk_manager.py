@@ -414,7 +414,7 @@ class RiskManager:
             logger.error(f"Error calculating risk metrics: {e}")
             return {}
 
-    def validate_trade_parameters(self, symbol: str, volume: float, stop_loss: float, take_profit: float) -> bool:
+    def validate_trade_parameters(self, symbol: str, volume: float, stop_loss: float, take_profit: float, order_type: Optional[int] = None) -> bool:
         """Validate trade parameters before execution"""
         try:
             symbol_info = self.mt5_client.get_symbol_info(symbol)
@@ -429,7 +429,16 @@ class RiskManager:
             if not tick:
                 return False
 
-            current_price = tick.ask
+            # Use correct side of quote for distance checks; fallback to ask/bid if needed
+            ask = getattr(tick, 'ask', None)
+            bid = getattr(tick, 'bid', None)
+            if order_type == 0 and ask is not None:  # BUY
+                current_price = ask
+            elif order_type == 1 and bid is not None:  # SELL
+                current_price = bid
+            else:
+                current_price = ask if ask is not None else bid
+
             min_stop_distance = symbol_info.trade_stops_level * symbol_info.point
 
             if abs(current_price - stop_loss) < min_stop_distance:

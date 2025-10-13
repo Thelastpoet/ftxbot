@@ -141,7 +141,7 @@ class MetaTrader5Client:
 
     def place_order(self, symbol: str, order_type: int, volume: float, 
                    price: Optional[float] = None, sl: Optional[float] = None, 
-                   tp: Optional[float] = None, comment: str = "") -> Optional[Any]:
+                   tp: Optional[float] = None, comment: str = "", deviation: Optional[int] = None) -> Optional[Any]:
         """Place a market order"""
         if not self.is_connected():
             return None
@@ -172,7 +172,7 @@ class MetaTrader5Client:
             "volume": volume,
             "type": order_type,
             "price": price,
-            "deviation": 20,  # Maximum price deviation
+            "deviation": int(deviation) if deviation is not None else 20,  # Maximum price deviation (points)
             "magic": 234000,  # Magic number for identification
             "comment": comment,
             "type_time": mt5.ORDER_TIME_GTC,

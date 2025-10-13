@@ -159,8 +159,11 @@ def _detect_pools_and_sweeps(
     tol = _compute_tolerance(ohlc, pip, cfg)
 
     # Work on copies to safely mark consumed candidates within each side
+    # Swing table columns in their own index-space (0..m-1), while OHLC is 0..n-1.
+    # Preserve OHLC indices from the swing table index to align time comparisons.
     shl_hl = shl['HighLow'].to_numpy().copy()
     shl_lvl = shl['Level'].to_numpy().copy()
+    shl_idx = shl.index.to_numpy().copy()
 
     highs_idx = np.flatnonzero(shl_hl == 1)
     lows_idx = np.flatnonzero(shl_hl == -1)
@@ -178,11 +181,14 @@ def _detect_pools_and_sweeps(
             band_low = base - tol
             band_high = base + tol
             group = [base]
-            start_idx = i
-            end_idx = i
+            # Map swing-row index -> OHLC index
+            start_ohlc_idx = int(shl_idx[i]) if i < shl_idx.shape[0] else 0
+            end_ohlc_idx = start_ohlc_idx
 
             # Determine sweeps relative to band
-            c_start = i + 1
+            # Begin sweep search on OHLC after the source swing bar
+            oh_i = start_ohlc_idx
+            c_start = oh_i + 1
             first_swept_idx = None
             last_swept_idx = None
             sweep_count = 0
@@ -231,15 +237,16 @@ def _detect_pools_and_sweeps(
                         if mode == 'realtime':
                             break
 
-            # Group equal levels until (optionally) the first sweep
+            # Group equal levels until (optionally) the first sweep (compare in OHLC index-space)
             for j in cand_idx:
                 if j <= i:
                     continue
-                if first_swept_idx is not None and j >= first_swept_idx:
+                oh_j = int(shl_idx[j]) if j < shl_idx.shape[0] else None
+                if first_swept_idx is not None and oh_j is not None and oh_j >= first_swept_idx:
                     break
                 if used[j] == side_val and (band_low <= shl_lvl[j] <= band_high):
                     group.append(shl_lvl[j])
-                    end_idx = j
+                    end_ohlc_idx = oh_j if oh_j is not None else end_ohlc_idx
                     used[j] = 0  # consume
 
             if len(group) > 1:
@@ -249,8 +256,8 @@ def _detect_pools_and_sweeps(
                     level_avg=level_avg,
                     band_low=float(band_low),
                     band_high=float(band_high),
-                    start_idx=int(start_idx),
-                    end_idx=int(end_idx),
+                    start_idx=int(start_ohlc_idx),
+                    end_idx=int(end_ohlc_idx),
                     first_swept_idx=None if first_swept_idx is None else int(first_swept_idx),
                     last_swept_idx=None if last_swept_idx is None else int(last_swept_idx),
                     sweep_count=int(sweep_count),
@@ -314,6 +321,10 @@ def build_liquidity_context(
     relevant_pools = lows_pools if side == 'long' else highs_pools
     other_side_pools = highs_pools if side == 'long' else lows_pools
 
+    n = len(ohlc)
+    recent_max_age = int(getattr(cfg, 'recent_sweep_max_age_bars', 15) or 15)
+    recent_cutoff = max(0, n - recent_max_age)
+
     # Determine recent sweep stats
     last_buy_sweep_idx = None
     last_sell_sweep_idx = None
@@ -323,14 +334,14 @@ def build_liquidity_context(
     sell_sweep_count = 0
 
     for p in lows_pools:
-        if p.last_swept_idx is not None:
+        if p.last_swept_idx is not None and p.last_swept_idx >= recent_cutoff:
             last_buy_sweep_idx = p.last_swept_idx if (last_buy_sweep_idx is None or p.last_swept_idx > last_buy_sweep_idx) else last_buy_sweep_idx
             if p.swept_extreme_price is not None:
                 last_buy_sweep_low = p.swept_extreme_price if (last_buy_sweep_low is None or p.swept_extreme_price < last_buy_sweep_low) else last_buy_sweep_low
             buy_sweep_count += p.sweep_count
 
     for p in highs_pools:
-        if p.last_swept_idx is not None:
+        if p.last_swept_idx is not None and p.last_swept_idx >= recent_cutoff:
             last_sell_sweep_idx = p.last_swept_idx if (last_sell_sweep_idx is None or p.last_swept_idx > last_sell_sweep_idx) else last_sell_sweep_idx
             if p.swept_extreme_price is not None:
                 last_sell_sweep_high = p.swept_extreme_price if (last_sell_sweep_high is None or p.swept_extreme_price > last_sell_sweep_high) else last_sell_sweep_high

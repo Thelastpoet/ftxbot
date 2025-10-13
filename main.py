@@ -72,6 +72,35 @@ class Config:
             self.max_drawdown = risk.get('max_drawdown_percentage', 0.1)
             self.risk_reward_ratio = risk.get('risk_reward_ratio', 2.0)
 
+            # Liquidity Context settings (accept at top-level or under risk_management)
+            self.liquidity_context_enabled = bool(config_data.get(
+                'liquidity_context_enabled', risk.get('liquidity_context_enabled', True)))
+            self.liquidity_context_enforce = bool(config_data.get(
+                'liquidity_context_enforce', risk.get('liquidity_context_enforce', False)))
+            self.liquidity_equal_level_tolerance_pips = float(config_data.get(
+                'liquidity_equal_level_tolerance_pips', risk.get('liquidity_equal_level_tolerance_pips', 6)))
+            self.liquidity_cushion_atr_mult = float(config_data.get(
+                'liquidity_cushion_atr_mult', risk.get('liquidity_cushion_atr_mult', 0.6)))
+            self.liquidity_cushion_atr_mult_repeat = float(config_data.get(
+                'liquidity_cushion_atr_mult_repeat', risk.get('liquidity_cushion_atr_mult_repeat', 0.8)))
+            self.liquidity_min_cushion_pips = float(config_data.get(
+                'liquidity_min_cushion_pips', risk.get('liquidity_min_cushion_pips', 4.0)))
+            self.liquidity_recent_sweep_max_age_bars = int(config_data.get(
+                'liquidity_recent_sweep_max_age_bars', risk.get('liquidity_recent_sweep_max_age_bars', 15)))
+            self.liquidity_sweep_lookback_bars = int(config_data.get(
+                'liquidity_sweep_lookback_bars', risk.get('liquidity_sweep_lookback_bars', 40)))
+            self.liquidity_wick_to_body_ratio_min = float(config_data.get(
+                'liquidity_wick_to_body_ratio_min', risk.get('liquidity_wick_to_body_ratio_min', 1.5)))
+            self.liquidity_use_close_back = bool(config_data.get(
+                'liquidity_use_close_back', risk.get('liquidity_use_close_back', True)))
+            self.liquidity_require_confirmation_on_dual_pools = bool(config_data.get(
+                'liquidity_require_confirmation_on_dual_pools', risk.get('liquidity_require_confirmation_on_dual_pools', True)))
+            self.liquidity_max_sl_distance_pips = config_data.get(
+                'liquidity_max_sl_distance_pips', risk.get('liquidity_max_sl_distance_pips', None))
+
+            # Order deviation (points) default
+            self.order_deviation_points = int(config_data.get('order_deviation_points', 20))
+
             # M1 confirmation (configurable at top-level under "m1_confirmation" or via trading_settings fallbacks)
             m1 = config_data.get('m1_confirmation', {}) or {}
             self.m1_confirmation_enabled = bool(m1.get('enabled', trading.get('m1_confirmation_enabled', False)))
@@ -247,6 +276,7 @@ class TradingBot:
         self.trade_logger = None
         self.consumed_breakouts = {}
         self.recent_closures = {} 
+        self.peak_equity = None
         self.load_memory_state()
         self.session_manager = MarketSession(config)
         self.running = False
@@ -338,6 +368,7 @@ class TradingBot:
             account_info = self.mt5_client.get_account_info()
             if account_info:
                 self.initial_balance = account_info.balance
+                self.peak_equity = account_info.equity
                 logger.info(f"Initial account balance: {self.initial_balance}")
             
             logger.info("Trading bot initialized successfully")
@@ -359,21 +390,33 @@ class TradingBot:
             raise
     
     async def check_drawdown(self) -> bool:
-        """Check if maximum drawdown has been reached"""
-        if not self.initial_balance:
+        """Check if maximum drawdown from peak equity has been reached."""
+        if self.mt5_client is None:
             return False
-        
+
         account_info = self.mt5_client.get_account_info()
         if not account_info:
             return False
-        
-        current_balance = account_info.balance
-        drawdown = (self.initial_balance - current_balance) / self.initial_balance
-        
+
+        # Track peak equity and compute drawdown from peak (safer than from initial balance)
+        try:
+            current_equity = float(getattr(account_info, 'equity', account_info.balance))
+        except Exception:
+            current_equity = float(account_info.balance)
+
+        if self.peak_equity is None:
+            self.peak_equity = current_equity
+        else:
+            self.peak_equity = max(self.peak_equity, current_equity)
+
+        if self.peak_equity <= 0:
+            return False
+
+        drawdown = (self.peak_equity - current_equity) / self.peak_equity
         if drawdown >= self.config.max_drawdown:
-            logger.warning(f"Maximum drawdown reached: {drawdown:.2%}")
+            logger.warning(f"Maximum drawdown reached from peak: {drawdown:.2%}")
             return True
-        
+
         return False
 
     async def _maybe_basket_take_profit(self) -> None:
@@ -604,11 +647,22 @@ class TradingBot:
                 )
                 return
             
-            # Calculate position size
+            # Calculate base position size
             position_size = self.risk_manager.calculate_position_size(
                 symbol=symbol,
                 stop_loss_pips=actual_sl_pips
             )
+
+            # Correlation-aware size reduction (soft)
+            if position_size > 0:
+                try:
+                    position_size = self.risk_manager.adjust_position_size_for_correlation(
+                        symbol=symbol,
+                        base_position_size=position_size,
+                        overrides=None,
+                    )
+                except Exception:
+                    pass
             
             if position_size <= 0:
                 logger.warning(f"{symbol}: Invalid position size calculated")
@@ -619,7 +673,8 @@ class TradingBot:
                 symbol=symbol,
                 volume=position_size,
                 stop_loss=signal.stop_loss,
-                take_profit=signal.take_profit
+                take_profit=signal.take_profit,
+                order_type=signal.type,
             ):
                 logger.warning(f"{symbol}: Trade parameters validation failed")
                 return
@@ -629,6 +684,17 @@ class TradingBot:
                 logger.info(f"{symbol}: Risk limits prevent trading")
                 return
             
+            # Resolve per-symbol or global order deviation (points)
+            deviation_points = None
+            try:
+                deviation_points = int(getattr(self.config, 'order_deviation_points', 20))
+                for sc in self.config.symbols:
+                    if sc.get('name') == symbol and sc.get('order_deviation_points') is not None:
+                        deviation_points = int(sc.get('order_deviation_points'))
+                        break
+            except Exception:
+                deviation_points = 20
+
             # EXECUTE THE TRADE
             result = self.mt5_client.place_order(
                 symbol=symbol,
@@ -636,7 +702,8 @@ class TradingBot:
                 volume=position_size,
                 sl=signal.stop_loss,
                 tp=signal.take_profit,
-                comment=f"LIVE_{signal.reason}"
+                comment=f"LIVE_{signal.reason}",
+                deviation=deviation_points,
             )
             
             if result and result.retcode == self.mt5_client.mt5.TRADE_RETCODE_DONE:
