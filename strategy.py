@@ -1,34 +1,23 @@
+﻿"""
+Core Price Action Strategy.
 """
-Pure Price Action Strategy Module - LIVE FOREX TRADING
-Real-time breakout detection with smart confirmation
-"""
-import math
-import time
-import MetaTrader5 as mt5
-from scipy.signal import argrelextrema
-import pandas as pd
-import numpy as np
-try:
-    import talib
-    TALIB_AVAILABLE = True
-except Exception:
-    talib = None
-    TALIB_AVAILABLE = False
 
-import logging
-from typing import List, Optional, Tuple, NamedTuple
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from typing import List, Optional, Tuple, NamedTuple
 
-from utils import get_pip_size
-from liquidity_context import build_liquidity_context, LiquidityConfig
+import MetaTrader5 as mt5
+import pandas as pd
+import logging
+
+from utils import get_pip_size, resolve_pip_size
 
 logger = logging.getLogger(__name__)
 
+
 @dataclass
 class TradingSignal:
-    """Data class for trading signals"""
-    type: int  # 0 for BUY, 1 for SELL
+    type: int  # 0 = BUY, 1 = SELL
     entry_price: float
     stop_loss: float
     take_profit: float
@@ -36,857 +25,405 @@ class TradingSignal:
     reason: str
     confidence: float
     timestamp: datetime
-    breakout_level: float = None
-    atr_pips: Optional[float] = None
-    sl_basis: Optional[str] = None
+    breakout_level: float
 
 class BreakoutInfo(NamedTuple):
-    """Breakout detection result"""
-    type: str  # 'bullish' or 'bearish'
+    type: str      # 'bullish' or 'bearish'
     level: float
     entry_price: float
-    distance: float
-    distance_pips: float
-    strength_score: float  # 0-1 normalized
 
 class PurePriceActionStrategy:
-    """Pure price action trading strategy - LIVE FOREX implementation"""
+    """Minimal breakout strategy based on swing levels and fixed pip thresholds."""
 
     def __init__(self, config):
         self.config = config
-        self.lookback_period = config.lookback_period
-        self.swing_window = config.swing_window
-        self.breakout_threshold_pips = config.breakout_threshold  
-        self.risk_reward_ratio = config.risk_reward_ratio
-        self.min_stop_loss_pips = getattr(config, "min_stop_loss_pips", 15)
-        self.stop_loss_buffer_pips = getattr(config, "stop_loss_buffer_pips", 10)
-        # Adaptive SL controls
-        self.stop_loss_atr_multiplier = getattr(config, "stop_loss_atr_multiplier", 1.0)
-        self.spread_floor_multiplier = getattr(config, "spread_floor_multiplier", 1.1)
-        
-        # Trading thresholds (slightly relaxed to avoid over-filtering)
-        self.max_spread_atr_ratio = getattr(config, "max_spread_atr_ratio", 0.35)
-        self.max_spread_pips = getattr(config, "max_spread_pips", 4)
-        # Age filter removed to avoid rejecting intra-candle entries; keep only close-time guard
-        self.max_signal_age_seconds = getattr(config, "max_signal_age_seconds", None)
-        self.min_candle_time_remaining = getattr(config, "min_candle_time_remaining", 5)  # seconds
-        self.max_extension_atr = 1.5
-        self.min_extension_atr = 0.3
-        self.min_body_ratio = getattr(config, "min_body_ratio", 0.25)
-        self.min_confidence = getattr(config, "min_confidence", 0.5)
-        self.proximity_threshold = getattr(config, "proximity_threshold", 20)  # in pips
-        self.min_peak_rank = getattr(config, "min_peak_rank", 2)  # min confirmations
+        # Core params only
+        self.lookback_period = getattr(config, 'lookback_period', 20)
+        self.swing_window = getattr(config, 'swing_window', 5)
+        self.breakout_threshold_pips = getattr(config, 'breakout_threshold', 7)
+        self.min_stop_loss_pips = getattr(config, 'min_stop_loss_pips', 20)
+        self.stop_loss_buffer_pips = getattr(config, 'stop_loss_buffer_pips', 15)
+        self.risk_reward_ratio = getattr(config, 'risk_reward_ratio', 2.0)
+        self.atr_period = int(getattr(config, 'atr_period', 14))
+        self.atr_sl_k = float(getattr(config, 'atr_sl_k', 0.6))
+        self.min_sl_buffer_pips = float(getattr(config, 'min_sl_buffer_pips', 10))
+        self.max_sl_pips = getattr(config, 'max_sl_pips', None)
+        self.min_headroom_rr = float(getattr(config, 'min_headroom_rr', 1.2))
+        self.max_rr_cap = getattr(config, 'max_rr_cap', None)
+        self.context_lookback_period = getattr(config, 'context_lookback_period', max(100, self.lookback_period * 3))
+        self.obstacle_buffer_pips = float(getattr(config, 'obstacle_buffer_pips', 3))
+        self.min_rr_after_adjustment = float(getattr(config, 'min_rr_after_adjustment', self.risk_reward_ratio))
+        self._last_breakout = {}  
+        self._last_breakout_bar = {} 
 
-        # M1 confirmation settings (default off to avoid over-restriction)
-        self.m1_confirmation_enabled = getattr(config, "m1_confirmation_enabled", False)
-        self.m1_confirmation_candles = getattr(config, "m1_confirmation_candles", 1)  # number of closed M1 candles beyond level
-        self.m1_confirmation_buffer_pips = getattr(config, "m1_confirmation_buffer_pips", 0.5)  # small buffer beyond level
-        # Dynamic buffer controls (useful for high-spread/volatile instruments)
-        self.m1_confirmation_dynamic_buffer = getattr(config, "m1_confirmation_dynamic_buffer", True)
-        self.m1_confirmation_min_buffer_pips = getattr(config, "m1_confirmation_min_buffer_pips", 0.5)
-        self.m1_confirmation_spread_multiplier = getattr(config, "m1_confirmation_spread_multiplier", 1.2)
+    # -----------------------------
+    # Swing points and S/R levels
+    # -----------------------------
+    def _find_swing_indices(self, series: pd.Series, window: int) -> List[int]:
+        idxs: List[int] = []
+        values = series.values
+        n = len(values)
+        for i in range(window, n - window):
+            left = values[i - window:i + 1]
+            right = values[i:i + window + 1]
+            
+            if values[i] >= left.max() and values[i] >= right.max():
+                idxs.append(i)
+        return idxs
 
-        # Backtest mode: disables real-time age/close filters
-        self.backtest_mode = getattr(config, "backtest_mode", False)
+    def find_swing_points(self, data: pd.DataFrame) -> Tuple[List[int], List[int]]:
+        if data is None or len(data) < self.swing_window * 2 + 1:
+            return [], []
+        highs = self._find_swing_indices(data['high'], self.swing_window)
+        lows = self._find_swing_indices(-data['low'], self.swing_window)  # reuse max finder on inverted lows
+        return highs, lows
 
-        # Optional: require last closed candle to confirm beyond the level
-        self.require_close_breakout = getattr(config, "require_close_breakout", False)
-        self.close_breakout_buffer_pips = getattr(config, "close_breakout_buffer_pips", 0.2)
-        
-        # --- Liquidity Context (stop-loss memory) ---
-        self.liquidity_context_enabled = getattr(config, "liquidity_context_enabled", True)
-        self.liq_cfg = LiquidityConfig(
-            # Sensible defaults; tune per symbol in your config later if you like
-            equal_level_tolerance_pips=getattr(config, "liquidity_equal_level_tolerance_pips", 6),
-            cushion_atr_mult=getattr(config, "liquidity_cushion_atr_mult", 0.6),
-            cushion_atr_mult_repeat=getattr(config, "liquidity_cushion_atr_mult_repeat", 0.8),
-            min_cushion_pips=getattr(config, "liquidity_min_cushion_pips", 4.0),
-            recent_sweep_max_age_bars=getattr(config, "liquidity_recent_sweep_max_age_bars", 15),
-            sweep_lookback_bars=getattr(config, "liquidity_sweep_lookback_bars", 40),
-            wick_to_body_ratio_min=getattr(config, "liquidity_wick_to_body_ratio_min", 1.5),
-            use_close_back=getattr(config, "liquidity_use_close_back", True),
-            require_confirmation_on_dual_pools=getattr(config, "liquidity_require_confirmation_on_dual_pools", True),
-            max_sl_distance_pips=getattr(config, "liquidity_max_sl_distance_pips", None),  # optional hard cap
-        )
-        # Advisory-only by default: we won’t *change* SL unless you flip this
-        self.liquidity_context_enforce = getattr(config, "liquidity_context_enforce", False)
+    def calculate_support_resistance(self, data: pd.DataFrame, swing_highs: List[int], swing_lows: List[int], symbol: str) -> Tuple[List[float], List[float]]:
+        """Pick up to 3 recent distinct swing highs/lows as resistance/support."""
+        symbol_info = mt5.symbol_info(symbol)
+        if not symbol_info:
+            return [], []
+        pip = get_pip_size(symbol_info)
+        proximity = 10 * pip  # 10 pips proximity consolidation
 
+        res: List[float] = []
+        sup: List[float] = []
 
-    def find_swing_points(self, data: pd.DataFrame) -> Tuple[np.ndarray, np.ndarray]:
-        """
-        Find swing highs and lows using argrelextrema
-        """
-        if len(data) < self.swing_window * 2:
-            return np.array([]), np.array([])
+        # Take the last 50 swings to avoid ancient levels
+        for i in reversed(swing_highs[-50:]):
+            level = float(data.iloc[i]['high'])
+            if not any(abs(level - x) <= proximity for x in res):
+                res.append(level)
+            if len(res) >= 3:
+                break
 
+        for i in reversed(swing_lows[-50:]):
+            level = float(data.iloc[i]['low'])
+            if not any(abs(level - x) <= proximity for x in sup):
+                sup.append(level)
+            if len(sup) >= 3:
+                break
+
+        return sorted(res), sorted(sup)
+
+       
+    # -----------------------------
+    # Breakout and SL/TP
+    # -----------------------------
+    def _compute_atr(self, highs: pd.Series, lows: pd.Series, closes: pd.Series, period: int) -> Optional[pd.Series]:
         try:
-            swing_highs = argrelextrema(data['high'].values, np.greater_equal, order=self.swing_window)[0]
-            swing_lows = argrelextrema(data['low'].values, np.less_equal, order=self.swing_window)[0]
-            return swing_highs, swing_lows
-        except Exception as e:
-            logger.error(f"Error finding swing points: {e}")
-            return np.array([]), np.array([])
-
-    def _detect_breakout(self, 
-                        tick: any,
-                        resistance_levels: List[float],
-                        support_levels: List[float],
-                        atr: Optional[float],
-                        pip_size: float,
-                        breakout_threshold_pips: Optional[float] = None) -> Optional[BreakoutInfo]:
-        """
-        Detect and score breakout - single place for breakout logic
-        """
-        # Dynamic threshold based on ATR or fixed
-        # Use symbol-specific threshold if passed, else default from config
-        eff_thr_pips = self.breakout_threshold_pips if breakout_threshold_pips is None else float(breakout_threshold_pips)
-
-        if atr:
-            threshold = max(eff_thr_pips * pip_size, 
-                          atr * self.min_extension_atr)
-            max_extension = atr * self.max_extension_atr
-        else:
-            threshold = eff_thr_pips * pip_size
-            max_extension = 20 * pip_size
-            logger.warning("Running without ATR - using fixed thresholds")
+            if len(closes) < period + 2:
+                return None
+            prev_close = closes.shift(1)
+            tr1 = (highs - lows).abs()
+            tr2 = (highs - prev_close).abs()
+            tr3 = (lows - prev_close).abs()
+            tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+            atr = tr.rolling(window=period, min_periods=period).mean()
+            return atr
+        except Exception:
+            return None
         
-        # Check bullish breakout (use ASK for buys)
-        for resistance in resistance_levels:
-            if tick.ask > resistance + threshold:
-                distance = tick.ask - resistance
-                
-                if distance > max_extension:
-                    continue  # Too extended
-                
-                # Score breakout strength (0-1)
-                if atr:
-                    strength = min(distance / atr, 1.0)
-                else:
-                    strength = min(distance / (10 * pip_size), 1.0)
-                
-                return BreakoutInfo(
-                    type='bullish',
-                    level=resistance,
-                    entry_price=tick.ask,
-                    distance=distance,
-                    distance_pips=distance / pip_size,
-                    strength_score=strength
-                )
-        
-        # Check bearish breakout (use BID for sells)
-        for support in support_levels:
-            if tick.bid < support - threshold:
-                distance = support - tick.bid
-                
-                if distance > max_extension:
-                    continue
-                
-                if atr:
-                    strength = min(distance / atr, 1.0)
-                else:
-                    strength = min(distance / (10 * pip_size), 1.0)
-                
-                return BreakoutInfo(
-                    type='bearish',
-                    level=support,
-                    entry_price=tick.bid,
-                    distance=distance,
-                    distance_pips=distance / pip_size,
-                    strength_score=strength
-                )
-        
+    def _detect_breakout_close(self, last_close: float, resistance: List[float], support: List[float], threshold_pips: float, pip: float) -> Optional[BreakoutInfo]:
+        thr = threshold_pips * pip
+        # BUY: close > resistance + thr
+        for level in resistance:
+            if last_close > level + thr:
+                return BreakoutInfo('bullish', level, last_close)
+        # SELL: close < support - thr
+        for level in support:
+            if last_close < level - thr:
+                return BreakoutInfo('bearish', level, last_close)
         return None
 
-    def _confirm_breakout_m1(self, symbol: str, breakout: BreakoutInfo, pip_size: float, tick: any) -> Tuple[bool, str]:
-        """
-        Confirm breakout on M1 timeframe using closed candles.
-
-        Rules:
-        - Last closed M1 candle must close beyond the broken level (with small buffer)
-        - Optionally require N last closed M1 candles to be beyond the level
-        - Current price (tick) must still be beyond the level
-
-        Returns: (is_confirmed, reason)
-        """
+    def _stop_loss(self, breakout: BreakoutInfo, pip: float, symbol: str, atr_last: Optional[float]) -> float:
+        # Apply per-symbol overrides if present
+        buf_pips = float(self.stop_loss_buffer_pips)
+        min_sl_pips = float(self.min_stop_loss_pips)
+        atr_k = float(self.atr_sl_k)
+        min_buf_pips = float(self.min_sl_buffer_pips)
         try:
-            # Ensure symbol is selected (helps history download in live)
+            for sc in getattr(self.config, 'symbols', []) or []:
+                if sc.get('name') == symbol:
+                    buf_pips = float(sc.get('stop_loss_buffer_pips', buf_pips))
+                    min_sl_pips = float(sc.get('min_stop_loss_pips', min_sl_pips))
+                    atr_k = float(sc.get('atr_sl_k', atr_k))
+                    min_buf_pips = float(sc.get('min_sl_buffer_pips', min_buf_pips))
+                    break
+        except Exception:
+            pass
+
+        # Dynamic extra buffer beyond structure: max(config buffer, min buffer, ATR*K)
+        buf_price = float(buf_pips) * float(pip)
+        add_min_buf_price = float(min_buf_pips) * float(pip)
+        atr_price = float(atr_last) if atr_last is not None else 0.0
+        dyn_extra = max(buf_price, add_min_buf_price, float(atr_k) * atr_price)
+
+        min_sl = float(min_sl_pips) * float(pip)
+        entry = breakout.entry_price
+        level = breakout.level
+        if breakout.type == 'bullish':
+            # behind broken resistance with extra volatility buffer
+            sl_struct = level - dyn_extra
+            sl_min = entry - min_sl
+            # Choose the deeper stop (further from entry) to avoid sweeps
+            return min(sl_struct, sl_min)
+        else:
+            sl_struct = level + dyn_extra
+            sl_min = entry + min_sl
+            # Choose the deeper stop above entry
+            return max(sl_struct, sl_min)
+
+    def _take_profit(self, entry: float, stop: float, rr: float, side: str) -> float:
+        dist = abs(entry - stop) * rr
+        return entry + dist if side == 'bullish' else entry - dist
+
+    def _next_obstacle_level(self, side: str, entry_price: float, ctx_res: List[float], ctx_sup: List[float]) -> Optional[float]:
+        """Return the next opposing S/R level ahead of price in the breakout direction.
+        - For bullish, the next resistance strictly above entry.
+        - For bearish, the next support strictly below entry.
+        Levels are expected sorted ascending.
+        """
+        if side == 'bullish':
+            ahead = [x for x in ctx_res if x > entry_price]
+            return ahead[0] if ahead else None
+        else:
+            behind = [x for x in ctx_sup if x < entry_price]
+            return behind[-1] if behind else None
+
+    # -----------------------------
+    # Public: generate signal
+    # -----------------------------
+    def generate_signal(self, data: pd.DataFrame, symbol: str, mtf_context: Optional[dict] = None) -> Optional[TradingSignal]:
+        try:
+            if data is None or len(data) < max(20, self.lookback_period):
+                return None
+
+            tick = mt5.symbol_info_tick(symbol)
+            info = mt5.symbol_info(symbol)
+            if not tick or not info:
+                return None
+            pip = resolve_pip_size(symbol, info, self.config)
+            if pip <= 0:
+                return None
+
+            # Spread guard (optional per symbol)
             try:
-                mt5.symbol_select(symbol, True)
+                spread_guard_pips = None
+                for sc in getattr(self.config, 'symbols', []) or []:
+                    if sc.get('name') == symbol:
+                        spread_guard_pips = sc.get('spread_guard_pips', None)
+                        break
+                # Fallback to global default if defined
+                if spread_guard_pips is None:
+                    spread_guard_pips = getattr(self.config, 'spread_guard_pips_default', None)
+                if spread_guard_pips is not None:
+                    spread_pips = abs(float(tick.ask) - float(tick.bid)) / float(pip)
+                    if spread_pips > float(spread_guard_pips):
+                        logger.debug(f"{symbol}: spread {spread_pips:.1f}p > guard {float(spread_guard_pips):.1f}p")
+                        return None
             except Exception:
                 pass
 
-            # Fetch a few recent M1 bars (include the forming one)
-            need_closed = max(1, int(self.m1_confirmation_candles))
-            count = max(need_closed + 2, 5)  # ensure enough bars
+            # Use closed candles for structure only (local structure window)
+            completed = data.iloc[:-1].tail(self.lookback_period)
+            if len(completed) < max(20, self.lookback_period):
+                return None
 
-            rates = None
-            for attempt in range(3):
-                rates = mt5.copy_rates_from_pos(symbol, mt5.TIMEFRAME_M1, 0, count)
-                if rates is not None and len(rates) >= need_closed + 1:
-                    break
-                # escalate count and give terminal a moment to download history (live only)
-                count = max(count * 2, 20)
-                time.sleep(0.05)
-            if rates is None or len(rates) < need_closed + 1:
-                return False, "insufficient_m1_data"
+            highs, lows = self.find_swing_points(completed)
+            if not highs and not lows:
+                logger.debug(f"{symbol}: No swing points found")
+                return None
 
-            df = pd.DataFrame(rates)
-            if df.empty:
-                return False, "empty_m1_data"
+            resistance, support = self.calculate_support_resistance(completed, highs, lows, symbol)
 
-            # Sort and get closed candles (exclude last row = forming)
-            df.sort_values(by="time", inplace=True)
-            closed = df.iloc[:-1]
-            if len(closed) < need_closed:
-                return False, "not_enough_closed_m1"
-
-            # Compute confirmation buffer (optionally dynamic w.r.t. current spread)
+            # Historical context window (broader)
             try:
-                spread_pips = (tick.ask - tick.bid) / pip_size if pip_size else 0.0
+                context_window = max(int(self.context_lookback_period), int(self.lookback_period))
             except Exception:
-                spread_pips = 0.0
+                context_window = max(100, self.lookback_period * 3)
+            ctx_src = data.iloc[:-1].tail(context_window)
+            ctx_res, ctx_sup = [], []
+            if len(ctx_src) >= max(20, self.swing_window * 2 + 1):
+                c_highs, c_lows = self.find_swing_points(ctx_src)
+                if c_highs or c_lows:
+                    ctx_res, ctx_sup = self.calculate_support_resistance(ctx_src, c_highs, c_lows, symbol)
 
-            if self.m1_confirmation_dynamic_buffer:
-                buffer_pips = max(self.m1_confirmation_min_buffer_pips,
-                                   spread_pips * float(self.m1_confirmation_spread_multiplier))
-            else:
-                buffer_pips = float(self.m1_confirmation_buffer_pips)
+            # Merge in multi-timeframe contextual S/R if provided
+            try:
+                if isinstance(mtf_context, dict):
+                    proximity = 10.0 * float(pip)
+                    def _merge_levels(base: List[float], add: List[float]) -> List[float]:
+                        out: List[float] = list(base)
+                        for lvl in add:
+                            if not any(abs(lvl - x) <= proximity for x in out):
+                                out.append(float(lvl))
+                        return sorted(out)
 
-            buffer = buffer_pips * pip_size
+                    # For each timeframe df in context, compute its own S/R and merge
+                    for tf_name, df_tf in mtf_context.items():
+                        if df_tf is None or not hasattr(df_tf, 'iloc'):
+                            continue
+                        src_tf = df_tf.iloc[:-1].tail(context_window)
+                        if len(src_tf) < max(20, self.swing_window * 2 + 1):
+                            continue
+                        th, tl = self.find_swing_points(src_tf)
+                        if not th and not tl:
+                            continue
+                        r_tf, s_tf = self.calculate_support_resistance(src_tf, th, tl, symbol)
+                        if r_tf:
+                            ctx_res = _merge_levels(ctx_res, r_tf)
+                        if s_tf:
+                            ctx_sup = _merge_levels(ctx_sup, s_tf)
+                    try:
+                        logger.debug(f"{symbol}: MTF context levels res={ctx_res} sup={ctx_sup}")
+                    except Exception:
+                        pass
+            except Exception:
+                pass
 
-            if breakout.type == 'bullish':
-                # Check last N closed candles closed beyond level
-                recent = closed.tail(need_closed)
-                cond_closed = (recent['close'] > (breakout.level + buffer)).all()
-                cond_tick = tick.ask > (breakout.level + buffer)
-                if cond_closed and cond_tick:
-                    return True, "m1_confirmed"
-                return False, "m1_not_confirmed_bullish"
+            # Debug observability
+            logger.debug(f"{symbol}: pip={pip:.5f} thr_pips={self.breakout_threshold_pips} res={resistance} sup={support}")
+            logger.debug(f"{symbol}: tick.ask={float(tick.ask):.5f} tick.bid={float(tick.bid):.5f}")
 
-            else:  # bearish
-                recent = closed.tail(need_closed)
-                cond_closed = (recent['close'] < (breakout.level - buffer)).all()
-                cond_tick = tick.bid < (breakout.level - buffer)
-                if cond_closed and cond_tick:
-                    return True, "m1_confirmed"
-                return False, "m1_not_confirmed_bearish"
-
-        except Exception as e:
-            logger.error(f"Error during M1 confirmation for {symbol}: {e}", exc_info=True)
-            return False, "m1_error"
-
-    def _calculate_confidence(self,
-                        breakout: BreakoutInfo,
-                        candle_body: float,
-                        candle_range: float,
-                        is_bullish_candle: bool,
-                        atr: Optional[float],
-                        spread: float,  # Changed from spread_pips to actual spread value
-                        pip_size: float,  # Pass pip_size directly
-                        trend: str) -> Tuple[float, bool]:
-        """
-        Calculate confidence and check if trade should be taken
-        Returns: (confidence_score, should_trade)
-        """
-        confidence = 0.3  # Base
-        
-        # 1. Breakout strength (already normalized 0-1)
-        confidence += breakout.strength_score * 0.2
-        
-        # 2. Candle momentum
-        body_ratio = candle_body / candle_range if candle_range > 0 else 0
-        
-        if atr and atr > 0:
-            momentum_score = min(candle_body / atr, 1.0)
-        else:
-            momentum_score = min(body_ratio * 2, 1.0)
-        
-        confidence += momentum_score * 0.3
-        
-        # 3. Direction alignment (SOFT)
-        direction_match = (
-            (breakout.type == 'bullish' and is_bullish_candle) or
-            (breakout.type == 'bearish' and not is_bullish_candle)
-        )
-        if direction_match:
-            confidence += 0.12
-        else:
-            # Soft penalty instead of hard stop; allow strong breakouts to pass
-            confidence -= 0.15
-            logger.debug(
-                f"Direction mismatch: {breakout.type} breakout but {'bullish' if is_bullish_candle else 'bearish'} candle"
-            )
-        
-        # 4. Trend alignment (SOFT)
-        if trend in ['bullish', 'bearish']:
-            trend_aligned = (
-                (breakout.type == 'bullish' and trend == 'bullish') or
-                (breakout.type == 'bearish' and trend == 'bearish')
-            )
-            if trend_aligned:
-                confidence += 0.2
-            else:
-                confidence -= 0.2
-                logger.debug(f"Against {trend} trend: applying penalty, not rejecting outright")
-        
-        # 5. Spread penalty
-        if atr and atr > 0:
-            spread_impact = spread / atr  # price units
-            if spread_impact > 0.35:
-                confidence -= 0.15
-            elif spread_impact > 0.2:
-                confidence -= 0.05
-        else:
-            spread_pips = spread / pip_size if pip_size > 0 else 0
-            if spread_pips > 3:
-                confidence -= 0.1
-        
-        final_confidence = max(0.1, min(confidence, 1.0))
-        should_trade = final_confidence >= self.min_confidence
-        
-        return final_confidence, should_trade
-
-    def _calculate_stop_loss(self, breakout: BreakoutInfo, atr: Optional[float], pip_size: float, tick: any, symbol: str) -> Tuple[float, str]:
-        """
-        Calculates the stop loss for a given breakout signal, ensuring it's logical and safe.
-        
-        The stop loss is determined by taking the most conservative (widest) position based on:
-        1. The broken S/R level (structural_sl).
-        2. A minimum distance based on volatility (ATR) or a fixed pip value (volatility_sl).
-        """
-        # Resolve per-symbol adaptive parameters
-        eff_atr_mult = self.stop_loss_atr_multiplier
-        eff_spread_floor_mult = self.spread_floor_multiplier
-        for sym_config in getattr(self.config, "symbols", []):
-            if sym_config.get('name') == symbol:
-                eff_atr_mult = sym_config.get("stop_loss_atr_multiplier", eff_atr_mult)
-                eff_spread_floor_mult = sym_config.get("spread_floor_multiplier", eff_spread_floor_mult)
-                break
-
-        # 1. Determine minimum required SL distance based on ATR and microstructure
-        #    Microstructure floor = max(broker minimum stops level, spread cushion)
-        stops_level_pips = 0.0
-        try:
-            symbol_info = mt5.symbol_info(symbol)
-            if symbol_info and getattr(symbol_info, 'point', 0) and getattr(symbol_info, 'trade_stops_level', None) is not None:
-                point = float(symbol_info.point)
-                pip_points = (pip_size / point) if point > 0 else 0.0
-                if pip_points > 0:
-                    stops_level_pips = float(symbol_info.trade_stops_level) / pip_points
-        except Exception:
-            stops_level_pips = 0.0
-
-        spread = tick.ask - tick.bid
-        spread_pips = (spread / pip_size) if pip_size else 0.0
-        micro_floor_pips = max(stops_level_pips, spread_pips * float(eff_spread_floor_mult))
-
-        atr_floor_price = (float(eff_atr_mult) * atr) if atr else 0.0
-        micro_floor_price = micro_floor_pips * pip_size
-        min_sl_distance = max(atr_floor_price, micro_floor_price)
-
-        # 2. Calculate a safety buffer for placing SL behind structure
-        spread = tick.ask - tick.bid
-        spread_buffer = spread + pip_size  # Add 1 pip to spread for buffer
-        # Allow per-symbol override for structural SL buffer
-        configured_sl_buffer_pips = self.stop_loss_buffer_pips
-        for sym_config in getattr(self.config, "symbols", []):
-            if sym_config.get('name') == symbol:
-                configured_sl_buffer_pips = sym_config.get("stop_loss_buffer_pips", configured_sl_buffer_pips)
-                break
-        configured_buffer = configured_sl_buffer_pips * pip_size
-        safety_buffer = max(spread_buffer, configured_buffer)
-
-        # 3. Calculate the two potential SL levels
-        entry_price = breakout.entry_price
-        broken_level = breakout.level
-
-        if breakout.type == 'bullish':
-            # SL based on structure (below the broken resistance)
-            structural_sl = broken_level - safety_buffer
-            # SL based on minimum volatility/configured distance
-            volatility_sl = entry_price - min_sl_distance
-            # Use the more conservative (wider/lower) stop loss
-            if structural_sl <= volatility_sl:
-                stop_loss = structural_sl
-                sl_basis = 'structural'
-            else:
-                stop_loss = volatility_sl
-                sl_basis = 'volatility'
-        else:  # Bearish
-            # SL based on structure (above the broken support)
-            structural_sl = broken_level + safety_buffer
-            # SL based on minimum volatility/configured distance
-            volatility_sl = entry_price + min_sl_distance
-            # Use the more conservative (wider/higher) stop loss
-            if structural_sl >= volatility_sl:
-                stop_loss = structural_sl
-                sl_basis = 'structural'
-            else:
-                stop_loss = volatility_sl
-                sl_basis = 'volatility'
-            
-        # 4. Final safety check to prevent SL from being on the wrong side of entry
-        epsilon = pip_size / 10.0
-        if breakout.type == 'bullish' and stop_loss >= entry_price - epsilon:
-            logger.warning(f"{symbol}: Calculated SL ({stop_loss:.5f}) was too close to entry ({entry_price:.5f}). Forcing volatility SL.")
-            stop_loss = entry_price - min_sl_distance
-            sl_basis = 'volatility'
-        elif breakout.type == 'bearish' and stop_loss <= entry_price + epsilon:
-            logger.warning(f"{symbol}: Calculated SL ({stop_loss:.5f}) was too close to entry ({entry_price:.5f}). Forcing volatility SL.")
-            stop_loss = entry_price + min_sl_distance
-            sl_basis = 'volatility'
-
-        return stop_loss, sl_basis
-
-    def _calculate_take_profit(self, entry_price: float, stop_loss: float, risk_reward_ratio: float, breakout_type: str) -> float:
-        """
-        Calculates the take profit level based on the stop loss distance and risk-reward ratio.
-        """
-        sl_distance = abs(entry_price - stop_loss)
-        tp_distance = sl_distance * risk_reward_ratio
-        
-        if breakout_type == 'bullish':
-            return entry_price + tp_distance
-        else:
-            return entry_price - tp_distance
-
-    def generate_signal(self, data: pd.DataFrame, symbol: str, trend: str = 'ranging') -> Optional[TradingSignal]:
-        """
-        Generate trading signal using existing MarketData infrastructure
-        """
-        if data is None or len(data) < max(self.lookback_period, 20):
-            return None
-
-        try:
-            # Get tick ONCE
-            tick = mt5.symbol_info_tick(symbol)
-            if not tick:
-                logger.error(f"Failed to get tick for {symbol}")
-                return None
-            
-            # Get symbol info
-            symbol_info = mt5.symbol_info(symbol)
-            if not symbol_info:
-                logger.error(f"Failed to get symbol info for {symbol}")
-                return None
-            
-            pip_size = get_pip_size(symbol_info)
-            spread_pips = (tick.ask - tick.bid) / pip_size
-            
-            # Get forming candle
-            forming_candle = data.iloc[-1]
-            completed_data = data.iloc[:-1].tail(self.lookback_period)
-            
-            swing_highs, swing_lows = self.find_swing_points(completed_data)
-            
-            if len(swing_highs) == 0 and len(swing_lows) == 0:
-                logger.debug(f"No swing points found for {symbol}")
-                return None
-            
-            # Apply symbol-specific overrides from config for R:R ratio
-            risk_reward_ratio = self.risk_reward_ratio
-            for sym_config in getattr(self.config, "symbols", []):
-                if sym_config.get('name') == symbol:
-                    risk_reward_ratio = sym_config.get("risk_reward_ratio", risk_reward_ratio)
-                    break           
-            
-            # Calculate ATR from completed data
-            atr = None
-            if TALIB_AVAILABLE and len(completed_data) >= 14:
-                atr = talib.ATR(
-                    completed_data['high'].values,
-                    completed_data['low'].values,
-                    completed_data['close'].values,
-                    timeperiod=14
-                )[-1]
-                logger.debug(f"{symbol}: ATR={atr/pip_size:.1f} pips")
-            else:
-                logger.warning(f"{symbol}: Running without ATR - TA-Lib not available or insufficient data")
-            
-            # QUICK FILTERS
-            # 1. Spread filter
-            max_spread = (atr * self.max_spread_atr_ratio) if atr else (self.max_spread_pips * pip_size)
-            spread_pips = ((tick.ask - tick.bid) / pip_size) if pip_size else 0.0
-            if tick.ask - tick.bid > max_spread:
-                logger.debug(f"{symbol}: Spread too high ({spread_pips:.1f} pips)")
-                return None
-            
-            # Prepare time_remaining for optional logging
-            time_remaining = None
-
-            # 2. Time-based filters (only avoid the last few seconds of the candle)
-            if not self.backtest_mode:
-                # Don't enter near candle close
-                timeframe_seconds = {'M1': 60, 'M5': 300, 'M15': 900, 'M30': 1800, 'H1': 3600}
-                current_timeframe = 'M15'
-                for sym_config in self.config.symbols:
-                    if sym_config['name'] == symbol:
-                        current_timeframe = sym_config['timeframes'][0]
-                        break
-                max_candle_seconds = timeframe_seconds.get(current_timeframe, 900)
-                # Compute age based on index time if available
-                candle_age = (datetime.now(timezone.utc) - 
-                              pd.to_datetime(forming_candle.name).replace(tzinfo=timezone.utc))
-                candle_age_seconds = candle_age.total_seconds()
-                time_remaining = max_candle_seconds - (candle_age_seconds % max_candle_seconds)
-                if time_remaining < self.min_candle_time_remaining:
-                    logger.debug(f"{symbol}: Too close to candle close ({time_remaining:.0f}s remaining)")
-                    return None
-            
-            # 4. Momentum filter (either body is decent OR range expanded vs ATR)
-            candle_body = abs(forming_candle['close'] - forming_candle['open'])
-            candle_range = max(forming_candle['high'] - forming_candle['low'], 1e-12)
-            body_ratio = candle_body / candle_range
-
-            # Base direction from the current timeframe (e.g., M15)
-            is_bullish_candle = forming_candle['close'] > forming_candle['open']
-            
-            min_body_ratio = self.min_body_ratio
-            if atr and (atr / pip_size) < 10:
-                min_body_ratio *= 0.8
-            
-            range_ok = (atr is not None and atr > 0 and (candle_range / atr) >= 0.8)
-            if body_ratio < min_body_ratio and not range_ok:
-                logger.debug(f"{symbol}: Insufficient momentum (body_ratio={body_ratio:.2f}, range/ATR={(candle_range/atr) if atr else 0:.2f})")
-                return None
-            
-            # Calculate S/R levels
-            resistance_levels, support_levels = self.calculate_support_resistance(completed_data, swing_highs, swing_lows, symbol)
-            
-            if not resistance_levels and not support_levels:
-                logger.debug(f"{symbol}: No S/R levels found")
-                return None
-            
-            # Build a compact swings table for the liquidity module
-            # (indices are the same as completed_data, which our module uses)
-            shl_rows = []
-            if len(swing_highs) > 0:
-                for i in swing_highs:
-                    shl_rows.append((i, 1, float(completed_data['high'].iloc[i])))
-            if len(swing_lows) > 0:
-                for i in swing_lows:
-                    shl_rows.append((i, -1, float(completed_data['low'].iloc[i])))
-
-            shl_df = pd.DataFrame(shl_rows, columns=["Index", "HighLow", "Level"]).set_index("Index").sort_index()
-            
-            # Detect breakout (allow per-symbol override for threshold)
-            eff_breakout_thr = self.breakout_threshold_pips
-            for sym_config in getattr(self.config, "symbols", []):
-                if sym_config.get('name') == symbol:
-                    eff_breakout_thr = sym_config.get("breakout_threshold_pips", eff_breakout_thr)
+            # Per-symbol overrides for RR and threshold
+            thr_pips = float(self.breakout_threshold_pips)
+            rr = float(self.risk_reward_ratio)
+            atr_period = int(self.atr_period)
+            min_headroom_rr = float(self.min_headroom_rr)
+            max_rr_cap = self.max_rr_cap
+            max_sl_pips = self.max_sl_pips
+            for sc in getattr(self.config, 'symbols', []) or []:
+                if sc.get('name') == symbol:
+                    thr_pips = float(sc.get('breakout_threshold_pips', thr_pips))
+                    rr = float(sc.get('risk_reward_ratio', rr))
+                    atr_period = int(sc.get('atr_period', atr_period))
+                    min_headroom_rr = float(sc.get('min_headroom_rr', min_headroom_rr))
+                    max_rr_cap = sc.get('max_rr_cap', max_rr_cap)
+                    max_sl_pips = sc.get('max_sl_pips', max_sl_pips)
                     break
 
-            breakout = self._detect_breakout(
-                tick,
-                resistance_levels,
-                support_levels,
-                atr,
-                pip_size,
-                breakout_threshold_pips=eff_breakout_thr,
-            )
-            
-            if not breakout:
+            # Use last closed candle close for breakout confirmation
+            last_close = float(completed.iloc[-1]['close'])
+            bo = self._detect_breakout_close(last_close, resistance, support, thr_pips, pip)
+            if not bo:
                 return None
 
-            logger.info(
-                f"{symbol}: Breakout detected - {breakout.type} @ {breakout.entry_price:.5f}, "
-                f"distance={breakout.distance_pips:.1f}p, strength={breakout.strength_score:.2f}"
-            )
+            logger.debug(f"{symbol}: breakout type={bo.type} level={bo.level:.5f} entry={bo.entry_price:.5f}")
 
-            # Optional: require last closed candle to have closed beyond the broken level (softens false breaks)
-            if self.require_close_breakout and len(completed_data) > 0:
-                last_closed = completed_data.iloc[-1]
-                buffer = self.close_breakout_buffer_pips * pip_size
-                if breakout.type == 'bullish':
-                    if not (last_closed['close'] > breakout.level + buffer):
-                        logger.info(f"{symbol}: Last close not beyond level (bullish); skipping by close-confirm rule.")
-                        return None
-                else:
-                    if not (last_closed['close'] < breakout.level - buffer):
-                        logger.info(f"{symbol}: Last close not beyond level (bearish); skipping by close-confirm rule.")
-                        return None
-
-            # M1 confirmation gate (prevents false signals on forming M15 candle)
-            if self.m1_confirmation_enabled:
-                confirmed, reason = self._confirm_breakout_m1(symbol, breakout, pip_size, tick)
-                if not confirmed:
-                    logger.info(f"{symbol}: Breakout not confirmed on M1 ({reason}), skipping.")
+            # Emit at most one signal per closed bar for the same side
+            try:
+                bar_time = completed.index[-1]
+                keyb = (symbol, bo.type)
+                if self._last_breakout_bar.get(keyb) == bar_time:
                     return None
-                else:
-                    # Use last closed M1 candle for momentum/direction in confidence calc
-                    try:
-                        rates_m1 = mt5.copy_rates_from_pos(symbol, mt5.TIMEFRAME_M1, 0, 3)
-                        if rates_m1 is not None and len(rates_m1) >= 2:
-                            m1_df = pd.DataFrame(rates_m1)
-                            m1_df.sort_values(by="time", inplace=True)
-                            last_closed = m1_df.iloc[-2]
-                            m1_body = abs(last_closed['close'] - last_closed['open'])
-                            m1_range = max(last_closed['high'] - last_closed['low'], 1e-12)
-                            m1_bullish = last_closed['close'] > last_closed['open']
-                            # Override local variables used later in confidence calculation
-                            candle_body = float(m1_body)
-                            candle_range = float(m1_range)
-                            is_bullish_candle = bool(m1_bullish)
-                    except Exception as e:
-                        logger.warning(f"{symbol}: Failed to derive M1 momentum candle: {e}")
-            
-            # Structure distance check
-            res_levels = sorted(resistance_levels)
-            sup_levels = sorted(support_levels)
-            next_structure = None
-            if breakout.type == 'bullish':
-                candidates = [r for r in res_levels if r > breakout.entry_price]
-                if candidates: next_structure = min(candidates)
-            else:
-                candidates = [s for s in sup_levels if s < breakout.entry_price]
-                if candidates: next_structure = max(candidates)
+                self._last_breakout_bar[keyb] = bar_time
+            except Exception:
+                pass
 
-            if next_structure is not None:
-                # Use the same volatility + microstructure floor as SL logic
-                eff_atr_mult = self.stop_loss_atr_multiplier
-                eff_spread_floor_mult = self.spread_floor_multiplier
-                for sym_config in getattr(self.config, "symbols", []):
-                    if sym_config.get('name') == symbol:
-                        eff_atr_mult = sym_config.get("stop_loss_atr_multiplier", eff_atr_mult)
-                        eff_spread_floor_mult = sym_config.get("spread_floor_multiplier", eff_spread_floor_mult)
+            # Duplicate breakout suppression (optional)
+            try:
+                dup_distance_pips = None
+                dup_window_sec = None
+                for sc in getattr(self.config, 'symbols', []) or []:
+                    if sc.get('name') == symbol:
+                        dup_distance_pips = sc.get('duplicate_breakout_distance_pips', None)
+                        dup_window_sec = sc.get('duplicate_breakout_window_seconds', None)
                         break
+                # Fallback to global defaults if defined
+                if dup_distance_pips is None:
+                    dup_distance_pips = getattr(self.config, 'duplicate_breakout_distance_pips_default', None)
+                if dup_window_sec is None:
+                    dup_window_sec = getattr(self.config, 'duplicate_breakout_window_seconds_default', None)
+                if dup_distance_pips is not None and dup_window_sec is not None:
+                    key = (symbol, bo.type)
+                    last = self._last_breakout.get(key)
+                    if last:
+                        dt_now = datetime.now(timezone.utc)
+                        if (dt_now - last['time']).total_seconds() <= float(dup_window_sec):
+                            dist_pips = abs(float(bo.entry_price) - float(last['price'])) / float(pip)
+                            if dist_pips <= float(dup_distance_pips):
+                                logger.debug(f"{symbol}: duplicate breakout suppressed ({dist_pips:.1f}p within {dup_window_sec}s)")
+                                return None
+                    # record current
+                    self._last_breakout[key] = {'time': datetime.now(timezone.utc), 'price': float(bo.entry_price)}
+            except Exception:
+                pass
 
-                stops_level_pips = 0.0
+            # Compute ATR on completed window
+            atr_series = self._compute_atr(completed['high'], completed['low'], completed['close'], atr_period)
+            atr_last = float(atr_series.iloc[-1]) if atr_series is not None and not pd.isna(atr_series.iloc[-1]) else None
+
+            sl = self._stop_loss(bo, pip, symbol, atr_last)
+            sl_pips = abs(bo.entry_price - sl) / pip
+            # Enforce max SL distance if configured
+            if max_sl_pips is not None and sl_pips > float(max_sl_pips):
+                logger.debug((f"{symbol}: SL {sl_pips:.1f}p > max {float(max_sl_pips):.1f}p; skipping"))
+                return None
+
+            # Headroom filter: require sufficient space to next obstacle
+            obstacle = None
+            try:
+                obstacle = self._next_obstacle_level(bo.type, bo.entry_price, ctx_res, ctx_sup)
+            except Exception:
+                obstacle = None
+            if obstacle is not None:
+                buf = float(self.obstacle_buffer_pips) * float(pip)
+                headroom_price = max(0.0, abs(obstacle - bo.entry_price) - buf)
+                headroom_pips = headroom_price / float(pip)
                 try:
-                    if symbol_info and getattr(symbol_info, 'point', 0) and getattr(symbol_info, 'trade_stops_level', None) is not None:
-                        point = float(symbol_info.point)
-                        pip_points = (pip_size / point) if point > 0 else 0.0
-                        if pip_points > 0:
-                            stops_level_pips = float(symbol_info.trade_stops_level) / pip_points
+                    logger.debug(f"{symbol}: obstacle={obstacle:.5f} headroom_pips={headroom_pips:.1f} sl_pips={sl_pips:.1f}")
                 except Exception:
-                    stops_level_pips = 0.0
-
-                spread_pips = ((tick.ask - tick.bid) / pip_size) if pip_size else 0.0
-                micro_floor_pips = max(stops_level_pips, spread_pips * float(eff_spread_floor_mult))
-
-                min_sl_distance = max((float(eff_atr_mult) * atr) if atr else 0.0,
-                                      micro_floor_pips * pip_size)
-                distance_to_next = abs(next_structure - breakout.entry_price)
-                
-                room_req_pips = getattr(self.config, "min_room_after_breakout_pips", None)
-                if room_req_pips:
-                    room_req = room_req_pips * pip_size
-                else:
-                    room_req = max(1.0 * min_sl_distance, 0.5 * atr if atr else 0.0)
-
-                if distance_to_next < room_req:
-                    logger.info(
-                        f"{symbol}: Limited room after breakout ({distance_to_next/pip_size:.1f}p < {room_req/pip_size:.1f}p). Skipping.")
+                    pass
+                if headroom_pips < (float(min_headroom_rr) * sl_pips):
+                    logger.debug(f"{symbol}: headroom {headroom_pips:.1f}p < {min_headroom_rr:.2f}×SL {sl_pips:.1f}p; skipping")
                     return None
-            
-            # Calculate confidence (use possibly overridden M1 momentum/direction if confirmation was used)
-            spread = tick.ask - tick.bid
-            confidence, should_trade = self._calculate_confidence(
-                breakout, candle_body, candle_range, is_bullish_candle,
-                atr, spread, pip_size, trend
-            )
-            
-            if not should_trade:
-                logger.info(f"{symbol}: Trade filtered out (confidence={confidence:.2f})")
-                return None
-            
-            # Calculate SL/TP
-            stop_loss, sl_basis = self._calculate_stop_loss(breakout, atr, pip_size, tick, symbol)
-            take_profit = self._calculate_take_profit(breakout.entry_price, stop_loss, risk_reward_ratio, breakout.type)
-            sl_distance = abs(breakout.entry_price - stop_loss)
-            
-            # ------- Liquidity Context: advisory first (no behavior change unless enforce is True) -------
-            if self.liquidity_context_enabled:
-                # spread in *pips* for context; use your existing values
-                spread_points = (tick.ask - tick.bid)
-                spread_pips = spread_points / pip_size if pip_size else 0.0
 
-                ctx = build_liquidity_context(
-                    ohlc=completed_data[["open","high","low","close"]],
-                    swing_highs_lows=shl_df[["HighLow","Level"]],
-                    side=("long" if breakout.type == "bullish" else "short"),
-                    entry_price=breakout.entry_price,
-                    broken_level=breakout.level,
-                    structural_sl=stop_loss,      # pass the *planned* SL (structural/volatility — whichever you chose)
-                    atr=(atr or 0.0),
-                    pip=pip_size,
-                    spread_pips=spread_pips,
-                    config=self.liq_cfg,
-                    mode=("realtime" if not self.backtest_mode else "research"),
-                )
+            # RR and cap for TP
+            rr_eff = float(rr)
+            if max_rr_cap is not None:
+                try:
+                    rr_eff = min(rr_eff, float(max_rr_cap))
+                except Exception:
+                    pass
+            tp = self._take_profit(bo.entry_price, sl, rr_eff, bo.type)
 
-                # --- LOGGING ONLY (always) ---
-                # NB: your logger accepts arbitrary fields; these become CSV columns automatically.
-                logger.info(
-                    f"{symbol}: LC | sl_zone_violation={ctx.sl_zone_violation} "
-                    f"rec_cushion_pips={ctx.recommended_cushion_pips:.1f} "
-                    f"buy_sweeps={ctx.buy_sweep_count} sell_sweeps={ctx.sell_sweep_count} "
-                    f"last_buy_sweep_low={ctx.last_buy_sweep_low} last_sell_sweep_high={ctx.last_sell_sweep_high} "
-                    f"explain={ctx.explain}"
-                )
+            # We no longer cap TP to the obstacle; headroom is used as a filter above
 
-                # ------- Minimal enforcement (optional): push SL beyond sweep extreme with cushion -------
-                if self.liquidity_context_enforce and ctx.sl_zone_violation and (ctx.sweep_zone_extreme is not None):
-                    cushion_price = ctx.recommended_cushion_pips * pip_size
-                    if breakout.type == "bullish":
-                        candidate_sl = ctx.sweep_zone_extreme - cushion_price
-                    else:
-                        candidate_sl = ctx.sweep_zone_extreme + cushion_price
-
-                    # Re-validate with broker min distances & your risk caps
-                    candidate_sl_distance = abs(breakout.entry_price - candidate_sl)
-                    # If you maintain a per-symbol cap, enforce it here (optional):
-                    cap_pips = self.liq_cfg.max_sl_distance_pips
-                    cap_ok = True
-                    if cap_pips is not None:
-                        cap_ok = (candidate_sl_distance / pip_size) <= cap_pips
-
-                    if cap_ok and candidate_sl_distance > 0:
-                        stop_loss = candidate_sl
-                        sl_distance = candidate_sl_distance
-                        # Recompute TP on R:R
-                        take_profit = self._calculate_take_profit(breakout.entry_price, stop_loss, risk_reward_ratio, breakout.type)
-                        sl_basis = f"{sl_basis}+liquidity_cushion"
-                    else:
-                        # If cap not OK, safest is to SKIP (same as your other microstructure vetoes)
-                        logger.info(f"{symbol}: LC enforcement would exceed caps -> skipping trade.")
-                        return None
-            # ------- end Liquidity Context -------
-
-
-            # Safety checks for SL distance
-            if sl_distance <= 0:
-                logger.error(f"{symbol}: Computed sl_distance <= 0 (entry={breakout.entry_price}, sl={stop_loss}) -> rejecting")
-                return None
-
-            min_sl_atr_mult = getattr(self.config, "min_sl_atr_mult", 0.5)
-            if atr and sl_distance < min_sl_atr_mult * atr:
-                logger.info(f"{symbol}: SL {sl_distance/pip_size:.1f}p < {min_sl_atr_mult:.2f} ATR -> rejecting trade")
-                return None
-                
-            # Round SL/TP to symbol precision
-            point = getattr(symbol_info, 'point', None)
-            digits = getattr(symbol_info, 'digits', None)
+            # Round to precision
+            point = getattr(info, 'point', None)
+            digits = getattr(info, 'digits', None)
             if point and digits is not None:
-                stop_loss = round(round(stop_loss / point) * point, int(digits))
-                take_profit = round(round(take_profit / point) * point, int(digits))
-            elif digits is not None:
-                stop_loss = round(stop_loss, int(digits))
-                take_profit = round(take_profit, int(digits))
-            
-            # Create signal
+                sl = round(round(sl / point) * point, int(digits))
+                tp = round(round(tp / point) * point, int(digits))
+
+            # Recompute SL pips after rounding to precision
+            sl_pips = abs(bo.entry_price - sl) / pip
+            if sl_pips <= 0:
+                return None
+
+            try:
+                # Provide visibility into context decisioning
+                logger.debug(f"{symbol}: sl_pips={sl_pips:.2f} rr_cfg={rr:.2f} rr_eff={rr_eff:.2f} tp={tp:.5f}")
+            except Exception:
+                logger.debug(f"{symbol}: sl_pips={sl_pips:.2f} tp={tp:.5f}")
+
             signal = TradingSignal(
-                type=0 if breakout.type == 'bullish' else 1,
-                entry_price=breakout.entry_price,
-                stop_loss=stop_loss,
-                take_profit=take_profit,
-                stop_loss_pips=sl_distance / pip_size,
-                reason=f"live_{breakout.type}_breakout",
-                confidence=confidence,
+                type=0 if bo.type == 'bullish' else 1,
+                entry_price=bo.entry_price,
+                stop_loss=sl,
+                take_profit=tp,
+                stop_loss_pips=sl_pips,
+                reason=f"core_{bo.type}_breakout",
+                confidence=0.5,
                 timestamp=datetime.now(timezone.utc),
-                breakout_level=breakout.level,
-                atr_pips=(atr / pip_size) if atr else None,
-                sl_basis=sl_basis
-            )
-            # NEW (optional) LC telemetry can be attached to signal as attributes if needed:
-            if self.liquidity_context_enabled:
-                signal.lc_sl_zone_violation = ctx.sl_zone_violation
-                signal.lc_rec_cushion_pips = ctx.recommended_cushion_pips
-                signal.lc_has_recent_buy_sweep = ctx.has_recent_buy_sweep
-                signal.lc_has_recent_sell_sweep = ctx.has_recent_sell_sweep
-                signal.lc_buy_sweep_count = ctx.buy_sweep_count
-                signal.lc_sell_sweep_count = ctx.sell_sweep_count
-                signal.lc_sweep_zone_extreme = ctx.sweep_zone_extreme
-                signal.lc_equal_highs_nearby = ctx.equal_highs_nearby
-                signal.lc_equal_lows_nearby = ctx.equal_lows_nearby
-            
-            time_remaining_str = (
-                f"  Time remaining in candle: {time_remaining:.0f}s" if time_remaining is not None else ""
+                breakout_level=bo.level,
             )
             logger.info(
-                f"*** SIGNAL: {symbol} {'BUY' if signal.type == 0 else 'SELL'} @ {signal.entry_price:.5f}"
-                f"  SL: {signal.stop_loss:.5f} ({signal.stop_loss_pips:.1f}p)"
-                f"  TP: {signal.take_profit:.5f} ({(abs(signal.take_profit - signal.entry_price)/pip_size):.1f}p)"
-                f"  R:R: {risk_reward_ratio:.1f}"
-                f"  Confidence: {signal.confidence:.2f}"
-                f"{time_remaining_str}"
+                f"CORE SIGNAL {symbol} {'BUY' if signal.type==0 else 'SELL'} ref @ {signal.entry_price:.5f} "
+                f"SL {signal.stop_loss:.5f} TP {signal.take_profit:.5f} ({sl_pips:.1f}p, RR={rr:.2f})"
             )
-            
             return signal
-            
         except Exception as e:
             logger.error(f"Error generating signal for {symbol}: {e}", exc_info=True)
             return None
-
-    def calculate_support_resistance(self, data: pd.DataFrame, swing_highs: np.ndarray, swing_lows: np.ndarray, symbol: str) -> Tuple[List[float], List[float]]:
-        """
-        Calculate significant support and resistance levels based on clustered swing points.
-        """
-        if data is None or len(data) < self.swing_window * 2:
-            return [], []
-
-        resistance_levels = []
-        support_levels = []
-
-        # 1. Find levels from swing points using clustering
-        if len(swing_highs) > 0:
-            resistance_prices = data.iloc[swing_highs]['high'].values
-            resistance_levels = self._cluster_levels(resistance_prices, symbol)
-
-        if len(swing_lows) > 0:
-            support_prices = data.iloc[swing_lows]['low'].values
-            support_levels = self._cluster_levels(support_prices, symbol)
-
-        # 2. Add recent extreme high/low as a fallback level if it's distinct
-        recent_high = float(data['high'].tail(20).max())
-        recent_low = float(data['low'].tail(20).min())
-        
-        symbol_info = mt5.symbol_info(symbol)
-        if not symbol_info:
-            logger.error(f"Failed to get symbol info for {symbol} in S/R calculation")
-            return [], []
-        pip_size = get_pip_size(symbol_info)
-        proximity = self.proximity_threshold * pip_size
-
-        # Add recent high if it's not already close to an existing resistance level
-        if not any(abs(recent_high - level) <= proximity for level in resistance_levels):
-            resistance_levels.append(recent_high)
-
-        # Add recent low if it's not already close to an existing support level
-        if not any(abs(recent_low - level) <= proximity for level in support_levels):
-            support_levels.append(recent_low)
-
-        # 3. Clean, sort, and limit the number of levels
-        resistance = sorted(list(set(resistance_levels)), reverse=True)[:3]
-        support = sorted(list(set(support_levels)))[:3]
-
-        return resistance, support
-
-    def _cluster_levels(self, prices: np.ndarray, symbol: str) -> List[float]:
-        """
-        Cluster nearby price levels using peak ranking, scaled by symbol pip size
-        """
-        if len(prices) == 0:
-            return []
-
-        symbol_info = mt5.symbol_info(symbol)
-        pip_size = get_pip_size(symbol_info)
-
-        proximity = self.proximity_threshold * pip_size  # convert pips to price units
-
-        ranked_prices = []
-        for price in prices:
-            rank = sum(1 for p in prices if abs(p - price) <= proximity)
-            if rank >= self.min_peak_rank:
-                ranked_prices.append((price, rank))
-
-        # sort by rank descending
-        ranked_prices.sort(key=lambda x: x[1], reverse=True)
-
-        consolidated_levels: List[float] = []
-        for price, _rank in ranked_prices:
-            is_close = any(abs(price - level) <= proximity for level in consolidated_levels)
-            if not is_close:
-                consolidated_levels.append(price)
-
-        return sorted(consolidated_levels)

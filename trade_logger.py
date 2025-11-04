@@ -88,7 +88,7 @@ class TradeLogger:
 
             if ticket is not None:
                 for t in self.trades:
-                    if t.get("ticket") == ticket:
+                    if t.get("ticket") == ticket or t.get("order_ticket") == ticket:
                         target = t
                         break
 

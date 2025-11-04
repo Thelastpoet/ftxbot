@@ -20,6 +20,9 @@ class MetaTrader5Client:
         self.initialized = False
         self.reconnect_attempts = 3
         self.reconnect_delay = 5  # seconds
+        self._filling_mode_cache = {}
+        # Automatically try to recover on connection loss
+        self.auto_reconnect = True
         self._initialize()
     
     def _initialize(self):
@@ -59,6 +62,22 @@ class MetaTrader5Client:
         terminal_info = mt5.terminal_info()
         return terminal_info is not None and terminal_info.connected
     
+    def _ensure_connected(self) -> bool:
+        """Ensure connection is alive; try to reconnect if allowed."""
+        if self.is_connected():
+            return True
+        if not self.auto_reconnect:
+            return False
+        for attempt in range(self.reconnect_attempts):
+            try:
+                logger.warning(f"MT5 not connected; reconnect attempt {attempt+1}/{self.reconnect_attempts}")
+                if self.reconnect() and self.is_connected():
+                    return True
+            except Exception as e:
+                logger.error(f"Reconnect attempt {attempt+1} failed: {e}")
+            time.sleep(self.reconnect_delay)
+        return self.is_connected()
+    
     def reconnect(self) -> bool:
         """Attempt to reconnect to MT5"""
         logger.info("Attempting to reconnect to MT5")
@@ -67,50 +86,97 @@ class MetaTrader5Client:
         return self._initialize()
     
     def get_account_info(self) -> Optional[Any]:
-        """Get account information"""
-        if not self.is_connected():
+        """Get account information with auto-reconnect."""
+        if not self._ensure_connected():
             logger.error("MT5 not connected")
             return None
-        
         account_info = mt5.account_info()
+        if account_info is None and self.auto_reconnect and self.reconnect():
+            account_info = mt5.account_info()
         if account_info is None:
             logger.error("Failed to get account info")
             return None
-        
         return account_info
     
     def get_symbol_info(self, symbol: str) -> Optional[Any]:
-        """Get symbol information"""
-        if not self.is_connected():
+        """Get symbol information with auto-reconnect."""
+        if not self._ensure_connected():
             return None
-        
-        # Ensure symbol is selected in Market Watch
+        # Ensure symbol is selected in Market Watch (selection may be lost after reconnect)
         if not mt5.symbol_select(symbol, True):
-            logger.error(f"Failed to select symbol {symbol}")
-            return None
-        
+            if self.auto_reconnect and self.reconnect():
+                if not mt5.symbol_select(symbol, True):
+                    logger.error(f"Failed to select symbol {symbol}")
+                    return None
+            else:
+                logger.error(f"Failed to select symbol {symbol}")
+                return None
         symbol_info = mt5.symbol_info(symbol)
         if symbol_info is None:
             logger.error(f"Failed to get symbol info for {symbol}")
             return None
-        
         return symbol_info
     
     def get_symbol_info_tick(self, symbol: str) -> Optional[Any]:
-        """Get latest tick for symbol"""
-        if not self.is_connected():
+        """Get latest tick for symbol with auto-reconnect."""
+        if not self._ensure_connected():
             return None
-        
         tick = mt5.symbol_info_tick(symbol)
+        if tick is None and self.auto_reconnect and self.reconnect():
+            tick = mt5.symbol_info_tick(symbol)
         if tick is None:
             logger.error(f"Failed to get tick for {symbol}")
             return None
-        
         return tick
+
+    def get_supported_filling_modes(self, symbol: str) -> list:
+        """Return a list of supported filling modes for a symbol, best-effort."""
+        info = self.get_symbol_info(symbol)
+        modes = []
+        try:
+            if info is None:
+                return []
+            if hasattr(info, 'filling_modes') and info.filling_modes:
+                try:
+                    modes.extend(list(info.filling_modes))
+                except Exception:
+                    pass
+            if hasattr(info, 'filling_mode') and info.filling_mode is not None:
+                modes.append(info.filling_mode)
+        except Exception:
+            return []
+        # Deduplicate while preserving order
+        seen = set()
+        out = []
+        for m in modes:
+            if m not in seen:
+                seen.add(m)
+                out.append(m)
+        return out
+
+    def preferred_filling_mode(self, symbol: str, preference: Optional[list] = None) -> int:
+        """Choose a preferred filling mode for a symbol using allowed modes and preference order."""
+        if symbol in self._filling_mode_cache:
+            return self._filling_mode_cache[symbol]
+        modes = self.get_supported_filling_modes(symbol)
+        # Default preference: IOC > FOK > RETURN
+        IOC = getattr(self.mt5, 'ORDER_FILLING_IOC', None)
+        FOK = getattr(self.mt5, 'ORDER_FILLING_FOK', None)
+        RET = getattr(self.mt5, 'ORDER_FILLING_RETURN', None)
+        default_pref = [m for m in [IOC, FOK, RET] if m is not None]
+        pref = preference if preference else default_pref
+        for p in pref:
+            if p in modes:
+                self._filling_mode_cache[symbol] = p
+                return p
+        # Fallback
+        fallback = FOK if FOK is not None else (modes[0] if modes else self.mt5.ORDER_FILLING_FOK)
+        self._filling_mode_cache[symbol] = fallback
+        return fallback
     
     def copy_rates_from_pos(self, symbol: str, timeframe: int, start_pos: int, count: int) -> Optional[Any]:
-        """Copy rates from position"""
-        if not self.is_connected():
+        """Copy rates from position with auto-reconnect and retry."""
+        if not self._ensure_connected():
             return None
         
         # Convert timeframe string to MT5 constant
@@ -131,19 +197,28 @@ class MetaTrader5Client:
             logger.error(f"Unknown timeframe: {timeframe}")
             return None
 
+        # Ensure symbol is selected (can be dropped after reconnect)
+        mt5.symbol_select(symbol, True)
+
         rates = mt5.copy_rates_from_pos(symbol, timeframe_mt5, start_pos, count)
 
         if rates is None or len(rates) == 0:
+            logger.warning(f"Failed to get rates for {symbol}; attempting reconnect and retry")
+            if self.auto_reconnect and self.reconnect():
+                mt5.symbol_select(symbol, True)
+                rates = mt5.copy_rates_from_pos(symbol, timeframe_mt5, start_pos, count)
+        if rates is None or len(rates) == 0:
             logger.error(f"Failed to get rates for {symbol}")
             return None
-        
         return rates
-
+    
     def place_order(self, symbol: str, order_type: int, volume: float, 
                    price: Optional[float] = None, sl: Optional[float] = None, 
-                   tp: Optional[float] = None, comment: str = "", deviation: Optional[int] = None) -> Optional[Any]:
-        """Place a market order"""
-        if not self.is_connected():
+                   tp: Optional[float] = None, comment: str = "",
+                   deviation_points: Optional[int] = None,
+                   type_filling_override: Optional[int] = None) -> Optional[Any]:
+        """Place a market order (ensures connection)."""
+        if not self._ensure_connected():
             return None
         
         symbol_info = self.get_symbol_info(symbol)
@@ -162,41 +237,107 @@ class MetaTrader5Client:
         volume = round(volume / lot_step) * lot_step
         volume = max(symbol_info.volume_min, min(volume, symbol_info.volume_max))
         
-        # --- Build candidate filling modes ---
-        candidates: List[int] = self._fill_candidates(symbol)
+        # --- Build filling mode candidates (override -> symbol -> defaults) ---
+        candidates = []
+        # cached working fill first if available
+        try:
+            if position.symbol in self._filling_mode_cache:
+                candidates.append(int(self._filling_mode_cache[position.symbol]))
+        except Exception:
+            pass
+        # 1) cached working mode first if available
+        try:
+            if symbol in self._filling_mode_cache:
+                candidates.append(int(self._filling_mode_cache[symbol]))
+        except Exception:
+            pass
+        # 2) external override next
+        try:
+            if type_filling_override is not None and int(type_filling_override) not in candidates:
+                candidates.append(int(type_filling_override))
+        except Exception:
+            pass
+        try:
+            # use symbol's reported modes next
+            symbol_modes = []
+            if hasattr(symbol_info, 'filling_mode') and getattr(symbol_info, 'filling_mode') is not None:
+                symbol_modes.append(int(symbol_info.filling_mode))
+            if hasattr(symbol_info, 'filling_modes') and getattr(symbol_info, 'filling_modes'):
+                try:
+                    symbol_modes.extend([int(m) for m in list(symbol_info.filling_modes)])
+                except Exception:
+                    pass
+            for m in symbol_modes:
+                if m not in candidates:
+                    candidates.append(m)
+        except Exception:
+            pass
+        # default preference at the end
+        for m in [getattr(mt5, 'ORDER_FILLING_IOC', None), getattr(mt5, 'ORDER_FILLING_FOK', None), getattr(mt5, 'ORDER_FILLING_RETURN', None)]:
+            if m is not None and m not in candidates:
+                candidates.append(int(m))
+        # final guard
+        if not candidates:
+            candidates = [int(getattr(mt5, 'ORDER_FILLING_FOK'))]
+        
+        # Derive deviation in points if not provided
+        if deviation_points is None:
+            try:
+                tick = self.get_symbol_info_tick(symbol)
+                spread_points = int(round(abs(float(tick.ask) - float(tick.bid)) / float(symbol_info.point))) if tick else 20
+                # dynamic clamp: 1x spread, between 10 and 100 points
+                deviation_points = max(10, min(100, spread_points))
+            except Exception:
+                deviation_points = 20
 
-        # Prepare request
-        request = {
-            "action": mt5.TRADE_ACTION_DEAL,
-            "symbol": symbol,
-            "volume": volume,
-            "type": order_type,
-            "price": price,
-            "deviation": int(deviation) if deviation is not None else 20,  # Maximum price deviation (points)
-            "magic": 234000,  # Magic number for identification
-            "comment": comment,
-            "type_time": mt5.ORDER_TIME_GTC,
-            # type_filling will be set during send attempts
-        }
-        
-        # Add stop loss if specified
-        if sl is not None:
-            request["sl"] = sl
-        
-        # Add take profit if specified
-        if tp is not None:
-            request["tp"] = tp
-        
-        # Send order with filling mode fallbacks
-        result = self._order_send_with_fill_fallback(request, candidates)
-        if result is None:
+        # Try order with candidates sequentially, cache the one that works
+        last_result = None
+        unsupported_code = getattr(mt5, 'TRADE_RETCODE_INVALID_FILL', None)  # Some builds expose this
+        for idx, type_filling in enumerate(candidates):
+            request = {
+                "action": mt5.TRADE_ACTION_DEAL,
+                "symbol": symbol,
+                "volume": volume,
+                "type": order_type,
+                "price": price,
+                "deviation": int(deviation_points),
+                "magic": 234000,  # Magic number for identification
+                "comment": comment,
+                "type_time": mt5.ORDER_TIME_GTC,
+                "type_filling": int(type_filling),
+            }
+            if sl is not None:
+                request["sl"] = sl
+            if tp is not None:
+                request["tp"] = tp
+
+            result = mt5.order_send(request)
+            last_result = result
+            if result is None:
+                logger.error("Order send failed: No result returned")
+                break
+            if result.retcode == mt5.TRADE_RETCODE_DONE:
+                # Cache working filling for this symbol
+                try:
+                    self._filling_mode_cache[symbol] = int(type_filling)
+                except Exception:
+                    pass
+                logger.info(f"Order placed successfully: {getattr(result, 'order', None)}")
+                return result
+            # If unsupported filling mode, try next candidate; else, stop and return
+            if int(getattr(result, 'retcode', -1)) in (10030, unsupported_code if unsupported_code is not None else -9999):
+                if idx < len(candidates) - 1:
+                    logger.warning(f"{symbol}: Filling mode {type_filling} unsupported, retrying with next option")
+                    continue
+            # Any other error: log and stop trying
+            logger.error(f"Order failed: {result.retcode} - {result.comment}")
             return None
-        logger.info(f"Order placed successfully: {getattr(result, 'order', None)}")
-        return result
+
+        return None
     
     def get_positions(self, symbol: Optional[str] = None) -> List[Any]:
         """Get open positions"""
-        if not self.is_connected():
+        if not self._ensure_connected():
             return []
         
         if symbol:
@@ -205,7 +346,10 @@ class MetaTrader5Client:
             positions = mt5.positions_get()
         
         if positions is None:
-            return []
+            if self.auto_reconnect and self.reconnect():
+                positions = mt5.positions_get(symbol=symbol) if symbol else mt5.positions_get()
+            if positions is None:
+                return []
         
         return list(positions)
     
@@ -215,7 +359,7 @@ class MetaTrader5Client:
     
     def close_position(self, ticket: int, volume: Optional[float] = None) -> Optional[Any]:
         """Close an open position"""
-        if not self.is_connected():
+        if not self._ensure_connected():
             return None
         
         # Get position info
@@ -240,35 +384,65 @@ class MetaTrader5Client:
         
         price = tick.bid if close_type == mt5.ORDER_TYPE_SELL else tick.ask
         
-        # --- Build candidate filling modes ---
-        candidates: List[int] = self._fill_candidates(position.symbol)
-        
-        # Prepare close request
-        request = {
-            "action": mt5.TRADE_ACTION_DEAL,
-            "position": ticket,
-            "symbol": position.symbol,
-            "volume": volume,
-            "type": close_type,
-            "price": price,
-            "deviation": 20,
-            "magic": 234000,
-            "comment": f"Close position {ticket}",
-            "type_time": mt5.ORDER_TIME_GTC,
-            # type_filling will be set during send attempts
-        }
-        
-        # Send close order with filling mode fallbacks
-        result = self._order_send_with_fill_fallback(request, candidates)
-        if result is None:
+        # --- Build filling mode candidates for closing ---
+        symbol_info = self.get_symbol_info(position.symbol)
+        candidates = []
+        try:
+            if hasattr(symbol_info, "filling_mode") and getattr(symbol_info, 'filling_mode') is not None:
+                candidates.append(int(symbol_info.filling_mode))
+            if hasattr(symbol_info, "filling_modes") and getattr(symbol_info, 'filling_modes'):
+                try:
+                    for m in list(symbol_info.filling_modes):
+                        if int(m) not in candidates:
+                            candidates.append(int(m))
+                except Exception:
+                    pass
+        except Exception:
+            pass
+        for m in [getattr(mt5, 'ORDER_FILLING_IOC', None), getattr(mt5, 'ORDER_FILLING_FOK', None), getattr(mt5, 'ORDER_FILLING_RETURN', None)]:
+            if m is not None and int(m) not in candidates:
+                candidates.append(int(m))
+        if not candidates:
+            candidates = [int(getattr(mt5, 'ORDER_FILLING_FOK'))]
+
+        # Try close with candidates
+        unsupported_code = getattr(mt5, 'TRADE_RETCODE_INVALID_FILL', None)
+        last_result = None
+        for idx, type_filling in enumerate(candidates):
+            request = {
+                "action": mt5.TRADE_ACTION_DEAL,
+                "position": ticket,
+                "symbol": position.symbol,
+                "volume": volume,
+                "type": close_type,
+                "price": price,
+                "deviation": 20,
+                "magic": 234000,
+                "comment": f"Close position {ticket}",
+                "type_time": mt5.ORDER_TIME_GTC,
+                "type_filling": int(type_filling),
+            }
+            result = mt5.order_send(request)
+            last_result = result
+            if result is None:
+                logger.error("Close order failed: No result returned")
+                break
+            if result.retcode == mt5.TRADE_RETCODE_DONE:
+                logger.info(f"Position {ticket} closed successfully")
+                return result
+            if int(getattr(result, 'retcode', -1)) in (10030, unsupported_code if unsupported_code is not None else -9999):
+                if idx < len(candidates) - 1:
+                    logger.warning(f"{position.symbol}: Filling mode {type_filling} unsupported on close, retrying")
+                    continue
+            logger.error(f"Close order failed: {result.retcode} - {result.comment}")
             return None
-        logger.info(f"Position {ticket} closed successfully")
-        return result
+
+        return None
     
     def modify_position(self, ticket: int, sl: Optional[float] = None, 
                        tp: Optional[float] = None) -> Optional[Any]:
         """Modify stop loss and take profit of an open position"""
-        if not self.is_connected():
+        if not self._ensure_connected():
             return None
         
         # Get position info
@@ -306,7 +480,7 @@ class MetaTrader5Client:
     
     def get_history_orders(self, from_date: datetime, to_date: datetime) -> List[Any]:
         """Get historical orders"""
-        if not self.is_connected():
+        if not self._ensure_connected():
             return []
         
         orders = mt5.history_orders_get(from_date, to_date)
@@ -318,11 +492,23 @@ class MetaTrader5Client:
     
     def get_history_deals_by_position(self, position_id: int) -> List[Any]:
         """Get historical deals by position ID"""
-        if not self.is_connected():
+        if not self._ensure_connected():
             return []
-        
+
         try:
-            deals = mt5.history_deals_get(position=position_id)
+            # Query deals within a wide enough date window directly
+            # Some MT5 Python builds do not provide `history_select`,
+            # so pass the range to `history_deals_get` and filter by position.
+            now = datetime.now()
+            from_date = datetime(now.year - 2, 1, 1)
+            try:
+                deals = mt5.history_deals_get(from_date, now, position=position_id)
+            except TypeError:
+                # Older builds may not support the `position` kwarg; fetch all and filter client-side
+                all_deals = mt5.history_deals_get(from_date, now)
+                deals = [d for d in (all_deals or []) if getattr(d, 'position', None) == position_id]
+            if deals:
+                deals = sorted(deals, key=lambda d: d.time)
             return list(deals) if deals else []
         except Exception as e:
             logger.error(f"Error getting deals for position {position_id}: {e}")
@@ -339,73 +525,3 @@ class MetaTrader5Client:
             return []
         
         return list(deals)
-
-    # ---------- Internal helpers ----------
-    def _order_send_with_fill_fallback(self, request: dict, candidates: List[int]) -> Optional[Any]:
-        """Attempt order_send with a list of filling modes.
-
-        Tries the provided filling mode candidates in order. If the server
-        rejects with unsupported filling mode (retcode 10030), it retries with
-        the next candidate. Returns the successful result, or None on failure.
-        """
-        invalid_fill_code = getattr(mt5, 'TRADE_RETCODE_INVALID_FILL', 10030)
-
-        last_result = None
-        for idx, fm in enumerate(candidates, start=1):
-            req = dict(request)
-            req['type_filling'] = fm
-            try:
-                result = mt5.order_send(req)
-            except Exception as e:
-                logger.error(f"order_send exception on attempt {idx} with filling={fm}: {e}")
-                continue
-
-            if result is None:
-                logger.error(f"Order send failed (attempt {idx}) with filling={fm}: No result returned")
-                continue
-
-            # Success
-            if getattr(result, 'retcode', None) == getattr(mt5, 'TRADE_RETCODE_DONE', 10009):
-                return result
-
-            # If unsupported filling, try next candidate
-            if getattr(result, 'retcode', None) == invalid_fill_code:
-                logger.error(f"Unsupported filling mode (retcode {result.retcode}) with filling={fm}; retrying next mode")
-                last_result = result
-                continue
-
-            # Other error: log and stop trying
-            logger.error(f"Order failed (attempt {idx}) with filling={fm}: {result.retcode} - {getattr(result, 'comment', '')}")
-            return None
-
-        # Exhausted all candidates
-        if last_result is not None:
-            logger.error(f"Order failed: unsupported filling modes for all candidates: {candidates}")
-        return None
-
-    def _fill_candidates(self, symbol: str) -> List[int]:
-        """Return preferred filling modes for a symbol, with sensible fallbacks.
-
-        Order: [symbol's configured mode if available] + [IOC, FOK, RETURN] (deduped).
-        """
-        candidates: List[int] = []
-        try:
-            info = self.get_symbol_info(symbol)
-        except Exception:
-            info = None
-
-        try:
-            if info is not None and hasattr(info, 'filling_mode') and info.filling_mode is not None:
-                candidates.append(int(info.filling_mode))
-        except Exception:
-            pass
-
-        for fm in (
-            getattr(mt5, 'ORDER_FILLING_IOC', 1),
-            getattr(mt5, 'ORDER_FILLING_FOK', 0),
-            getattr(mt5, 'ORDER_FILLING_RETURN', 2),
-        ):
-            if fm not in candidates:
-                candidates.append(fm)
-
-        return candidates
