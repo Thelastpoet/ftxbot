@@ -11,6 +11,7 @@ import pandas as pd
 import logging
 
 from utils import get_pip_size, resolve_pip_size
+from patterns import candlestick_confirm
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +27,10 @@ class TradingSignal:
     confidence: float
     timestamp: datetime
     breakout_level: float
+    # Optional pattern context for logging/analytics
+    pattern_score: Optional[float] = None
+    pattern_dir: Optional[str] = None
+    pattern_primary: Optional[str] = None
 
 class BreakoutInfo(NamedTuple):
     type: str      # 'bullish' or 'bearish'
@@ -53,6 +58,16 @@ class PurePriceActionStrategy:
         self.context_lookback_period = getattr(config, 'context_lookback_period', max(100, self.lookback_period * 3))
         self.obstacle_buffer_pips = float(getattr(config, 'obstacle_buffer_pips', 3))
         self.min_rr_after_adjustment = float(getattr(config, 'min_rr_after_adjustment', self.risk_reward_ratio))
+        # Patterns/ATR integration controls
+        self.enable_patterns = bool(getattr(config, 'enable_patterns', True))
+        self.pattern_window = int(getattr(config, 'pattern_window', 3))
+        self.pattern_score_threshold = float(getattr(config, 'pattern_score_threshold', 0.6))
+        self.pattern_strong_threshold = float(getattr(config, 'pattern_strong_threshold', 0.8))
+        self.allowed_patterns = getattr(config, 'allowed_patterns', None)
+        self.dup_relax_on_strong_pattern = bool(getattr(config, 'dup_relax_on_strong_pattern', True))
+        self.headroom_relax_pct_on_strong = float(getattr(config, 'headroom_relax_pct_on_strong', 0.25))
+        self.obstacle_buffer_relax_pct_on_strong = float(getattr(config, 'obstacle_buffer_relax_pct_on_strong', 0.3))
+        self.atr_source = getattr(config, 'atr_source', 'talib')
         self._last_breakout = {}  
         self._last_breakout_bar = {} 
 
@@ -111,18 +126,61 @@ class PurePriceActionStrategy:
     # Breakout and SL/TP
     # -----------------------------
     def _compute_atr(self, highs: pd.Series, lows: pd.Series, closes: pd.Series, period: int) -> Optional[pd.Series]:
+        """Compute ATR via TA-Lib if configured, else fallback to manual."""
         try:
             if len(closes) < period + 2:
                 return None
+            if str(self.atr_source).lower() == 'talib':
+                try:
+                    import talib as ta  # type: ignore
+                    arr = ta.ATR(highs.values, lows.values, closes.values, timeperiod=int(period))
+                    if arr is not None:
+                        series = pd.Series(arr, index=closes.index)
+                        try:
+                            logger.debug(f"ATR via TA-Lib (period={period}) computed")
+                        except Exception:
+                            pass
+                        return series
+                except Exception:
+                    # fall back to manual below
+                    pass
             prev_close = closes.shift(1)
             tr1 = (highs - lows).abs()
             tr2 = (highs - prev_close).abs()
             tr3 = (lows - prev_close).abs()
             tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
             atr = tr.rolling(window=period, min_periods=period).mean()
+            try:
+                logger.debug(f"ATR via manual TR SMA (period={period}) computed")
+            except Exception:
+                pass
             return atr
         except Exception:
             return None
+
+    def _candlestick_confirm(self, completed: pd.DataFrame, bo: 'BreakoutInfo', symbol: str) -> Tuple[bool, Optional[dict]]:
+        """Confirm breakout using TA-Lib candlestick patterns. Fail-open if disabled or TA-Lib missing."""
+        if not self.enable_patterns:
+            return True, None
+        try:
+            ok, info = candlestick_confirm(
+                completed[['open', 'high', 'low', 'close']],
+                direction=bo.type,
+                window=int(self.pattern_window),
+                allowed_patterns=self.allowed_patterns,
+            )
+            try:
+                logger.debug(f"{symbol}: pattern_ok={ok} dir={info.get('dir') if info else None} score={info.get('score') if info else None}")
+            except Exception:
+                pass
+            if not ok:
+                return False, info
+            score = float((info or {}).get('score', 0.0) or 0.0)
+            if score < float(self.pattern_score_threshold):
+                return False, info
+            return True, info
+        except Exception:
+            return True, None
         
     def _detect_breakout_close(self, last_close: float, resistance: List[float], support: List[float], threshold_pips: float, pip: float) -> Optional[BreakoutInfo]:
         thr = threshold_pips * pip
@@ -311,6 +369,14 @@ class PurePriceActionStrategy:
 
             logger.debug(f"{symbol}: breakout type={bo.type} level={bo.level:.5f} entry={bo.entry_price:.5f}")
 
+            # TA-Lib candlestick confirmation (gate). If disabled/unavailable, pass-through.
+            pattern_info = None
+            if self.enable_patterns:
+                ok, info = self._candlestick_confirm(completed, bo, symbol)
+                if not ok:
+                    return None
+                pattern_info = info or None
+
             # Emit at most one signal per closed bar for the same side
             try:
                 bar_time = completed.index[-1]
@@ -335,6 +401,16 @@ class PurePriceActionStrategy:
                     dup_distance_pips = getattr(self.config, 'duplicate_breakout_distance_pips_default', None)
                 if dup_window_sec is None:
                     dup_window_sec = getattr(self.config, 'duplicate_breakout_window_seconds_default', None)
+                # Relax suppression if a strong confirming pattern exists
+                try:
+                    strong = False
+                    if 'pattern_info' in locals() and pattern_info is not None:
+                        strong = float(pattern_info.get('score', 0.0) or 0.0) >= float(self.pattern_strong_threshold)
+                    if strong and self.dup_relax_on_strong_pattern and dup_distance_pips is not None and dup_window_sec is not None:
+                        dup_distance_pips = max(0.0, float(dup_distance_pips) * 0.6)
+                        dup_window_sec = max(60.0, float(dup_window_sec) * 0.5)
+                except Exception:
+                    pass
                 if dup_distance_pips is not None and dup_window_sec is not None:
                     key = (symbol, bo.type)
                     last = self._last_breakout.get(key)
@@ -361,6 +437,20 @@ class PurePriceActionStrategy:
                 logger.debug((f"{symbol}: SL {sl_pips:.1f}p > max {float(max_sl_pips):.1f}p; skipping"))
                 return None
 
+            # If a strong confirming candlestick printed, modestly relax headroom requirement
+            try:
+                if 'pattern_info' in locals() and pattern_info is not None:
+                    _ps = float(pattern_info.get('score', 0.0) or 0.0)
+                    if _ps >= float(self.pattern_strong_threshold):
+                        _old = float(min_headroom_rr)
+                        min_headroom_rr = max(0.25, float(min_headroom_rr) * (1.0 - float(self.headroom_relax_pct_on_strong)))
+                        try:
+                            logger.debug(f"{symbol}: relax headroom RR on strong pattern (score={_ps:.2f}): {(_old):.2f} -> {float(min_headroom_rr):.2f}")
+                        except Exception:
+                            pass
+            except Exception:
+                pass
+
             # Headroom filter: require sufficient space to next obstacle
             obstacle = None
             try:
@@ -368,7 +458,21 @@ class PurePriceActionStrategy:
             except Exception:
                 obstacle = None
             if obstacle is not None:
-                buf = float(self.obstacle_buffer_pips) * float(pip)
+                # Optionally relax obstacle buffer if strong confirming pattern present
+                obstacle_buffer_pips_eff = float(self.obstacle_buffer_pips)
+                try:
+                    if 'pattern_info' in locals() and pattern_info is not None:
+                        _ps2 = float(pattern_info.get('score', 0.0) or 0.0)
+                        if _ps2 >= float(self.pattern_strong_threshold):
+                            _oldb = float(obstacle_buffer_pips_eff)
+                            obstacle_buffer_pips_eff = max(0.0, _oldb * (1.0 - float(self.obstacle_buffer_relax_pct_on_strong)))
+                            try:
+                                logger.debug(f"{symbol}: relax obstacle buffer on strong pattern: {_oldb:.2f} -> {float(obstacle_buffer_pips_eff):.2f} pips")
+                            except Exception:
+                                pass
+                except Exception:
+                    pass
+                buf = float(obstacle_buffer_pips_eff) * float(pip)
                 headroom_price = max(0.0, abs(obstacle - bo.entry_price) - buf)
                 headroom_pips = headroom_price / float(pip)
                 try:
@@ -418,11 +522,34 @@ class PurePriceActionStrategy:
                 confidence=0.5,
                 timestamp=datetime.now(timezone.utc),
                 breakout_level=bo.level,
+                pattern_score=(pattern_info.get('score') if pattern_info else None) if isinstance(pattern_info, dict) else None,
+                pattern_dir=(pattern_info.get('dir') if pattern_info else None) if isinstance(pattern_info, dict) else None,
+                pattern_primary=(pattern_info.get('primary') if pattern_info else None) if isinstance(pattern_info, dict) else None,
             )
-            logger.info(
-                f"CORE SIGNAL {symbol} {'BUY' if signal.type==0 else 'SELL'} ref @ {signal.entry_price:.5f} "
-                f"SL {signal.stop_loss:.5f} TP {signal.take_profit:.5f} ({sl_pips:.1f}p, RR={rr:.2f})"
-            )
+            # Enriched INFO log for terminal: includes pattern/ATR source if available
+            try:
+                pat_label = None
+                pat_score = None
+                if 'pattern_info' in locals() and isinstance(pattern_info, dict):
+                    pat_label = pattern_info.get('primary') or pattern_info.get('dir')
+                    ps = pattern_info.get('score')
+                    pat_score = f"{float(ps):.2f}" if ps is not None else None
+                parts = [
+                    f"CORE SIGNAL {symbol} {'BUY' if signal.type==0 else 'SELL'}",
+                    f"ref @ {signal.entry_price:.5f}",
+                    f"SL {signal.stop_loss:.5f}",
+                    f"TP {signal.take_profit:.5f}",
+                    f"({sl_pips:.1f}p, RR={rr:.2f})",
+                ]
+                if pat_label and pat_score:
+                    parts.append(f"pat={pat_label}:{pat_score}")
+                parts.append(f"ATR={str(self.atr_source).upper()}")
+                logger.info(" ".join(parts))
+            except Exception:
+                logger.info(
+                    f"CORE SIGNAL {symbol} {'BUY' if signal.type==0 else 'SELL'} ref @ {signal.entry_price:.5f} "
+                    f"SL {signal.stop_loss:.5f} TP {signal.take_profit:.5f} ({sl_pips:.1f}p, RR={rr:.2f})"
+                )
             return signal
         except Exception as e:
             logger.error(f"Error generating signal for {symbol}: {e}", exc_info=True)

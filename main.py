@@ -15,15 +15,49 @@ from typing import Optional, Dict
 from utils import resolve_pip_size
 from strategy import PurePriceActionStrategy, TradingSignal
 
-# Logging
-logging.basicConfig(
-    level=logging.DEBUG,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler('forex_bot.log'),
-        logging.StreamHandler()
-    ]
-)
+def configure_logging(console_level: str = 'INFO') -> None:
+    """Configure production-friendly logging for console and file.
+
+    - Console: concise format at requested level (default INFO).
+    - File: full detail at DEBUG in forex_bot.log.
+    - Suppress noisy third-party debug (e.g., asyncio proactor message).
+    """
+    level_map = {
+        'DEBUG': logging.DEBUG,
+        'INFO': logging.INFO,
+        'WARNING': logging.WARNING,
+        'ERROR': logging.ERROR,
+        'CRITICAL': logging.CRITICAL,
+    }
+    root = logging.getLogger()
+    root.setLevel(logging.DEBUG)
+    # Clear existing handlers to avoid duplicates on reload
+    for h in list(root.handlers):
+        root.removeHandler(h)
+
+    # File handler: verbose
+    fh = logging.FileHandler('forex_bot.log', encoding='utf-8')
+    fh.setLevel(logging.DEBUG)
+    fh.setFormatter(logging.Formatter(
+        fmt='%(asctime)s | %(levelname)s | %(name)s | %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S'
+    ))
+
+    # Console handler: concise
+    ch = logging.StreamHandler()
+    ch.setLevel(level_map.get(str(console_level).upper(), logging.INFO))
+    ch.setFormatter(logging.Formatter(
+        fmt='%(asctime)s | %(levelname)s | %(name)s | %(message)s',
+        datefmt='%H:%M:%S'
+    ))
+
+    root.addHandler(fh)
+    root.addHandler(ch)
+
+    # Tame noisy libraries
+    logging.getLogger('asyncio').setLevel(logging.WARNING)
+    logging.getLogger('MetaTrader5').setLevel(logging.WARNING)
+
 logger = logging.getLogger(__name__)
 
 class Config:
@@ -42,6 +76,16 @@ class Config:
             self.breakout_threshold = trading.get('breakout_threshold_pips', 7)
             self.min_stop_loss_pips = trading.get('min_stop_loss_pips', 20)
             self.stop_loss_buffer_pips = trading.get('stop_loss_buffer_pips', 15)
+            # Patterns and ATR (TA-Lib) integration
+            self.enable_patterns = trading.get('enable_patterns', True)
+            self.pattern_window = trading.get('pattern_window', 3)
+            self.pattern_score_threshold = trading.get('pattern_score_threshold', 0.6)
+            self.pattern_strong_threshold = trading.get('pattern_strong_threshold', 0.8)
+            self.allowed_patterns = trading.get('allowed_patterns', None)
+            self.dup_relax_on_strong_pattern = trading.get('dup_relax_on_strong_pattern', True)
+            self.headroom_relax_pct_on_strong = trading.get('headroom_relax_pct_on_strong', 0.25)
+            self.obstacle_buffer_relax_pct_on_strong = trading.get('obstacle_buffer_relax_pct_on_strong', 0.3)
+            self.atr_source = trading.get('atr_source', 'talib')
             # ATR/headroom controls
             self.atr_period = trading.get('atr_period', 14)
             self.atr_sl_k = trading.get('atr_sl_k', 0.6)
@@ -91,6 +135,15 @@ class Config:
         self.breakout_threshold = 7
         self.min_stop_loss_pips = 20
         self.stop_loss_buffer_pips = 15
+        self.enable_patterns = True
+        self.pattern_window = 3
+        self.pattern_score_threshold = 0.6
+        self.pattern_strong_threshold = 0.8
+        self.allowed_patterns = None
+        self.dup_relax_on_strong_pattern = True
+        self.headroom_relax_pct_on_strong = 0.25
+        self.obstacle_buffer_relax_pct_on_strong = 0.3
+        self.atr_source = 'talib'
         self.atr_period = 14
         self.atr_sl_k = 0.6
         self.min_sl_buffer_pips = 10
@@ -133,6 +186,22 @@ class TradingBot:
             self.strategy = PurePriceActionStrategy(self.config)
             self.risk_manager = RiskManager(self.config, self.mt5_client)
             self.trade_logger = TradeLogger('trades.log')
+
+            # Strategy snapshot
+            try:
+                logger.info(
+                    "Strategy init: patterns=%s window=%s thr=%s/%s atr=%s rr=%.2f lookback=%s swing=%s",
+                    'ON' if getattr(self.config, 'enable_patterns', True) else 'OFF',
+                    getattr(self.config, 'pattern_window', 3),
+                    getattr(self.config, 'pattern_score_threshold', 0.6),
+                    getattr(self.config, 'pattern_strong_threshold', 0.8),
+                    getattr(self.config, 'atr_source', 'talib'),
+                    float(getattr(self.config, 'risk_reward_ratio', 2.0)),
+                    getattr(self.config, 'lookback_period', 20),
+                    getattr(self.config, 'swing_window', 5),
+                )
+            except Exception:
+                pass
 
             # Preflight introspection for configured symbols
             for sc in (self.config.symbols or []):
@@ -243,6 +312,9 @@ class TradingBot:
                     'confidence': signal.confidence,
                     'signal_time': signal.timestamp,
                     'breakout_level': signal.breakout_level,
+                    'pattern_score': getattr(signal, 'pattern_score', None),
+                    'pattern_dir': getattr(signal, 'pattern_dir', None),
+                    'pattern_primary': getattr(signal, 'pattern_primary', None),
                     'status': 'OPEN'
                 }
                 self.trade_logger.log_trade(trade)
@@ -304,14 +376,33 @@ class TradingBot:
                 return
 
             open_positions = self.mt5_client.get_all_positions()
-            # Position IDs (tickets) of currently open positions
-            open_position_ids = {getattr(p, 'ticket', None) for p in (open_positions or [])}
 
             for trade in open_trades:
-                # Compare against position_id, not the initial order ticket
-                if trade.get('position_id') not in open_position_ids:
+                # Find the position for this trade
+                position_id = trade.get('position_id')
+                deal_ticket = trade.get('deal_ticket')
+
+                # If position_id is None, try to find it from the open positions using deal_ticket
+                if position_id is None and deal_ticket is not None:
+                    for p in (open_positions or []):
+                        # Match by checking if this position was opened by our deal
+                        if getattr(p, 'identifier', None) == deal_ticket or getattr(p, 'ticket', None) == deal_ticket:
+                            position_id = getattr(p, 'ticket', None)
+                            # Update the trade with the found position_id for future reference
+                            trade['position_id'] = position_id
+                            self.trade_logger.persist_all()
+                            break
+
+                # Skip monitoring if we still can't find a valid position_id
+                if position_id is None:
+                    continue
+
+                # Check if position is still open
+                position_still_open = any(getattr(p, 'ticket', None) == position_id for p in (open_positions or []))
+
+                if not position_still_open:
                     # The trade is no longer open, so we need to update its status
-                    deals = self.mt5_client.get_history_deals_by_position(trade.get('position_id'))
+                    deals = self.mt5_client.get_history_deals_by_position(position_id)
                     if deals:
                         closing_deals = [d for d in deals if d.entry == self.mt5_client.mt5.DEAL_ENTRY_OUT or d.entry == self.mt5_client.mt5.DEAL_ENTRY_INOUT]
                         if closing_deals:
@@ -411,7 +502,7 @@ def parse_arguments():
 
 async def main():
     args = parse_arguments()
-    logging.getLogger().setLevel(getattr(logging, args.log_level))
+    configure_logging(args.log_level)
     cfg = Config(args.config, args)
     bot = TradingBot(cfg)
     try:
