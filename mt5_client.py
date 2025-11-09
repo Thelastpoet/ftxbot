@@ -6,7 +6,7 @@ Handles all interactions with the MT5 terminal
 import MetaTrader5 as mt5
 import logging
 from typing import Optional, List, Any
-from datetime import datetime
+from datetime import datetime, timezone
 import time
 
 logger = logging.getLogger(__name__)
@@ -239,12 +239,6 @@ class MetaTrader5Client:
         
         # --- Build filling mode candidates (override -> symbol -> defaults) ---
         candidates = []
-        # cached working fill first if available
-        try:
-            if position.symbol in self._filling_mode_cache:
-                candidates.append(int(self._filling_mode_cache[position.symbol]))
-        except Exception:
-            pass
         # 1) cached working mode first if available
         try:
             if symbol in self._filling_mode_cache:
@@ -499,8 +493,8 @@ class MetaTrader5Client:
             # Query deals within a wide enough date window directly
             # Some MT5 Python builds do not provide `history_select`,
             # so pass the range to `history_deals_get` and filter by position.
-            now = datetime.now()
-            from_date = datetime(now.year - 2, 1, 1)
+            now = datetime.now(timezone.utc)
+            from_date = datetime(now.year - 2, 1, 1, tzinfo=timezone.utc)
             try:
                 deals = mt5.history_deals_get(from_date, now, position=position_id)
             except TypeError:

@@ -17,6 +17,31 @@
     "max_drawdown_percentage": 0.05,
     "risk_reward_ratio": 1.5
   },
+  "amd_settings": {
+    "enabled": true,
+    "enable_asian_trading": false,
+    "enable_london_trading": true,
+    "enable_ny_trading": true,
+    "asian_session_hours": [0, 8],
+    "london_session_hours": [8, 16],
+    "ny_session_hours": [13, 22],
+    "accumulation_detection": {
+      "max_range_vs_adr_ratio": 0.4,
+      "min_overlap_bars": 5,
+      "max_price_from_open_pips": 30
+    },
+    "manipulation_detection": {
+      "enabled": true,
+      "sweep_threshold_pips": 5,
+      "reversal_confirmation_bars": 3,
+      "reversal_threshold_pips": 15
+    },
+    "directional_bias": {
+      "enabled": true,
+      "allow_countertrend_in_expansion": false,
+      "disable_trades_in_distribution": false
+    }
+  },
   "symbols": [
   {
     "name": "EURUSD",

@@ -8,7 +8,7 @@ import logging
 import json
 import argparse
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional, Dict
 
@@ -105,6 +105,32 @@ class Config:
             self.risk_reward_ratio = risk.get('risk_reward_ratio', 2.0)
             self.use_equity = risk.get('use_equity', True)
 
+            # AMD settings
+            amd = data.get('amd_settings', {})
+            self.amd_enabled = amd.get('enabled', False)
+            self.amd_enable_asian_trading = amd.get('enable_asian_trading', False)
+            self.amd_enable_london_trading = amd.get('enable_london_trading', True)
+            self.amd_enable_ny_trading = amd.get('enable_ny_trading', True)
+            self.amd_asian_session_hours = tuple(amd.get('asian_session_hours', [0, 8]))
+            self.amd_london_session_hours = tuple(amd.get('london_session_hours', [8, 16]))
+            self.amd_ny_session_hours = tuple(amd.get('ny_session_hours', [13, 22]))
+            # Accumulation detection
+            accum = amd.get('accumulation_detection', {})
+            self.amd_max_range_vs_adr_ratio = accum.get('max_range_vs_adr_ratio', 0.4)
+            self.amd_min_overlap_bars = accum.get('min_overlap_bars', 5)
+            self.amd_max_price_from_open_pips = accum.get('max_price_from_open_pips', 30)
+            # Manipulation detection
+            manip = amd.get('manipulation_detection', {})
+            self.amd_manipulation_enabled = manip.get('enabled', True)
+            self.amd_sweep_threshold_pips = manip.get('sweep_threshold_pips', 5)
+            self.amd_reversal_confirmation_bars = manip.get('reversal_confirmation_bars', 3)
+            self.amd_reversal_threshold_pips = manip.get('reversal_threshold_pips', 15)
+            # Directional bias
+            bias = amd.get('directional_bias', {})
+            self.amd_directional_bias_enabled = bias.get('enabled', True)
+            self.amd_allow_countertrend_in_expansion = bias.get('allow_countertrend_in_expansion', False)
+            self.amd_disable_trades_in_distribution = bias.get('disable_trades_in_distribution', False)
+
             # Symbols
             self.symbols = []
             for s in data.get('symbols', []) or []:
@@ -158,6 +184,8 @@ class Config:
         self.max_drawdown = 0.05
         self.risk_reward_ratio = 2.0
         self.symbols = [{'name': 'EURUSD', 'timeframes': ['M15']}]
+        # AMD defaults (disabled)
+        self.amd_enabled = False
         # No momentum filter config; price-action + MTF context only
 
 class TradingBot:
@@ -168,6 +196,7 @@ class TradingBot:
         self.strategy = None
         self.risk_manager = None
         self.trade_logger = None
+        self.amd_analyzer = None
         self.running = False
         self.symbol_fillings = {}
 
@@ -186,6 +215,12 @@ class TradingBot:
             self.strategy = PurePriceActionStrategy(self.config)
             self.risk_manager = RiskManager(self.config, self.mt5_client)
             self.trade_logger = TradeLogger('trades.log')
+
+            # Initialize AMD analyzer if enabled
+            if self.config.amd_enabled:
+                from amd_context import AMDAnalyzer
+                self.amd_analyzer = AMDAnalyzer(self.config)
+                logger.info("AMD context analyzer enabled")
 
             # Strategy snapshot
             try:
@@ -228,7 +263,7 @@ class TradingBot:
             logger.error(f"Initialization failed: {e}")
             raise
 
-    async def execute_trade(self, signal: TradingSignal, symbol: str):
+    async def execute_trade(self, signal: TradingSignal, symbol: str, amd_context: Optional[Dict] = None):
         try:
             sym_info = self.mt5_client.get_symbol_info(symbol)
             if not sym_info:
@@ -296,7 +331,7 @@ class TradingBot:
             )
             if result and getattr(result, 'retcode', None) == self.mt5_client.mt5.TRADE_RETCODE_DONE:
                 trade = {
-                    'timestamp': datetime.now(),
+                    'timestamp': datetime.now(timezone.utc),
                     'symbol': symbol,
                     'order_type': 'BUY' if signal.type == 0 else 'SELL',
                     'entry_price': getattr(result, 'price', None) or float(exec_price),
@@ -315,6 +350,10 @@ class TradingBot:
                     'pattern_score': getattr(signal, 'pattern_score', None),
                     'pattern_dir': getattr(signal, 'pattern_dir', None),
                     'pattern_primary': getattr(signal, 'pattern_primary', None),
+                    'amd_phase': amd_context.get('phase') if amd_context else None,
+                    'amd_session': amd_context.get('session') if amd_context else None,
+                    'amd_asia_type': amd_context.get('asia_type') if amd_context else None,
+                    'amd_direction': amd_context.get('allowed_direction') if amd_context else None,
                     'status': 'OPEN'
                 }
                 self.trade_logger.log_trade(trade)
@@ -350,7 +389,16 @@ class TradingBot:
             except Exception:
                 mtf_context = {}
 
-            signal = self.strategy.generate_signal(candles, symbol, mtf_context=mtf_context if mtf_context else None)
+            # Compute AMD context if enabled
+            amd_context = None
+            if self.amd_analyzer is not None:
+                try:
+                    amd_context = self.amd_analyzer.analyze(candles, symbol, timeframe)
+                except Exception as e:
+                    logger.warning(f"{symbol}: AMD analysis failed: {e}")
+                    amd_context = None
+
+            signal = self.strategy.generate_signal(candles, symbol, mtf_context=mtf_context if mtf_context else None, amd_context=amd_context)
             if signal:
                 # Skip if an existing position with same direction and our magic exists
                 try:
@@ -365,7 +413,7 @@ class TradingBot:
                         return
                 except Exception:
                     pass
-                await self.execute_trade(signal, symbol)
+                await self.execute_trade(signal, symbol, amd_context=amd_context)
         except Exception as e:
             logger.error(f"Error processing {symbol}: {e}")
 
@@ -453,7 +501,7 @@ class TradingBot:
 
                             # Optional: close time from deal timestamp (best effort)
                             try:
-                                close_time = datetime.fromtimestamp(getattr(closing_deal, 'time', 0)) if getattr(closing_deal, 'time', None) else None
+                                close_time = datetime.fromtimestamp(getattr(closing_deal, 'time', 0), tz=timezone.utc) if getattr(closing_deal, 'time', None) else None
                             except Exception:
                                 close_time = None
 

@@ -29,7 +29,7 @@ class MarketData:
 
     def _process_rates(self, rates: Any) -> pd.DataFrame:
         df = pd.DataFrame(rates)
-        df['time'] = pd.to_datetime(df['time'], unit='s')
+        df['time'] = pd.to_datetime(df['time'], unit='s', utc=True)
         df.set_index('time', inplace=True)
         # Normalize columns
         df.rename(columns={
