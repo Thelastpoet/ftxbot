@@ -3,7 +3,16 @@
     "allow": [
       "Bash(dir)",
       "Bash(git stash)",
-      "Bash(git stash pop)"
+      "Bash(git stash pop)",
+      "Bash(sed -n '544,556p' amd_context.py)",
+      "Bash(sed -n '362,366p' amd_context.py)",
+      "Bash(sed -n '609,636p' amd_context.py)",
+      "Bash(sed -n '155,156p' RECOMMENDATIONS.md)",
+      "Bash(sed -n '649,682p' amd_context.py)",
+      "WebSearch",
+      "Bash(sed -n '457,568p' amd_context.py)",
+      "Bash(sed -n '39-43p' config.json)",
+      "Bash(python -m py_compile amd_context.py)"
     ],
     "deny": [],
     "ask": []

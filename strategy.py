@@ -15,7 +15,6 @@ from patterns import candlestick_confirm
 
 logger = logging.getLogger(__name__)
 
-
 @dataclass
 class TradingSignal:
     type: int  # 0 = BUY, 1 = SELL
@@ -27,7 +26,6 @@ class TradingSignal:
     confidence: float
     timestamp: datetime
     breakout_level: float
-    # Optional pattern context for logging/analytics
     pattern_score: Optional[float] = None
     pattern_dir: Optional[str] = None
     pattern_primary: Optional[str] = None
@@ -65,8 +63,7 @@ class PurePriceActionStrategy:
         self.pattern_strong_threshold = float(getattr(config, 'pattern_strong_threshold', 0.8))
         self.allowed_patterns = getattr(config, 'allowed_patterns', None)
         self.atr_source = getattr(config, 'atr_source', 'talib')
-        self._last_breakout = {}  
-        self._last_breakout_bar = {} 
+        self._last_breakout_bar = {}  # One signal per bar per direction 
 
     # -----------------------------
     # Swing points and S/R levels
@@ -267,6 +264,18 @@ class PurePriceActionStrategy:
     def _amd_direction_allowed(self, breakout_type: str, amd_context: dict) -> bool:
         """Check if breakout direction is allowed by AMD bias."""
         allowed_dir = amd_context.get("allowed_direction")
+        phase = amd_context.get("phase", "UNKNOWN")
+        sweep_confirmed = amd_context.get("sweep_confirmed", False)
+
+        # If higher timeframe trend conflicts with AMD bias, neutralize the bias
+        try:
+            htf = amd_context.get("higher_tf_trend")
+            if htf in ("bullish", "bearish") and allowed_dir in ("BUY", "SELL"):
+                if phase == "EXPANSION" and sweep_confirmed:
+                    if (allowed_dir == "BUY" and htf == "bearish") or (allowed_dir == "SELL" and htf == "bullish"):
+                        allowed_dir = None
+        except Exception:
+            pass
 
         # BLOCK sentinel = disable all trades (used for whipsaw/distribution)
         if allowed_dir == "BLOCK":
@@ -280,8 +289,6 @@ class PurePriceActionStrategy:
         breakout_dir = "BUY" if breakout_type == "bullish" else "SELL"
 
         # Strict enforcement: during EXPANSION phase, block countertrend if config disables it
-        phase = amd_context.get("phase", "UNKNOWN")
-        sweep_confirmed = amd_context.get("sweep_confirmed", False)
 
         if phase == "EXPANSION" and sweep_confirmed and allowed_dir is not None:
             # Check if countertrend trading is disabled in expansion
@@ -320,7 +327,7 @@ class PurePriceActionStrategy:
             if amd_context is not None:
                 phase = amd_context.get("phase", "UNKNOWN")
                 if phase == "DISTRIBUTION" and getattr(self.config, 'amd_disable_trades_in_distribution', False):
-                    logger.debug(f"{symbol}: AMD distribution filter - DISTRIBUTION phase, trading disabled")
+                    logger.info(f"{symbol}: AMD distribution filter - DISTRIBUTION phase, trading disabled")
                     return None
 
                 # AMD Filter 1c: Late session distribution filter
@@ -337,10 +344,17 @@ class PurePriceActionStrategy:
                     if allowed_dir is not None and allowed_dir != "BLOCK":
                         # If there's a directional bias from manipulation, assume that's the trend
                         # Block trades in that direction during late session (likely distribution)
-                        logger.debug(f"{symbol}: AMD late session filter - blocking new trend entries during late NY")
+                        logger.info(f"{symbol}: AMD late session filter - blocking new trend entries during late NY")
                         # Note: This will be further filtered by directional bias check
                         # For now, we just log and let the directional bias handle it
                         pass
+
+            # AMD Filter 1d: UNKNOWN phase gate (be conservative)
+            if amd_context is not None:
+                phase = amd_context.get("phase", "UNKNOWN")
+                if phase == "UNKNOWN" and not getattr(self.config, 'amd_trade_unknown_days', False):
+                    logger.info(f"{symbol}: AMD UNKNOWN phase filter - structure unclear, trading disabled")
+                    return None
 
             # Spread guard (optional per symbol)
             try:
@@ -385,7 +399,7 @@ class PurePriceActionStrategy:
                     ctx_res, ctx_sup = self.calculate_support_resistance(ctx_src, c_highs, c_lows, symbol)
 
             # Merge in multi-timeframe contextual S/R if provided
-            proximity = 10.0 * float(pip)
+            proximity = float(getattr(self.config, 'level_merge_proximity_pips', 10.0)) * float(pip)
             def _merge_levels(base: List[float], add: List[float]) -> List[float]:
                 out: List[float] = list(base)
                 for lvl in add:
@@ -423,13 +437,18 @@ class PurePriceActionStrategy:
                     asia_high = amd_context.get("asia_high")
                     asia_low = amd_context.get("asia_low")
 
+                    # Treat Asia levels as sacred: always include them
                     if asia_high is not None:
-                        ctx_res = _merge_levels(ctx_res, [asia_high])
-                        logger.debug(f"{symbol}: Injected Asia high {asia_high:.5f} into resistance")
+                        if asia_high not in ctx_res:
+                            ctx_res.append(float(asia_high))
+                            ctx_res = sorted(ctx_res)
+                        logger.debug(f"{symbol}: Injected SACRED Asia high {asia_high:.5f} into resistance")
 
                     if asia_low is not None:
-                        ctx_sup = _merge_levels(ctx_sup, [asia_low])
-                        logger.debug(f"{symbol}: Injected Asia low {asia_low:.5f} into support")
+                        if asia_low not in ctx_sup:
+                            ctx_sup.append(float(asia_low))
+                            ctx_sup = sorted(ctx_sup)
+                        logger.debug(f"{symbol}: Injected SACRED Asia low {asia_low:.5f} into support")
             except Exception as e:
                 logger.warning(f"{symbol}: Failed to inject Asia levels: {e}")
 
@@ -456,6 +475,8 @@ class PurePriceActionStrategy:
 
             # Use last closed candle close for breakout confirmation
             last_close = float(completed.iloc[-1]['close'])
+
+            # Use configured breakout threshold (constant, not AMD-adjusted)
             bo = self._detect_breakout_close(last_close, resistance, support, thr_pips, pip)
             if not bo:
                 return None
@@ -469,47 +490,10 @@ class PurePriceActionStrategy:
                     logger.debug(f"{symbol}: AMD directional filter - {bo.type} blocked, allowed={allowed}")
                     return None
 
-            # AMD Filter 3: First sweep blocking (manipulation phase)
-            # Block the initial fake breakout during manipulation to avoid getting trapped
-            if amd_context is not None:
-                phase = amd_context.get("phase", "UNKNOWN")
-
-                # During MANIPULATION phase, block first sweep attempts
-                if phase == "MANIPULATION":
-                    is_first_sweep_high = amd_context.get("is_first_sweep_high", False)
-                    is_first_sweep_low = amd_context.get("is_first_sweep_low", False)
-
-                    # Block bullish breakout if we're in the first sweep of Asia low
-                    if bo.type == "bullish" and is_first_sweep_low:
-                        logger.debug(f"{symbol}: AMD manipulation filter - blocking first sweep of Asia low (fake breakout)")
-                        return None
-
-                    # Block bearish breakout if we're in the first sweep of Asia high
-                    if bo.type == "bearish" and is_first_sweep_high:
-                        logger.debug(f"{symbol}: AMD manipulation filter - blocking first sweep of Asia high (fake breakout)")
-                        return None
-
             # TA-Lib candlestick confirmation (gate). If disabled/unavailable, pass-through.
             pattern_info = None
             if self.enable_patterns:
                 ok, info = self._candlestick_confirm(completed, bo, symbol)
-
-                # AMD Enhancement: Relax pattern threshold during EXPANSION phase
-                # After confirmed manipulation, the "real move" is expected, so be less strict
-                if not ok and amd_context is not None:
-                    phase = amd_context.get("phase", "UNKNOWN")
-                    sweep_confirmed = amd_context.get("sweep_confirmed", False)
-
-                    if phase == "EXPANSION" and sweep_confirmed:
-                        # Allow weaker patterns (70% of normal threshold) during expansion
-                        pattern_score = float((info or {}).get('score', 0.0) or 0.0)
-                        relaxed_threshold = self.pattern_score_threshold * 0.7
-
-                        if pattern_score >= relaxed_threshold:
-                            ok = True
-                            logger.debug(f"{symbol}: AMD expansion - pattern threshold relaxed "
-                                       f"({pattern_score:.2f} >= {relaxed_threshold:.2f})")
-
                 if not ok:
                     return None
                 pattern_info = info or None
@@ -521,52 +505,6 @@ class PurePriceActionStrategy:
                 if self._last_breakout_bar.get(keyb) == bar_time:
                     return None
                 self._last_breakout_bar[keyb] = bar_time
-            except Exception:
-                pass
-
-            # Duplicate breakout suppression (optional)
-            try:
-                dup_distance_pips = None
-                dup_window_sec = None
-                for sc in getattr(self.config, 'symbols', []) or []:
-                    if sc.get('name') == symbol:
-                        dup_distance_pips = sc.get('duplicate_breakout_distance_pips', None)
-                        dup_window_sec = sc.get('duplicate_breakout_window_seconds', None)
-                        break
-                # Fallback to global defaults if defined
-                if dup_distance_pips is None:
-                    dup_distance_pips = getattr(self.config, 'duplicate_breakout_distance_pips_default', None)
-                if dup_window_sec is None:
-                    dup_window_sec = getattr(self.config, 'duplicate_breakout_window_seconds_default', None)
-
-                # AMD Enhancement: Relax duplicate suppression during EXPANSION phase
-                # During the real expansion move, we want to allow multiple entries on pullbacks
-                if dup_distance_pips is not None and dup_window_sec is not None:
-                    dup_distance_eff = float(dup_distance_pips)
-                    dup_window_eff = float(dup_window_sec)
-
-                    if amd_context is not None:
-                        phase = amd_context.get("phase", "UNKNOWN")
-                        sweep_confirmed = amd_context.get("sweep_confirmed", False)
-
-                        if phase == "EXPANSION" and sweep_confirmed:
-                            # Reduce duplicate suppression by 60% during expansion
-                            dup_distance_eff *= 0.4
-                            dup_window_eff *= 0.5
-                            logger.debug(f"{symbol}: AMD expansion - duplicate suppression relaxed "
-                                       f"(dist={dup_distance_eff:.1f}p window={dup_window_eff:.0f}s)")
-
-                    key = (symbol, bo.type)
-                    last = self._last_breakout.get(key)
-                    if last:
-                        dt_now = datetime.now(timezone.utc)
-                        if (dt_now - last['time']).total_seconds() <= dup_window_eff:
-                            dist_pips = abs(float(bo.entry_price) - float(last['price'])) / float(pip)
-                            if dist_pips <= dup_distance_eff:
-                                logger.debug(f"{symbol}: duplicate breakout suppressed ({dist_pips:.1f}p within {dup_window_eff:.0f}s)")
-                                return None
-                    # record current
-                    self._last_breakout[key] = {'time': datetime.now(timezone.utc), 'price': float(bo.entry_price)}
             except Exception:
                 pass
 
@@ -589,32 +527,13 @@ class PurePriceActionStrategy:
                 obstacle = None
             if obstacle is not None:
                 buf = float(self.obstacle_buffer_pips) * float(pip)
-
-                # AMD Enhancement: Relax headroom and obstacle buffer during EXPANSION phase
-                # After confirmed manipulation, the real move often has stronger momentum
-                min_headroom_rr_eff = float(min_headroom_rr)
-                buf_eff = buf
-
-                if amd_context is not None:
-                    phase = amd_context.get("phase", "UNKNOWN")
-                    sweep_confirmed = amd_context.get("sweep_confirmed", False)
-
-                    if phase == "EXPANSION" and sweep_confirmed:
-                        # Reduce headroom requirement by 50%
-                        min_headroom_rr_eff *= 0.5
-                        # Reduce obstacle buffer by 30%
-                        buf_eff *= 0.7
-                        logger.debug(f"{symbol}: AMD expansion - headroom relaxed "
-                                   f"(req={min_headroom_rr_eff:.2f}xSL, buf={buf_eff/pip:.1f}p)")
-
-                headroom_price = max(0.0, abs(obstacle - bo.entry_price) - buf_eff)
+                headroom_price = max(0.0, abs(obstacle - bo.entry_price) - buf)
                 headroom_pips = headroom_price / float(pip)
-                try:
-                    logger.debug(f"{symbol}: obstacle={obstacle:.5f} headroom_pips={headroom_pips:.1f} sl_pips={sl_pips:.1f}")
-                except Exception:
-                    pass
-                if headroom_pips < (min_headroom_rr_eff * sl_pips):
-                    logger.debug(f"{symbol}: headroom {headroom_pips:.1f}p < {min_headroom_rr_eff:.2f}×SL {sl_pips:.1f}p; skipping")
+
+                logger.debug(f"{symbol}: obstacle={obstacle:.5f} headroom={headroom_pips:.1f}p sl={sl_pips:.1f}p req={min_headroom_rr:.2f}xSL")
+
+                if headroom_pips < (min_headroom_rr * sl_pips):
+                    logger.debug(f"{symbol}: insufficient headroom ({headroom_pips:.1f}p < {min_headroom_rr:.2f}×{sl_pips:.1f}p); skipping")
                     return None
 
             # RR and cap for TP

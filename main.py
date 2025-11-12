@@ -114,6 +114,21 @@ class Config:
             self.amd_asian_session_hours = tuple(amd.get('asian_session_hours', [0, 8]))
             self.amd_london_session_hours = tuple(amd.get('london_session_hours', [8, 16]))
             self.amd_ny_session_hours = tuple(amd.get('ny_session_hours', [13, 22]))
+            # Additional AMD toggles
+            self.amd_trade_unknown_days = amd.get('trade_unknown_days', False)
+            self.amd_late_ny_hour_utc = amd.get('late_ny_hour_utc', 19)
+            self.amd_volatility_factor_min = amd.get('volatility_factor_min', 0.5)
+            self.amd_volatility_factor_max = amd.get('volatility_factor_max', 2.0)
+            self.amd_fallback_narrow_range_pips = amd.get('fallback_narrow_range_pips', 50)
+            self.level_merge_proximity_pips = amd.get('level_merge_proximity_pips', 10)
+            # AMD logging preferences
+            self.amd_log_on_change = amd.get('log_on_change', True)
+            self.amd_log_each_loop = amd.get('log_each_loop', False)
+            # Breakout/pattern relax controls during AMD EXPANSION
+            self.amd_breakout_threshold_volatility_scaled = amd.get('breakout_threshold_volatility_scaled', True)
+            self.amd_breakout_relax_in_expansion_factor = amd.get('breakout_relax_in_expansion_factor', 0.85)
+            self.amd_breakout_min_pips_floor = amd.get('breakout_min_pips_floor', 0.0)
+            self.amd_patterns_required_in_expansion = amd.get('patterns_required_in_expansion', False)
             # Accumulation detection
             accum = amd.get('accumulation_detection', {})
             self.amd_max_range_vs_adr_ratio = accum.get('max_range_vs_adr_ratio', 0.4)
@@ -130,6 +145,10 @@ class Config:
             self.amd_directional_bias_enabled = bias.get('enabled', True)
             self.amd_allow_countertrend_in_expansion = bias.get('allow_countertrend_in_expansion', False)
             self.amd_disable_trades_in_distribution = bias.get('disable_trades_in_distribution', False)
+            # Distribution detection config passthrough
+            self.amd_distribution_detection = amd.get('distribution_detection', {})
+            # MTF trend confirmation config passthrough
+            self.amd_mtf_trend_confirmation = amd.get('mtf_trend_confirmation', {})
 
             # Symbols
             self.symbols = []
@@ -221,6 +240,20 @@ class TradingBot:
                 from amd_context import AMDAnalyzer
                 self.amd_analyzer = AMDAnalyzer(self.config)
                 logger.info("AMD context analyzer enabled")
+
+            # Log current trading session (UTC) on startup
+            try:
+                from sessions import get_current_session
+                now_utc = datetime.now(timezone.utc)
+                session = get_current_session(
+                    now_utc,
+                    self.config.amd_asian_session_hours,
+                    self.config.amd_london_session_hours,
+                    self.config.amd_ny_session_hours,
+                )
+                logger.info(f"Current session (UTC): {session}")
+            except Exception:
+                pass
 
             # Strategy snapshot
             try:
@@ -393,10 +426,49 @@ class TradingBot:
             amd_context = None
             if self.amd_analyzer is not None:
                 try:
-                    amd_context = self.amd_analyzer.analyze(candles, symbol, timeframe)
+                    amd_context = self.amd_analyzer.analyze(candles, symbol, timeframe, mtf_context=mtf_context)
                 except Exception as e:
                     logger.warning(f"{symbol}: AMD analysis failed: {e}")
                     amd_context = None
+
+            # AMD summary logging (terminal observability)
+            if amd_context is not None:
+                try:
+                    sess = amd_context.get('session', 'UNKNOWN')
+                    phase = amd_context.get('phase', 'UNKNOWN')
+                    asia_type = amd_context.get('asia_type', 'UNKNOWN')
+                    vr = amd_context.get('volatility_factor', None)
+                    vtxt = f"v={vr:.2f}" if isinstance(vr, (int, float)) else "v=n/a"
+                    rng = amd_context.get('asia_range_pips')
+                    rngtxt = f"rng={rng:.1f}p" if isinstance(rng, (int, float)) else "rng=n/a"
+                    mt = amd_context.get('manipulation_type', None)
+                    shc = amd_context.get('sweep_high_confirmed', False)
+                    slc = amd_context.get('sweep_low_confirmed', False)
+                    shcnt = amd_context.get('sweep_high_count', 0)
+                    slcnt = amd_context.get('sweep_low_count', 0)
+                    bias = amd_context.get('allowed_direction', None)
+                    htf = amd_context.get('higher_tf_trend', None)
+                    reason = amd_context.get('reason', '')
+
+                    summary = (
+                        f"AMD {symbol} {timeframe} sess={sess} phase={phase} asia={asia_type} "
+                        f"{rngtxt} {vtxt} sweeps:H{shcnt}/L{slcnt} conf:H={bool(shc)}/L={bool(slc)} "
+                        f"manip={mt or 'none'} bias={bias or 'ANY'} htf={htf or 'n/a'} reason={reason}"
+                    )
+
+                    # Log only on change by default, optionally each loop
+                    if not hasattr(self, '_amd_last_state'):
+                        self._amd_last_state = {}
+                    key = (symbol, timeframe)
+                    state_tuple = (sess, phase, asia_type, bool(shc), bool(slc), mt, bias, htf)
+                    last = self._amd_last_state.get(key)
+                    log_each = getattr(self.config, 'amd_log_each_loop', False)
+                    log_on_change = getattr(self.config, 'amd_log_on_change', True)
+                    if log_each or (log_on_change and last != state_tuple):
+                        logger.info(summary)
+                        self._amd_last_state[key] = state_tuple
+                except Exception:
+                    pass
 
             signal = self.strategy.generate_signal(candles, symbol, mtf_context=mtf_context if mtf_context else None, amd_context=amd_context)
             if signal:

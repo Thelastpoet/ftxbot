@@ -7,8 +7,6 @@
     "min_stop_loss_pips": 20,
     "stop_loss_buffer_pips": 15,
     "spread_guard_pips": 4,
-    "duplicate_breakout_distance_pips": 7,
-    "duplicate_breakout_window_seconds": 600,
     "min_headroom_rr": 0.5
   },
   "risk_management": {
@@ -22,9 +20,17 @@
     "enable_asian_trading": false,
     "enable_london_trading": true,
     "enable_ny_trading": true,
+    "log_on_change": true,
+    "log_each_loop": false,
+    "trade_unknown_days": false,
     "asian_session_hours": [0, 8],
     "london_session_hours": [8, 16],
     "ny_session_hours": [13, 22],
+    "late_ny_hour_utc": 19,
+    "volatility_factor_min": 0.5,
+    "volatility_factor_max": 2.0,
+    "fallback_narrow_range_pips": 50,
+    "level_merge_proximity_pips": 10,
     "accumulation_detection": {
       "max_range_vs_adr_ratio": 0.4,
       "min_overlap_bars": 5,
@@ -36,10 +42,21 @@
       "reversal_confirmation_bars": 3,
       "reversal_threshold_pips": 15
     },
+    "distribution_detection": {
+      "enabled": true,
+      "min_retest_count": 3,
+      "retest_proximity_pips": 10,
+      "min_wick_rejection_pips": 10
+    },
     "directional_bias": {
       "enabled": true,
       "allow_countertrend_in_expansion": false,
       "disable_trades_in_distribution": false
+    },
+    "mtf_trend_confirmation": {
+      "enabled": true,
+      "higher_timeframe": "H1",
+      "lookback_bars": 20
     }
   },
   "symbols": [
@@ -71,19 +88,71 @@
     "name": "USDCAD",
     "timeframes": ["M15", "H1"]
   },
+  {
+    "name": "EURJPY",
+    "timeframes": ["M15", "H1"]
+  },
+  {
+    "name": "GBPJPY",
+    "timeframes": ["M15", "H1"]
+  },
+  {
+    "name": "AUDJPY",
+    "timeframes": ["M15", "H1"]
+  },
+  {
+    "name": "NZDJPY",
+    "timeframes": ["M15", "H1"]
+  },
+  {
+    "name": "EURGBP",
+    "timeframes": ["M15", "H1"]
+  },
+  {
+    "name": "EURCHF",
+    "timeframes": ["M15", "H1"]
+  },
+  {
+    "name": "GBPCHF",
+    "timeframes": ["M15", "H1"]
+  },
+  {
+    "name": "EURAUD",
+    "timeframes": ["M15", "H1"]
+  },
+  {
+    "name": "EURCAD",
+    "timeframes": ["M15", "H1"]
+  },
+  {
+    "name": "GBPAUD",
+    "timeframes": ["M15", "H1"]
+  },
+  {
+    "name": "GBPCAD",
+    "timeframes": ["M15", "H1"]
+  },
+  {
+    "name": "AUDCAD",
+    "timeframes": ["M15", "H1"]
+  },
+  {
+    "name": "AUDNZD",
+    "timeframes": ["M15", "H1"]
+  },
     {
       "name": "XAUUSD",
-      "timeframes": ["M15", "H1"],
+      "timeframes": ["M5", "H1"],
       "pip_unit": 0.01,
       "min_stop_loss_pips": 500,
       "stop_loss_buffer_pips": 100,
       "breakout_threshold_pips": 50,
       "risk_reward_ratio": 1.5,
       "spread_guard_pips": 100,
-      "duplicate_breakout_distance_pips": 200,
-      "duplicate_breakout_window_seconds": 1800,
       "drift_max_pips": 100,
-      "drift_fraction_of_sl": 0.5
+      "drift_fraction_of_sl": 0.5,
+      "sweep_threshold_pips": 100,
+      "reversal_threshold_pips": 300
     }
   ]
 }

@@ -6,19 +6,19 @@ for filtering breakout trades.
 """
 
 import logging
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 from typing import Optional, Dict, Any, Literal
 import pandas as pd
 import MetaTrader5 as mt5
 
 from sessions import get_current_session, is_near_session_open, SessionType
-from utils import resolve_pip_size, get_pip_size
+from utils import resolve_pip_size
 
 logger = logging.getLogger(__name__)
 
 PhaseType = Literal["ACCUMULATION", "MANIPULATION", "EXPANSION", "DISTRIBUTION", "UNKNOWN"]
 AsiaType = Literal["ACCUMULATION", "EXPANSION", "UNKNOWN"]
-DirectionType = Optional[Literal["BUY", "SELL"]]
+DirectionType = Optional[Literal["BUY", "SELL", "BLOCK"]]
 
 
 class AMDAnalyzer:
@@ -45,24 +45,46 @@ class AMDAnalyzer:
         self.asian_session_hours = getattr(config, 'amd_asian_session_hours', (0, 8))
         self.london_session_hours = getattr(config, 'amd_london_session_hours', (8, 16))
         self.ny_session_hours = getattr(config, 'amd_ny_session_hours', (13, 22))
+        # Late NY hour (UTC)
+        self.late_ny_hour_utc = getattr(config, 'amd_late_ny_hour_utc', 19)
 
         # Accumulation detection thresholds
         self.max_range_vs_adr_ratio = getattr(config, 'amd_max_range_vs_adr_ratio', 0.4)
         self.min_overlap_bars = getattr(config, 'amd_min_overlap_bars', 5)
         self.max_price_from_open_pips = getattr(config, 'amd_max_price_from_open_pips', 30)
+        # Fallback absolute narrow range if no recent average
+        self.fallback_narrow_range_pips = getattr(config, 'amd_fallback_narrow_range_pips', 50)
 
         # Manipulation detection
         self.manipulation_enabled = getattr(config, 'amd_manipulation_enabled', True)
         self.sweep_threshold_pips = getattr(config, 'amd_sweep_threshold_pips', 5)
         self.reversal_confirmation_bars = getattr(config, 'amd_reversal_confirmation_bars', 3)
         self.reversal_threshold_pips = getattr(config, 'amd_reversal_threshold_pips', 15)
+        # Volatility factor clamp
+        self.volatility_factor_min = getattr(config, 'amd_volatility_factor_min', 0.5)
+        self.volatility_factor_max = getattr(config, 'amd_volatility_factor_max', 2.0)
 
         # Directional bias
         self.directional_bias_enabled = getattr(config, 'amd_directional_bias_enabled', True)
         self.allow_countertrend_in_expansion = getattr(config, 'amd_allow_countertrend_in_expansion', False)
         self.disable_trades_in_distribution = getattr(config, 'amd_disable_trades_in_distribution', False)
 
-    def analyze(self, data: pd.DataFrame, symbol: str, timeframe: str) -> Optional[Dict[str, Any]]:
+        # Distribution detection configuration
+        dist_cfg = getattr(config, 'amd_distribution_detection', {}) or {}
+        self.distribution_enabled = bool(dist_cfg.get('enabled', True))
+        self.dist_min_retests = int(dist_cfg.get('min_retest_count', 3))
+        self.dist_retest_proximity_pips = float(dist_cfg.get('retest_proximity_pips', 10))
+        self.dist_min_wick_rejection_pips = float(dist_cfg.get('min_wick_rejection_pips', 10))
+
+        # MTF trend confirmation
+        mtf_cfg = getattr(config, 'amd_mtf_trend_confirmation', {}) or {}
+        self.mtf_trend_enabled = bool(mtf_cfg.get('enabled', False))
+        self.mtf_trend_timeframe = str(mtf_cfg.get('higher_timeframe', 'H1'))
+        self.mtf_trend_lookback = int(mtf_cfg.get('lookback_bars', 20))
+        self.mtf_trend_swing_window = int(mtf_cfg.get('swing_window', 3))
+        self.mtf_trend_min_step_atr_mult = float(mtf_cfg.get('min_step_atr_multiple', 0.25))
+
+    def analyze(self, data: pd.DataFrame, symbol: str, timeframe: str, mtf_context: Optional[Dict[str, pd.DataFrame]] = None) -> Optional[Dict[str, Any]]:
         """
         Analyze candle data and return AMD context.
 
@@ -70,6 +92,7 @@ class AMDAnalyzer:
             data: Candle DataFrame with UTC-aware DatetimeIndex
             symbol: Trading symbol
             timeframe: Timeframe string (e.g., "M15")
+            mtf_context: Optional dict of additional timeframe DataFrames (e.g., {"H1": df})
 
         Returns:
             AMD context dict or None if analysis fails
@@ -118,8 +141,12 @@ class AMDAnalyzer:
                 "reason": "no_analysis"
             }
 
-            # Check if we're in late session (late NY = 19:00+ UTC)
-            if session == "NY" and now.hour >= 19:
+            # Check if we're in late session (configurable, default late NY = 19:00+ UTC)
+            try:
+                late_hour = int(getattr(self, 'late_ny_hour_utc', 19))
+            except Exception:
+                late_hour = 19
+            if session == "NY" and now.hour >= late_hour:
                 context["is_late_session"] = True
 
             # Check if we're in manipulation window (30 min after London/NY open)
@@ -171,18 +198,41 @@ class AMDAnalyzer:
                 recent_avg_range = self._calculate_recent_asia_avg_range(data, pip, lookback_days=20)
                 if recent_avg_range is not None and recent_avg_range > 0:
                     current_range = context["asia_range_pips"]
-                    # Volatility factor = current / average (clamped to 0.5 - 2.0 range)
-                    volatility_factor = max(0.5, min(2.0, current_range / recent_avg_range))
+                    # Volatility factor = current / average (clamped by config)
+                    vf = (current_range / recent_avg_range) if recent_avg_range else 1.0
+                    volatility_factor = max(float(self.volatility_factor_min), min(float(self.volatility_factor_max), float(vf)))
                     context["volatility_factor"] = volatility_factor
                     logger.debug(f"Volatility factor: {volatility_factor:.2f} "
                                f"(current={current_range:.1f}p avg={recent_avg_range:.1f}p)")
 
             # Detect manipulation (sweeps of Asia range)
             if session in ("LONDON", "NY") and context["asia_high"] is not None:
-                self._detect_manipulation(data, context, pip, now)
+                # Per-symbol sweep threshold overrides
+                sweep_threshold_pips = self.sweep_threshold_pips
+                reversal_threshold_pips = self.reversal_threshold_pips
+
+                # Look for per-symbol overrides
+                for sc in getattr(self.config, 'symbols', []) or []:
+                    if sc.get('name') == symbol:
+                        sweep_threshold_pips = sc.get('sweep_threshold_pips', sweep_threshold_pips)
+                        reversal_threshold_pips = sc.get('reversal_threshold_pips', reversal_threshold_pips)
+                        break
+
+                self._detect_manipulation(data, context, pip, now, sweep_threshold_pips, reversal_threshold_pips)
 
             # Classify current phase
-            context["phase"] = self._classify_phase(context, session)
+            context["phase"] = self._classify_phase(context, session, data, pip)
+
+            # Higher timeframe trend (optional)
+            if self.mtf_trend_enabled and isinstance(mtf_context, dict):
+                try:
+                    df_htf = mtf_context.get(self.mtf_trend_timeframe)
+                    if df_htf is not None:
+                        htf_trend = self._detect_higher_tf_trend(df_htf, lookback=self.mtf_trend_lookback)
+                        if htf_trend in ("bullish", "bearish"):
+                            context["higher_tf_trend"] = htf_trend
+                except Exception:
+                    pass
 
             # Determine allowed direction
             if self.directional_bias_enabled:
@@ -333,8 +383,8 @@ class AMDAnalyzer:
                 logger.debug(f"Asia range: {asia_range_pips:.1f}p vs avg: {recent_avg:.1f}p "
                            f"(threshold: {self.max_range_vs_adr_ratio * recent_avg:.1f}p)")
             else:
-                # Fallback: use absolute threshold for major FX pairs (~50 pips)
-                if asia_range_pips < 50:
+                # Fallback: use absolute threshold (configurable)
+                if asia_range_pips < float(self.fallback_narrow_range_pips):
                     narrow_range = True
 
             # Criterion 2: Price stays near daily open
@@ -372,7 +422,9 @@ class AMDAnalyzer:
             return "UNKNOWN"
 
     def _detect_manipulation(self, data: pd.DataFrame, context: Dict[str, Any],
-                            pip: float, now: datetime) -> None:
+                            pip: float, now: datetime,
+                            sweep_threshold_pips: float,
+                            reversal_threshold_pips: float) -> None:
         """
         Detect if Asia high/low has been swept (manipulation) with reversal confirmation.
 
@@ -388,6 +440,8 @@ class AMDAnalyzer:
             context: AMD context dict to update
             pip: Pip size
             now: Current UTC time
+            sweep_threshold_pips: Per-symbol sweep threshold in pips
+            reversal_threshold_pips: Per-symbol reversal threshold in pips
         """
         try:
             if not self.manipulation_enabled:
@@ -410,65 +464,101 @@ class AMDAnalyzer:
             if len(post_asia) == 0:
                 return
 
-            sweep_threshold = self.sweep_threshold_pips * pip
-            reversal_threshold = self.reversal_threshold_pips * pip
+            # Apply volatility scaling to sweep and reversal thresholds
+            _vf = float(context.get("volatility_factor", 1.0) or 1.0)
+
+            # Add minimum threshold guards (prevent over-scaling in quiet markets)
+            sweep_threshold_min = getattr(self.config, 'amd_sweep_threshold_min_pips', 3.0)
+            reversal_threshold_min = getattr(self.config, 'amd_reversal_threshold_min_pips', 10.0)
+
+            sweep_threshold = max(sweep_threshold_pips * pip * _vf, sweep_threshold_min * pip)
+            reversal_threshold = max(reversal_threshold_pips * pip * _vf, reversal_threshold_min * pip)
+
+            logger.debug(f"Sweep detection thresholds: sweep={sweep_threshold/pip:.1f}p reversal={reversal_threshold/pip:.1f}p "
+                       f"(base: {sweep_threshold_pips:.1f}p/{reversal_threshold_pips:.1f}p, vf={_vf:.2f}, "
+                       f"min: {sweep_threshold_min:.1f}p/{reversal_threshold_min:.1f}p)")
 
             # Detect sweep of Asia high (bearish sweep)
             swept_high = False
             high_confirmed = False
             sweep_high_count = 0
 
+            # Wider reversal scan window (10 bars instead of 3)
+            reversal_scan_window = 10
+
             if post_asia['high'].max() > (asia_high + sweep_threshold):
-                # Count number of sweep attempts
-                for idx, row in post_asia.iterrows():
-                    if row['high'] > (asia_high + sweep_threshold):
-                        sweep_high_count += 1
                 swept_high = True
                 context["has_swept_asia_high"] = True
 
-                # Find the bar that swept the high
-                sweep_idx = post_asia['high'].idxmax()
-                sweep_bar_loc = post_asia.index.get_loc(sweep_idx)
-                sweep_time = sweep_idx.to_pydatetime()
+                # Find FIRST sweep with valid reversal (chronological order)
+                # This prevents missing early valid signals when price continues probing
+                first_sweep_idx = None
+                first_sweep_confirmed = False
 
-                # Check if this is the first sweep (no prior sweep above Asia high)
-                prior_bars = post_asia[post_asia.index < sweep_idx]
-                is_first_sweep = not any(prior_bars['high'] > (asia_high + sweep_threshold))
+                for i in range(len(post_asia)):
+                    row = post_asia.iloc[i]
+
+                    # Check if this bar sweeps Asia high
+                    if row['high'] > (asia_high + sweep_threshold):
+                        sweep_high_count += 1
+
+                        # If we haven't found a confirmed sweep yet, check this one
+                        if not first_sweep_confirmed:
+                            sweep_bar_loc = i
+                            sweep_idx = post_asia.index[i]
+                            sweep_time = sweep_idx.to_pydatetime()
+                            sweep_high_price = float(row['high'])
+
+                            # Look ahead for reversal (up to reversal_scan_window bars)
+                            bars_after_sweep = post_asia.iloc[i+1:i+1+reversal_scan_window]
+
+                            if len(bars_after_sweep) > 0:
+                                subsequent_lows = bars_after_sweep['low']
+                                lowest_after = float(subsequent_lows.min())
+
+                                # Reversal confirmed if:
+                                # 1. Price returned inside Asia range, AND
+                                # 2. Moved at least reversal_threshold_pips down from sweep high
+                                if (lowest_after < asia_high) and ((sweep_high_price - lowest_after) >= reversal_threshold):
+                                    # Found first valid sweep+reversal combination
+                                    first_sweep_idx = sweep_idx
+                                    first_sweep_confirmed = True
+                                    high_confirmed = True
+
+                                    logger.debug(f"Asia high sweep confirmed: swept to {sweep_high_price:.5f}, "
+                                               f"reversed to {lowest_after:.5f} ({(sweep_high_price - lowest_after)/pip:.1f}p) "
+                                               f"[sweep bar {i+1}/{len(post_asia)}, first confirmed sweep]")
+
+                # Set context flags based on first confirmed sweep (or first sweep if none confirmed)
+                if first_sweep_idx is not None:
+                    sweep_idx = first_sweep_idx
+                    sweep_time = sweep_idx.to_pydatetime()
+                    is_first_sweep = True  # By definition, we found the first sweep
+                else:
+                    # No confirmed sweep found, use first sweep occurrence for metadata
+                    for i in range(len(post_asia)):
+                        if post_asia.iloc[i]['high'] > (asia_high + sweep_threshold):
+                            sweep_idx = post_asia.index[i]
+                            sweep_time = sweep_idx.to_pydatetime()
+                            is_first_sweep = True
+                            break
+
                 context["is_first_sweep_high"] = is_first_sweep
 
                 # Check if sweep occurred near London or NY open (within 30 minutes)
-                context["sweep_high_at_london_open"] = is_near_session_open(
-                    "LONDON", sweep_time, window_minutes=30,
-                    asia_hours=self.asian_session_hours,
-                    london_hours=self.london_session_hours,
-                    ny_hours=self.ny_session_hours
-                )
-                context["sweep_high_at_ny_open"] = is_near_session_open(
-                    "NY", sweep_time, window_minutes=30,
-                    asia_hours=self.asian_session_hours,
-                    london_hours=self.london_session_hours,
-                    ny_hours=self.ny_session_hours
-                )
-
-                # Check for reversal confirmation
-
-                # Look at next N bars for reversal
-                bars_after_sweep = post_asia.iloc[sweep_bar_loc:sweep_bar_loc + self.reversal_confirmation_bars + 1]
-
-                if len(bars_after_sweep) > 1:
-                    sweep_high_price = float(bars_after_sweep.iloc[0]['high'])
-                    subsequent_lows = bars_after_sweep.iloc[1:]['low']
-
-                    if len(subsequent_lows) > 0:
-                        lowest_after = float(subsequent_lows.min())
-
-                        # Reversal confirmed if:
-                        # 1. Price returned inside Asia range, AND
-                        # 2. Moved at least reversal_threshold_pips down from sweep high
-                        if (lowest_after < asia_high) and ((sweep_high_price - lowest_after) >= reversal_threshold):
-                            high_confirmed = True
-                            logger.debug(f"Asia high sweep confirmed: swept to {sweep_high_price:.5f}, "
-                                       f"reversed to {lowest_after:.5f} ({(sweep_high_price - lowest_after)/pip:.1f}p)")
+                if sweep_idx is not None:
+                    context["sweep_high_at_london_open"] = is_near_session_open(
+                        "LONDON", sweep_time, window_minutes=30,
+                        asia_hours=self.asian_session_hours,
+                        london_hours=self.london_session_hours,
+                        ny_hours=self.ny_session_hours
+                    )
+                    context["sweep_high_at_ny_open"] = is_near_session_open(
+                        "NY", sweep_time, window_minutes=30,
+                        asia_hours=self.asian_session_hours,
+                        london_hours=self.london_session_hours,
+                        ny_hours=self.ny_session_hours
+                    )
 
             # Detect sweep of Asia low (bullish sweep)
             swept_low = False
@@ -476,55 +566,78 @@ class AMDAnalyzer:
             sweep_low_count = 0
 
             if post_asia['low'].min() < (asia_low - sweep_threshold):
-                # Count number of sweep attempts
-                for idx, row in post_asia.iterrows():
-                    if row['low'] < (asia_low - sweep_threshold):
-                        sweep_low_count += 1
                 swept_low = True
                 context["has_swept_asia_low"] = True
 
-                # Find the bar that swept the low
-                sweep_idx = post_asia['low'].idxmin()
-                sweep_bar_loc = post_asia.index.get_loc(sweep_idx)
-                sweep_time = sweep_idx.to_pydatetime()
+                # Find FIRST sweep with valid reversal (chronological order)
+                # This prevents missing early valid signals when price continues probing
+                first_sweep_idx = None
+                first_sweep_confirmed = False
 
-                # Check if this is the first sweep (no prior sweep below Asia low)
-                prior_bars = post_asia[post_asia.index < sweep_idx]
-                is_first_sweep = not any(prior_bars['low'] < (asia_low - sweep_threshold))
+                for i in range(len(post_asia)):
+                    row = post_asia.iloc[i]
+
+                    # Check if this bar sweeps Asia low
+                    if row['low'] < (asia_low - sweep_threshold):
+                        sweep_low_count += 1
+
+                        # If we haven't found a confirmed sweep yet, check this one
+                        if not first_sweep_confirmed:
+                            sweep_bar_loc = i
+                            sweep_idx = post_asia.index[i]
+                            sweep_time = sweep_idx.to_pydatetime()
+                            sweep_low_price = float(row['low'])
+
+                            # Look ahead for reversal (up to reversal_scan_window bars)
+                            bars_after_sweep = post_asia.iloc[i+1:i+1+reversal_scan_window]
+
+                            if len(bars_after_sweep) > 0:
+                                subsequent_highs = bars_after_sweep['high']
+                                highest_after = float(subsequent_highs.max())
+
+                                # Reversal confirmed if:
+                                # 1. Price returned inside Asia range, AND
+                                # 2. Moved at least reversal_threshold_pips up from sweep low
+                                if (highest_after > asia_low) and ((highest_after - sweep_low_price) >= reversal_threshold):
+                                    # Found first valid sweep+reversal combination
+                                    first_sweep_idx = sweep_idx
+                                    first_sweep_confirmed = True
+                                    low_confirmed = True
+
+                                    logger.debug(f"Asia low sweep confirmed: swept to {sweep_low_price:.5f}, "
+                                               f"reversed to {highest_after:.5f} ({(highest_after - sweep_low_price)/pip:.1f}p) "
+                                               f"[sweep bar {i+1}/{len(post_asia)}, first confirmed sweep]")
+
+                # Set context flags based on first confirmed sweep (or first sweep if none confirmed)
+                if first_sweep_idx is not None:
+                    sweep_idx = first_sweep_idx
+                    sweep_time = sweep_idx.to_pydatetime()
+                    is_first_sweep = True  # By definition, we found the first sweep
+                else:
+                    # No confirmed sweep found, use first sweep occurrence for metadata
+                    for i in range(len(post_asia)):
+                        if post_asia.iloc[i]['low'] < (asia_low - sweep_threshold):
+                            sweep_idx = post_asia.index[i]
+                            sweep_time = sweep_idx.to_pydatetime()
+                            is_first_sweep = True
+                            break
+
                 context["is_first_sweep_low"] = is_first_sweep
 
                 # Check if sweep occurred near London or NY open (within 30 minutes)
-                context["sweep_low_at_london_open"] = is_near_session_open(
-                    "LONDON", sweep_time, window_minutes=30,
-                    asia_hours=self.asian_session_hours,
-                    london_hours=self.london_session_hours,
-                    ny_hours=self.ny_session_hours
-                )
-                context["sweep_low_at_ny_open"] = is_near_session_open(
-                    "NY", sweep_time, window_minutes=30,
-                    asia_hours=self.asian_session_hours,
-                    london_hours=self.london_session_hours,
-                    ny_hours=self.ny_session_hours
-                )
-
-                # Check for reversal confirmation
-
-                bars_after_sweep = post_asia.iloc[sweep_bar_loc:sweep_bar_loc + self.reversal_confirmation_bars + 1]
-
-                if len(bars_after_sweep) > 1:
-                    sweep_low_price = float(bars_after_sweep.iloc[0]['low'])
-                    subsequent_highs = bars_after_sweep.iloc[1:]['high']
-
-                    if len(subsequent_highs) > 0:
-                        highest_after = float(subsequent_highs.max())
-
-                        # Reversal confirmed if:
-                        # 1. Price returned inside Asia range, AND
-                        # 2. Moved at least reversal_threshold_pips up from sweep low
-                        if (highest_after > asia_low) and ((highest_after - sweep_low_price) >= reversal_threshold):
-                            low_confirmed = True
-                            logger.debug(f"Asia low sweep confirmed: swept to {sweep_low_price:.5f}, "
-                                       f"reversed to {highest_after:.5f} ({(highest_after - sweep_low_price)/pip:.1f}p)")
+                if sweep_idx is not None:
+                    context["sweep_low_at_london_open"] = is_near_session_open(
+                        "LONDON", sweep_time, window_minutes=30,
+                        asia_hours=self.asian_session_hours,
+                        london_hours=self.london_session_hours,
+                        ny_hours=self.ny_session_hours
+                    )
+                    context["sweep_low_at_ny_open"] = is_near_session_open(
+                        "NY", sweep_time, window_minutes=30,
+                        asia_hours=self.asian_session_hours,
+                        london_hours=self.london_session_hours,
+                        ny_hours=self.ny_session_hours
+                    )
 
             # Only mark sweep_confirmed if at least one sweep + reversal occurred
             if high_confirmed or low_confirmed:
@@ -554,11 +667,18 @@ class AMDAnalyzer:
                 logger.debug(f"Wyckoff: WHIPSAW detected (distribution behavior)")
             else:
                 context["manipulation_type"] = None
+                # Log unconfirmed sweeps for diagnostics
+                if swept_high and not high_confirmed:
+                    logger.debug(f"Asia high swept {sweep_high_count}x but NO REVERSAL confirmed "
+                               f"(need {reversal_threshold/pip:.1f}p reversal within {reversal_scan_window} bars)")
+                if swept_low and not low_confirmed:
+                    logger.debug(f"Asia low swept {sweep_low_count}x but NO REVERSAL confirmed "
+                               f"(need {reversal_threshold/pip:.1f}p reversal within {reversal_scan_window} bars)")
 
         except Exception as e:
             logger.error(f"Error detecting manipulation: {e}")
 
-    def _classify_phase(self, context: Dict[str, Any], session: SessionType) -> PhaseType:
+    def _classify_phase(self, context: Dict[str, Any], session: SessionType, data: pd.DataFrame, pip: float) -> PhaseType:
         """
         Classify current AMD phase based on session and structure.
 
@@ -590,46 +710,57 @@ class AMDAnalyzer:
 
             # During London
             elif session == "LONDON":
-                if sweep_confirmed:
-                    # Confirmed manipulation → expansion phase
-                    return "EXPANSION"
-                elif has_swept and not sweep_confirmed:
-                    # Sweep happened but no reversal yet → manipulation in progress
+                # Cycle 1: Asia ACCUMULATION → London MANIPULATION
+                if asia_type == "ACCUMULATION":
+                    # London is manipulation phase regardless of sweep status
+                    # Sweep detection helps identify manipulation progress, not phase
                     return "MANIPULATION"
-                elif asia_type == "ACCUMULATION":
-                    # Asia accumulated, but no sweep detected yet
-                    # Use ACCUMULATION phase (waiting for manipulation to occur)
-                    # This allows slow breakouts during London if no manipulation happens
+
+                # Cycle 2: Asia EXPANSION → London ACCUMULATION
+                elif asia_type == "EXPANSION":
+                    # After trending Asia, London consolidates (accumulates)
                     return "ACCUMULATION"
+
                 else:
-                    # Asia was expansion or unknown - can't determine London phase
+                    # Only return UNKNOWN if Asia classification itself failed
                     return "UNKNOWN"
 
             # During NY
             elif session == "NY":
-                # Check for distribution signals
-                # 1. Both sweeps confirmed = whipsaw (distribution behavior)
-                sweep_high_confirmed = context.get("sweep_high_confirmed", False)
-                sweep_low_confirmed = context.get("sweep_low_confirmed", False)
+                # Cycle 1: Asia ACCUMULATION → London MANIPULATION → NY DISTRIBUTION
+                if asia_type == "ACCUMULATION":
+                    # Check for classic distribution signals
+                    sweep_high_confirmed = context.get("sweep_high_confirmed", False)
+                    sweep_low_confirmed = context.get("sweep_low_confirmed", False)
 
-                if sweep_high_confirmed and sweep_low_confirmed:
-                    # Both Asia H/L swept and reversed = classic whipsaw/distribution
+                    # Both sweeps confirmed = whipsaw (strong distribution signal)
+                    if sweep_high_confirmed and sweep_low_confirmed:
+                        return "DISTRIBUTION"
+
+                    # Late NY session + confirmed sweep = potential distribution
+                    now_utc = datetime.now(timezone.utc)
+                    is_late_ny = (session == "NY") and (now_utc.hour >= int(self.late_ny_hour_utc))
+                    if is_late_ny and sweep_confirmed:
+                        return "DISTRIBUTION"
+
+                    # Topping distribution pattern detection
+                    try:
+                        if self.distribution_enabled and self._detect_distribution_behavior(data, context, pip):
+                            return "DISTRIBUTION"
+                    except Exception:
+                        pass
+
+                    # Default for Cycle 1: NY is distribution phase
                     return "DISTRIBUTION"
 
-                # 2. Late NY session (after 19:00 UTC) with confirmed sweep = potential distribution
-                # Late NY is when institutions often close/distribute positions
-                now_utc = datetime.now(timezone.utc)
-                is_late_ny = now_utc.hour >= 19 and session == "NY"
+                # Cycle 2: Asia EXPANSION → London ACCUMULATION → NY MANIPULATION
+                elif asia_type == "EXPANSION":
+                    # NY is manipulation phase after London accumulation
+                    # Sweep detection identifies manipulation progress, not phase
+                    return "MANIPULATION"
 
-                if is_late_ny and sweep_confirmed:
-                    # Late NY after sweep = likely distribution phase
-                    return "DISTRIBUTION"
-
-                # 3. Otherwise, if sweep confirmed in NY, treat as expansion
-                if sweep_confirmed:
-                    return "EXPANSION"
                 else:
-                    # No confirmed sweep → can't determine phase
+                    # Only return UNKNOWN if Asia classification failed
                     return "UNKNOWN"
 
             else:
@@ -651,12 +782,23 @@ class AMDAnalyzer:
             context: AMD context dict
 
         Returns:
-            DirectionType: "BUY", "SELL", or None (both directions allowed)
+            DirectionType: "BUY", "SELL", "BLOCK", or None (both directions allowed)
         """
         try:
             phase = context.get("phase", "UNKNOWN")
             sweep_high_confirmed = context.get("sweep_high_confirmed", False)
             sweep_low_confirmed = context.get("sweep_low_confirmed", False)
+
+            # During manipulation, block until sweep confirms direction for breakout engine
+            if phase == "MANIPULATION":
+                if sweep_low_confirmed and not sweep_high_confirmed:
+                    return "BUY"  # Spring confirmed (bullish sweep) → trade bullish breakouts only
+                elif sweep_high_confirmed and not sweep_low_confirmed:
+                    return "SELL"  # Upthrust confirmed (bearish sweep) → trade bearish breakouts only
+                elif sweep_high_confirmed and sweep_low_confirmed:
+                    return "BLOCK"  # Whipsaw detected → avoid choppy market
+                else:
+                    return "BLOCK"  # No sweep confirmed yet → wait for direction confirmation
 
             # During expansion after confirmed sweep, bias toward reversal direction
             if phase == "EXPANSION":
@@ -710,3 +852,112 @@ class AMDAnalyzer:
             parts.append(f"bias_{direction.lower()}")
 
         return "_".join(parts)
+
+    def _detect_distribution_behavior(self, data: pd.DataFrame, context: Dict[str, Any], pip: float) -> bool:
+        """
+        Detect classic topping distribution behavior in the recent window.
+        Returns True if pattern of multiple retests and wick rejections is present.
+        """
+        try:
+            recent = data.tail(20)
+            if len(recent) < 15:
+                return False
+
+            recent_high = float(recent['high'].max())
+            prox = float(self.dist_retest_proximity_pips) * float(pip)
+            retests = 0
+            for _, row in recent.iterrows():
+                if abs(float(row['high']) - recent_high) <= prox:
+                    retests += 1
+
+            if retests < int(self.dist_min_retests):
+                return False
+
+            # Wick rejections among last few bars
+            min_wick = float(self.dist_min_wick_rejection_pips) * float(pip)
+            wick_fail = 0
+            last_bars = recent.tail(5)
+            for _, row in last_bars.iterrows():
+                high = float(row['high'])
+                close = float(row['close'])
+                if abs(high - recent_high) <= prox and (high - close) > min_wick:
+                    wick_fail += 1
+
+            if wick_fail >= 2:
+                logger.debug(f"Distribution detected: retests={retests}, wick_rejections={wick_fail} near {recent_high:.5f}")
+                return True
+            return False
+        except Exception as e:
+            logger.error(f"Error in distribution detection: {e}")
+            return False
+
+    def _detect_higher_tf_trend(self, data: pd.DataFrame, lookback: int = 20) -> Optional[str]:
+        """
+        Swing-based higher timeframe trend detection.
+
+        Rules:
+        - Bullish if latest swing high > prior swing high AND latest swing low > prior swing low,
+          with both increases at least min_step (fraction of ATR).
+        - Bearish if latest swing high < prior swing high AND latest swing low < prior swing low,
+          with both decreases at least min_step.
+        - Else None.
+        """
+        try:
+            n = int(max(lookback, 10))
+            if data is None or len(data) < n:
+                return None
+
+            recent = data.tail(n)
+            highs = recent['high'].values
+            lows = recent['low'].values
+
+            # Compute simple ATR for materiality (no TA-Lib)
+            closes = recent['close'].values
+            trs = []
+            for i in range(1, len(recent)):
+                tr = max(
+                    highs[i] - lows[i],
+                    abs(highs[i] - closes[i-1]),
+                    abs(lows[i] - closes[i-1])
+                )
+                trs.append(float(tr))
+            avg_tr = float(sum(trs) / len(trs)) if trs else 0.0
+            min_step = float(self.mtf_trend_min_step_atr_mult) * avg_tr if avg_tr > 0 else 0.0
+
+            sw = max(1, int(self.mtf_trend_swing_window))
+            # Identify swing highs/lows
+            swing_highs = []
+            swing_lows = []
+            for i in range(sw, len(recent) - sw):
+                window_h = highs[i-sw:i+sw+1]
+                window_l = lows[i-sw:i+sw+1]
+                if highs[i] == max(window_h):
+                    swing_highs.append((i, float(highs[i])))
+                if lows[i] == min(window_l):
+                    swing_lows.append((i, float(lows[i])))
+
+            if len(swing_highs) < 2 or len(swing_lows) < 2:
+                return None
+
+            # Take last two swings each
+            h_prev, h_last = swing_highs[-2][1], swing_highs[-1][1]
+            l_prev, l_last = swing_lows[-2][1], swing_lows[-1][1]
+
+            # Ensure chronological ordering of pairs (optional safety)
+            if swing_highs[-2][0] >= swing_highs[-1][0] or swing_lows[-2][0] >= swing_lows[-1][0]:
+                # Shouldn't happen with append ordering, but be safe
+                pass
+
+            up_h = (h_last - h_prev) >= min_step
+            up_l = (l_last - l_prev) >= min_step
+            dn_h = (h_prev - h_last) >= min_step
+            dn_l = (l_prev - l_last) >= min_step
+
+            if up_h and up_l:
+                return "bullish"
+            if dn_h and dn_l:
+                return "bearish"
+            return None
+        except Exception as e:
+            logger.error(f"Error in higher timeframe trend detection: {e}")
+            return None
