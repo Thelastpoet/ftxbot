@@ -14,6 +14,7 @@ from typing import Optional, Dict
 
 from utils import resolve_pip_size
 from strategy import PurePriceActionStrategy, TradingSignal
+from state_manager import StateManager, save_strategy_state, load_strategy_state
 
 def configure_logging(console_level: str = 'INFO') -> None:
     """Configure production-friendly logging for console and file.
@@ -108,47 +109,21 @@ class Config:
             # AMD settings
             amd = data.get('amd_settings', {})
             self.amd_enabled = amd.get('enabled', False)
-            self.amd_enable_asian_trading = amd.get('enable_asian_trading', False)
-            self.amd_enable_london_trading = amd.get('enable_london_trading', True)
-            self.amd_enable_ny_trading = amd.get('enable_ny_trading', True)
             self.amd_asian_session_hours = tuple(amd.get('asian_session_hours', [0, 8]))
             self.amd_london_session_hours = tuple(amd.get('london_session_hours', [8, 16]))
             self.amd_ny_session_hours = tuple(amd.get('ny_session_hours', [13, 22]))
-            # Additional AMD toggles
-            self.amd_trade_unknown_days = amd.get('trade_unknown_days', False)
             self.amd_late_ny_hour_utc = amd.get('late_ny_hour_utc', 19)
-            self.amd_volatility_factor_min = amd.get('volatility_factor_min', 0.5)
-            self.amd_volatility_factor_max = amd.get('volatility_factor_max', 2.0)
-            self.amd_fallback_narrow_range_pips = amd.get('fallback_narrow_range_pips', 50)
+            self.amd_asia_accumulation_threshold_pips = amd.get('asia_accumulation_threshold_pips', 30.0)
+            self.amd_london_accumulation_threshold_pips = amd.get('london_accumulation_threshold_pips', 25.0)
             self.level_merge_proximity_pips = amd.get('level_merge_proximity_pips', 10)
             # AMD logging preferences
             self.amd_log_on_change = amd.get('log_on_change', True)
             self.amd_log_each_loop = amd.get('log_each_loop', False)
-            # Breakout/pattern relax controls during AMD EXPANSION
-            self.amd_breakout_threshold_volatility_scaled = amd.get('breakout_threshold_volatility_scaled', True)
-            self.amd_breakout_relax_in_expansion_factor = amd.get('breakout_relax_in_expansion_factor', 0.85)
-            self.amd_breakout_min_pips_floor = amd.get('breakout_min_pips_floor', 0.0)
-            self.amd_patterns_required_in_expansion = amd.get('patterns_required_in_expansion', False)
-            # Accumulation detection
-            accum = amd.get('accumulation_detection', {})
-            self.amd_max_range_vs_adr_ratio = accum.get('max_range_vs_adr_ratio', 0.4)
-            self.amd_min_overlap_bars = accum.get('min_overlap_bars', 5)
-            self.amd_max_price_from_open_pips = accum.get('max_price_from_open_pips', 30)
             # Manipulation detection
             manip = amd.get('manipulation_detection', {})
-            self.amd_manipulation_enabled = manip.get('enabled', True)
             self.amd_sweep_threshold_pips = manip.get('sweep_threshold_pips', 5)
             self.amd_reversal_confirmation_bars = manip.get('reversal_confirmation_bars', 3)
             self.amd_reversal_threshold_pips = manip.get('reversal_threshold_pips', 15)
-            # Directional bias
-            bias = amd.get('directional_bias', {})
-            self.amd_directional_bias_enabled = bias.get('enabled', True)
-            self.amd_allow_countertrend_in_expansion = bias.get('allow_countertrend_in_expansion', False)
-            self.amd_disable_trades_in_distribution = bias.get('disable_trades_in_distribution', False)
-            # Distribution detection config passthrough
-            self.amd_distribution_detection = amd.get('distribution_detection', {})
-            # MTF trend confirmation config passthrough
-            self.amd_mtf_trend_confirmation = amd.get('mtf_trend_confirmation', {})
 
             # Symbols
             self.symbols = []
@@ -215,9 +190,27 @@ class TradingBot:
         self.strategy = None
         self.risk_manager = None
         self.trade_logger = None
-        self.amd_analyzer = None
+        
+        # Persist state files under a dedicated folder
+        self.state_manager = StateManager('symbol_state')
         self.running = False
         self.symbol_fillings = {}
+
+        # Session and statistics tracking
+        self._last_session = None
+        self._last_hour = None
+        self._hourly_stats = {
+            'symbols_processed': 0,
+            'breakouts_detected': 0,
+            'breakouts_bullish': 0,
+            'breakouts_bearish': 0,
+            'signals_generated': 0,
+            'signals_blocked': 0,
+            'block_reasons': {},
+            'trades_executed': 0,
+            'spring_confirmations': 0,
+            'upthrust_confirmations': 0
+        }
 
     async def initialize(self):
         try:
@@ -236,10 +229,14 @@ class TradingBot:
             self.trade_logger = TradeLogger('trades.log')
 
             # Initialize AMD analyzer if enabled
-            if self.config.amd_enabled:
-                from amd_context import AMDAnalyzer
-                self.amd_analyzer = AMDAnalyzer(self.config)
-                logger.info("AMD context analyzer enabled")
+            
+
+            # Load strategy state (duplicate prevention)
+            try:
+                if load_strategy_state(self.state_manager, self.strategy):
+                    logger.info("Strategy: Duplicate prevention state restored")
+            except Exception as e:
+                logger.warning(f"Strategy: Failed to restore state: {e}")
 
             # Log current trading session (UTC) on startup
             try:
@@ -296,7 +293,7 @@ class TradingBot:
             logger.error(f"Initialization failed: {e}")
             raise
 
-    async def execute_trade(self, signal: TradingSignal, symbol: str, amd_context: Optional[Dict] = None):
+    async def execute_trade(self, signal: TradingSignal, symbol: str):
         try:
             sym_info = self.mt5_client.get_symbol_info(symbol)
             if not sym_info:
@@ -383,10 +380,6 @@ class TradingBot:
                     'pattern_score': getattr(signal, 'pattern_score', None),
                     'pattern_dir': getattr(signal, 'pattern_dir', None),
                     'pattern_primary': getattr(signal, 'pattern_primary', None),
-                    'amd_phase': amd_context.get('phase') if amd_context else None,
-                    'amd_session': amd_context.get('session') if amd_context else None,
-                    'amd_asia_type': amd_context.get('asia_type') if amd_context else None,
-                    'amd_direction': amd_context.get('allowed_direction') if amd_context else None,
                     'status': 'OPEN'
                 }
                 self.trade_logger.log_trade(trade)
@@ -407,8 +400,27 @@ class TradingBot:
         timeframe = tfs[0]
 
         try:
+            # Determine how many bars are needed to include today's Asia session
+            def _required_bars_for_timeframe(tf: str) -> int:
+                tfu = (tf or '').upper()
+                if tfu == 'M1':
+                    return 1500   # ~25h
+                if tfu == 'M5':
+                    return 350    # ~29h
+                if tfu == 'M15':
+                    return 120    # ~30h
+                if tfu == 'M30':
+                    return 60     # ~30h
+                if tfu == 'H1':
+                    return 36     # ~36h
+                if tfu == 'H4':
+                    return 12     # ~48h
+                if tfu == 'D1':
+                    return 7      # 1 week
+                return 300        # safe default
+
             # Base timeframe data
-            candles = await self.market_data.fetch_data(symbol, timeframe, max(100, self.config.lookback_period * 3))
+            candles = await self.market_data.fetch_data(symbol, timeframe, _required_bars_for_timeframe(timeframe))
             if candles is None:
                 return
 
@@ -416,61 +428,17 @@ class TradingBot:
             mtf_context = {}
             try:
                 for tf in tfs[1:]:
-                    df_tf = await self.market_data.fetch_data(symbol, tf, max(100, self.config.lookback_period * 3))
+                    df_tf = await self.market_data.fetch_data(symbol, tf, _required_bars_for_timeframe(tf))
                     if df_tf is not None:
                         mtf_context[tf] = df_tf
             except Exception:
                 mtf_context = {}
 
-            # Compute AMD context if enabled
-            amd_context = None
-            if self.amd_analyzer is not None:
-                try:
-                    amd_context = self.amd_analyzer.analyze(candles, symbol, timeframe, mtf_context=mtf_context)
-                except Exception as e:
-                    logger.warning(f"{symbol}: AMD analysis failed: {e}")
-                    amd_context = None
+            
 
-            # AMD summary logging (terminal observability)
-            if amd_context is not None:
-                try:
-                    sess = amd_context.get('session', 'UNKNOWN')
-                    phase = amd_context.get('phase', 'UNKNOWN')
-                    asia_type = amd_context.get('asia_type', 'UNKNOWN')
-                    vr = amd_context.get('volatility_factor', None)
-                    vtxt = f"v={vr:.2f}" if isinstance(vr, (int, float)) else "v=n/a"
-                    rng = amd_context.get('asia_range_pips')
-                    rngtxt = f"rng={rng:.1f}p" if isinstance(rng, (int, float)) else "rng=n/a"
-                    mt = amd_context.get('manipulation_type', None)
-                    shc = amd_context.get('sweep_high_confirmed', False)
-                    slc = amd_context.get('sweep_low_confirmed', False)
-                    shcnt = amd_context.get('sweep_high_count', 0)
-                    slcnt = amd_context.get('sweep_low_count', 0)
-                    bias = amd_context.get('allowed_direction', None)
-                    htf = amd_context.get('higher_tf_trend', None)
-                    reason = amd_context.get('reason', '')
+            
 
-                    summary = (
-                        f"AMD {symbol} {timeframe} sess={sess} phase={phase} asia={asia_type} "
-                        f"{rngtxt} {vtxt} sweeps:H{shcnt}/L{slcnt} conf:H={bool(shc)}/L={bool(slc)} "
-                        f"manip={mt or 'none'} bias={bias or 'ANY'} htf={htf or 'n/a'} reason={reason}"
-                    )
-
-                    # Log only on change by default, optionally each loop
-                    if not hasattr(self, '_amd_last_state'):
-                        self._amd_last_state = {}
-                    key = (symbol, timeframe)
-                    state_tuple = (sess, phase, asia_type, bool(shc), bool(slc), mt, bias, htf)
-                    last = self._amd_last_state.get(key)
-                    log_each = getattr(self.config, 'amd_log_each_loop', False)
-                    log_on_change = getattr(self.config, 'amd_log_on_change', True)
-                    if log_each or (log_on_change and last != state_tuple):
-                        logger.info(summary)
-                        self._amd_last_state[key] = state_tuple
-                except Exception:
-                    pass
-
-            signal = self.strategy.generate_signal(candles, symbol, mtf_context=mtf_context if mtf_context else None, amd_context=amd_context)
+            signal = self.strategy.generate_signal(candles, symbol, mtf_context=mtf_context if mtf_context else None)
             if signal:
                 # Skip if an existing position with same direction and our magic exists
                 try:
@@ -485,7 +453,7 @@ class TradingBot:
                         return
                 except Exception:
                     pass
-                await self.execute_trade(signal, symbol, amd_context=amd_context)
+                await self.execute_trade(signal, symbol)
         except Exception as e:
             logger.error(f"Error processing {symbol}: {e}")
 
@@ -590,14 +558,99 @@ class TradingBot:
         except Exception as e:
             logger.error(f"Error monitoring open trades: {e}", exc_info=True)
 
+    def _check_session_transition(self):
+        """Check if trading session has changed and log transition."""
+        try:
+            from sessions import get_current_session
+            now = datetime.now(timezone.utc)
+            current_session = get_current_session(
+                now,
+                self.config.amd_asian_session_hours,
+                self.config.amd_london_session_hours,
+                self.config.amd_ny_session_hours
+            )
+
+            if self._last_session is not None and current_session != self._last_session:
+                logger.info(f"{'='*60}")
+                logger.info(f"SESSION TRANSITION: {self._last_session} → {current_session} ({now.strftime('%H:%M UTC')})")
+                logger.info(f"{'='*60}")
+
+            self._last_session = current_session
+        except Exception:
+            pass
+
+    def _check_hourly_stats(self):
+        """Check if hour has changed and log hourly statistics."""
+        try:
+            now = datetime.now(timezone.utc)
+            current_hour = now.hour
+
+            if self._last_hour is not None and current_hour != self._last_hour:
+                # Log previous hour's stats
+                logger.info(f"")
+                logger.info(f"[HOURLY STATS {self._last_hour:02d}:00-{current_hour:02d}:00 UTC]")
+                logger.info(f"  Symbols processed: {self._hourly_stats['symbols_processed']}")
+                logger.info(f"  Breakouts detected: {self._hourly_stats['breakouts_detected']} (bullish: {self._hourly_stats['breakouts_bullish']}, bearish: {self._hourly_stats['breakouts_bearish']})")
+                logger.info(f"  Signals generated: {self._hourly_stats['signals_generated']}")
+                logger.info(f"  Signals blocked: {self._hourly_stats['signals_blocked']}")
+
+                if self._hourly_stats['block_reasons']:
+                    for reason, count in sorted(self._hourly_stats['block_reasons'].items(), key=lambda x: x[1], reverse=True)[:3]:
+                        logger.info(f"    - {reason}: {count}")
+
+                logger.info(f"  Trades executed: {self._hourly_stats['trades_executed']}")
+
+                open_count = len([t for t in self.trade_logger.trades if t.get('status') == 'OPEN'])
+                logger.info(f"  Open positions: {open_count}")
+                logger.info(f"")
+
+                # Reset stats for new hour
+                self._hourly_stats = {
+                    'symbols_processed': 0,
+                    'breakouts_detected': 0,
+                    'breakouts_bullish': 0,
+                    'breakouts_bearish': 0,
+                    'signals_generated': 0,
+                    'signals_blocked': 0,
+                    'block_reasons': {},
+                    'trades_executed': 0,
+                    'spring_confirmations': 0,
+                    'upthrust_confirmations': 0
+                }
+
+            self._last_hour = current_hour
+        except Exception as e:
+            logger.debug(f"Error checking hourly stats: {e}")
+
     async def run(self):
         self.running = True
         logger.info("Starting core trading loop")
+
+        # Initialize tracking
+        self._check_session_transition()
+        self._check_hourly_stats()
+
+        loop_count = 0  # For periodic state persistence
+
         while self.running:
             try:
+                # Check for session/hour transitions
+                self._check_session_transition()
+                self._check_hourly_stats()
+
                 await self.monitor_open_trades()
                 for sym in self.config.symbols:
                     await self.process_symbol(sym)
+
+                # Periodic state persistence (every 10 loops = ~50 seconds at 5s interval)
+                loop_count += 1
+                if loop_count % 10 == 0:
+                    try:
+                        if self.strategy:
+                            save_strategy_state(self.state_manager, self.strategy)
+                    except Exception as e:
+                        logger.debug(f"State save error: {e}")
+
                 await asyncio.sleep(self.config.main_loop_interval)
             except KeyboardInterrupt:
                 logger.info("Interrupted")

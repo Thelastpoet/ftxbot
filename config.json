@@ -7,7 +7,13 @@
     "min_stop_loss_pips": 20,
     "stop_loss_buffer_pips": 15,
     "spread_guard_pips": 4,
-    "min_headroom_rr": 0.5
+    "min_headroom_rr": 0.5,
+    "entry_confirmation_bars": 1,
+    "pattern_window": 5,
+    "pattern_score_threshold": 0.6,
+    "spread_multiplier_threshold": 1.5,
+    "spread_lookback_bars": 20,
+    "session_close_buffer_minutes": 20
   },
   "risk_management": {
     "risk_per_trade": 0.01,
@@ -17,46 +23,19 @@
   },
   "amd_settings": {
     "enabled": true,
-    "enable_asian_trading": false,
-    "enable_london_trading": true,
-    "enable_ny_trading": true,
     "log_on_change": true,
     "log_each_loop": false,
-    "trade_unknown_days": false,
     "asian_session_hours": [0, 8],
     "london_session_hours": [8, 16],
     "ny_session_hours": [13, 22],
     "late_ny_hour_utc": 19,
-    "volatility_factor_min": 0.5,
-    "volatility_factor_max": 2.0,
-    "fallback_narrow_range_pips": 50,
+    "asia_accumulation_threshold_pips": 30.0,
+    "london_accumulation_threshold_pips": 25.0,
     "level_merge_proximity_pips": 10,
-    "accumulation_detection": {
-      "max_range_vs_adr_ratio": 0.4,
-      "min_overlap_bars": 5,
-      "max_price_from_open_pips": 30
-    },
     "manipulation_detection": {
-      "enabled": true,
       "sweep_threshold_pips": 5,
       "reversal_confirmation_bars": 3,
       "reversal_threshold_pips": 15
-    },
-    "distribution_detection": {
-      "enabled": true,
-      "min_retest_count": 3,
-      "retest_proximity_pips": 10,
-      "min_wick_rejection_pips": 10
-    },
-    "directional_bias": {
-      "enabled": true,
-      "allow_countertrend_in_expansion": false,
-      "disable_trades_in_distribution": false
-    },
-    "mtf_trend_confirmation": {
-      "enabled": true,
-      "higher_timeframe": "H1",
-      "lookback_bars": 20
     }
   },
   "symbols": [
@@ -142,7 +121,7 @@
   },
     {
       "name": "XAUUSD",
-      "timeframes": ["M5", "H1"],
+      "timeframes": ["M15", "H1"],
       "pip_unit": 0.01,
       "min_stop_loss_pips": 500,
       "stop_loss_buffer_pips": 100,

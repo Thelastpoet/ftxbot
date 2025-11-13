@@ -1,4 +1,4 @@
-﻿"""
+"""
 Core Price Action Strategy.
 """
 
@@ -63,7 +63,11 @@ class PurePriceActionStrategy:
         self.pattern_strong_threshold = float(getattr(config, 'pattern_strong_threshold', 0.8))
         self.allowed_patterns = getattr(config, 'allowed_patterns', None)
         self.atr_source = getattr(config, 'atr_source', 'talib')
-        self._last_breakout_bar = {}  # One signal per bar per direction 
+        self._last_breakout_bar = {}  # One signal per bar per direction
+        self._last_block_reason = {} # One log per block reason per symbol
+        # Breakout acceptance controls
+        self.entry_mode = str(getattr(config, 'entry_mode', 'confirm')).lower()
+        self.entry_confirmation_bars = int(getattr(config, 'entry_confirmation_bars', 1))
 
     # -----------------------------
     # Swing points and S/R levels
@@ -244,66 +248,9 @@ class PurePriceActionStrategy:
             return behind[-1] if behind else None
 
     # -----------------------------
-    # AMD filters
-    # -----------------------------
-    def _amd_session_allowed(self, amd_context: dict) -> bool:
-        """Check if trading is allowed in current session."""
-        session = amd_context.get("session", "UNKNOWN")
-
-        # Check session-specific flags from config
-        if session == "ASIA":
-            return getattr(self.config, 'amd_enable_asian_trading', False)
-        elif session == "LONDON":
-            return getattr(self.config, 'amd_enable_london_trading', True)
-        elif session == "NY":
-            return getattr(self.config, 'amd_enable_ny_trading', True)
-        else:
-            # Unknown session - be conservative, allow if not explicitly disabled
-            return True
-
-    def _amd_direction_allowed(self, breakout_type: str, amd_context: dict) -> bool:
-        """Check if breakout direction is allowed by AMD bias."""
-        allowed_dir = amd_context.get("allowed_direction")
-        phase = amd_context.get("phase", "UNKNOWN")
-        sweep_confirmed = amd_context.get("sweep_confirmed", False)
-
-        # If higher timeframe trend conflicts with AMD bias, neutralize the bias
-        try:
-            htf = amd_context.get("higher_tf_trend")
-            if htf in ("bullish", "bearish") and allowed_dir in ("BUY", "SELL"):
-                if phase == "EXPANSION" and sweep_confirmed:
-                    if (allowed_dir == "BUY" and htf == "bearish") or (allowed_dir == "SELL" and htf == "bullish"):
-                        allowed_dir = None
-        except Exception:
-            pass
-
-        # BLOCK sentinel = disable all trades (used for whipsaw/distribution)
-        if allowed_dir == "BLOCK":
-            return False
-
-        # No bias = allow both directions
-        if allowed_dir is None:
-            return True
-
-        # Convert breakout type to direction
-        breakout_dir = "BUY" if breakout_type == "bullish" else "SELL"
-
-        # Strict enforcement: during EXPANSION phase, block countertrend if config disables it
-
-        if phase == "EXPANSION" and sweep_confirmed and allowed_dir is not None:
-            # Check if countertrend trading is disabled in expansion
-            allow_countertrend = getattr(self.config, 'amd_allow_countertrend_in_expansion', False)
-
-            if not allow_countertrend and breakout_dir != allowed_dir:
-                # Countertrend trade during strong expansion = blocked
-                return False
-
-        return breakout_dir == allowed_dir
-
-    # -----------------------------
     # Public: generate signal
     # -----------------------------
-    def generate_signal(self, data: pd.DataFrame, symbol: str, mtf_context: Optional[dict] = None, amd_context: Optional[dict] = None) -> Optional[TradingSignal]:
+    def generate_signal(self, data: pd.DataFrame, symbol: str, mtf_context: Optional[dict] = None) -> Optional[TradingSignal]:
         try:
             if data is None or len(data) < max(20, self.lookback_period):
                 return None
@@ -316,47 +263,13 @@ class PurePriceActionStrategy:
             if pip <= 0:
                 return None
 
-            # AMD Filter 1: Session gate (before expensive computations)
-            if amd_context is not None:
-                if not self._amd_session_allowed(amd_context):
-                    session = amd_context.get("session", "UNKNOWN")
-                    logger.debug(f"{symbol}: AMD session filter - {session} trading disabled")
-                    return None
+            # AMD Filter
+            # Directional filtering applied later after breakout detection (see AMD Filter 2)
 
-            # AMD Filter 1b: Distribution phase gate (before expensive computations)
-            if amd_context is not None:
-                phase = amd_context.get("phase", "UNKNOWN")
-                if phase == "DISTRIBUTION" and getattr(self.config, 'amd_disable_trades_in_distribution', False):
-                    logger.info(f"{symbol}: AMD distribution filter - DISTRIBUTION phase, trading disabled")
-                    return None
+            # Calculate current spread
+            current_spread_pips = abs(float(tick.ask) - float(tick.bid)) / float(pip)
 
-                # AMD Filter 1c: Late session distribution filter
-                # During late NY session, institutions often close positions (distribution behavior)
-                # Block new trend-following entries to avoid getting caught in reversals
-                session = amd_context.get("session", "UNKNOWN")
-                is_late_session = amd_context.get("is_late_session", False)
-
-                if session == "NY" and is_late_session:
-                    # During late NY, only allow counter-trend mean reversion trades
-                    # Block trend-following breakouts in the direction of the day's bias
-                    allowed_dir = amd_context.get("allowed_direction")
-
-                    if allowed_dir is not None and allowed_dir != "BLOCK":
-                        # If there's a directional bias from manipulation, assume that's the trend
-                        # Block trades in that direction during late session (likely distribution)
-                        logger.info(f"{symbol}: AMD late session filter - blocking new trend entries during late NY")
-                        # Note: This will be further filtered by directional bias check
-                        # For now, we just log and let the directional bias handle it
-                        pass
-
-            # AMD Filter 1d: UNKNOWN phase gate (be conservative)
-            if amd_context is not None:
-                phase = amd_context.get("phase", "UNKNOWN")
-                if phase == "UNKNOWN" and not getattr(self.config, 'amd_trade_unknown_days', False):
-                    logger.info(f"{symbol}: AMD UNKNOWN phase filter - structure unclear, trading disabled")
-                    return None
-
-            # Spread guard (optional per symbol)
+            # Spread guard (optional per symbol - absolute threshold)
             try:
                 spread_guard_pips = None
                 for sc in getattr(self.config, 'symbols', []) or []:
@@ -367,9 +280,59 @@ class PurePriceActionStrategy:
                 if spread_guard_pips is None:
                     spread_guard_pips = getattr(self.config, 'spread_guard_pips_default', None)
                 if spread_guard_pips is not None:
-                    spread_pips = abs(float(tick.ask) - float(tick.bid)) / float(pip)
-                    if spread_pips > float(spread_guard_pips):
-                        logger.debug(f"{symbol}: spread {spread_pips:.1f}p > guard {float(spread_guard_pips):.1f}p")
+                    if current_spread_pips > float(spread_guard_pips):
+                        current_block_state = "SPREAD_GUARD"
+                        if self._last_block_reason.get(symbol) != current_block_state:
+                            logger.info(f"[BLOCK] {symbol}: spread {current_spread_pips:.1f}p > guard {float(spread_guard_pips):.1f}p")
+                            self._last_block_reason[symbol] = current_block_state
+                        return None
+            except Exception:
+                pass
+
+            # Session awareness: Dynamic spread filter (relative threshold)
+            try:
+                spread_multiplier = float(getattr(self.config, 'spread_multiplier_threshold', 1.5))
+                spread_lookback = int(getattr(self.config, 'spread_lookback_bars', 20))
+
+                # Calculate average spread from recent bars
+                if len(data) >= spread_lookback:
+                    recent_bars = data.iloc[-spread_lookback:]
+                    if 'spread' in recent_bars.columns:
+                        avg_spread_pips = float(recent_bars['spread'].mean()) / float(pip)
+                    else:
+                        # Calculate spread from high-low as proxy if not available
+                        avg_range_pips = float((recent_bars['high'] - recent_bars['low']).mean()) / float(pip)
+                        # Estimate spread as ~10% of average bar range (conservative estimate)
+                        avg_spread_pips = avg_range_pips * 0.1
+
+                    # Block if current spread is abnormally wide
+                    if avg_spread_pips > 0 and current_spread_pips > (avg_spread_pips * spread_multiplier):
+                        current_block_state = "ELEVATED_SPREAD"
+                        if self._last_block_reason.get(symbol) != current_block_state:
+                            logger.info(f"[BLOCK] {symbol}: elevated spread ({current_spread_pips:.1f}p > {spread_multiplier}x avg {avg_spread_pips:.1f}p)")
+                            self._last_block_reason[symbol] = current_block_state
+                        return None
+            except Exception:
+                pass
+
+            # Session awareness: Block new entries near session close
+            try:
+                session_close_buffer = int(getattr(self.config, 'session_close_buffer_minutes', 20))
+
+                if session_close_buffer > 0:
+                    from sessions import get_minutes_until_session_close
+
+                    minutes_remaining = get_minutes_until_session_close(
+                        asia_hours=getattr(self.config, 'amd_asian_session_hours', (0, 8)),
+                        london_hours=getattr(self.config, 'amd_london_session_hours', (8, 16)),
+                        ny_hours=getattr(self.config, 'amd_ny_session_hours', (13, 22))
+                    )
+
+                    if minutes_remaining > 0 and minutes_remaining < session_close_buffer:
+                        current_block_state = "SESSION_CLOSE_APPROACHING"
+                        if self._last_block_reason.get(symbol) != current_block_state:
+                            logger.info(f"[BLOCK] {symbol}: session close approaching ({minutes_remaining}min remaining)")
+                            self._last_block_reason[symbol] = current_block_state
                         return None
             except Exception:
                 pass
@@ -431,26 +394,7 @@ class PurePriceActionStrategy:
             except Exception:
                 pass
 
-            # Inject Asia high/low as S/R levels if AMD context available
-            try:
-                if amd_context is not None:
-                    asia_high = amd_context.get("asia_high")
-                    asia_low = amd_context.get("asia_low")
-
-                    # Treat Asia levels as sacred: always include them
-                    if asia_high is not None:
-                        if asia_high not in ctx_res:
-                            ctx_res.append(float(asia_high))
-                            ctx_res = sorted(ctx_res)
-                        logger.debug(f"{symbol}: Injected SACRED Asia high {asia_high:.5f} into resistance")
-
-                    if asia_low is not None:
-                        if asia_low not in ctx_sup:
-                            ctx_sup.append(float(asia_low))
-                            ctx_sup = sorted(ctx_sup)
-                        logger.debug(f"{symbol}: Injected SACRED Asia low {asia_low:.5f} into support")
-            except Exception as e:
-                logger.warning(f"{symbol}: Failed to inject Asia levels: {e}")
+            # Do not inject AMD levels into S/R; keep breakout engine independent
 
             # Debug observability
             logger.debug(f"{symbol}: pip={pip:.5f} thr_pips={self.breakout_threshold_pips} res={resistance} sup={support}")
@@ -483,26 +427,80 @@ class PurePriceActionStrategy:
 
             logger.debug(f"{symbol}: breakout type={bo.type} level={bo.level:.5f} entry={bo.entry_price:.5f}")
 
-            # AMD Filter 2: Directional bias (after breakout detected)
-            if amd_context is not None:
-                if not self._amd_direction_allowed(bo.type, amd_context):
-                    allowed = amd_context.get("allowed_direction", "ANY")
-                    logger.debug(f"{symbol}: AMD directional filter - {bo.type} blocked, allowed={allowed}")
+            # Breakout acceptance (anti-fakeout): require consecutive closes beyond level
+            if self.entry_mode == 'confirm':
+                need_bars = max(1, int(self.entry_confirmation_bars))
+                if len(completed) < need_bars:
                     return None
+                thr_price = float(thr_pips) * float(pip)
+                closes = completed['close'].iloc[-need_bars:]
+                if bo.type == 'bullish':
+                    if not (closes > (bo.level + thr_price)).all():
+                        current_block_state = "ENTRY_CONFIRMATION_CLOSE"
+                        if self._last_block_reason.get(symbol) != current_block_state:
+                            logger.info(f"[BLOCK] {symbol}: entry confirmation failed (need {need_bars} close(s) beyond level)")
+                            self._last_block_reason[symbol] = current_block_state
+                        return None
+                else:
+                    if not (closes < (bo.level - thr_price)).all():
+                        current_block_state = "ENTRY_CONFIRMATION_CLOSE"
+                        if self._last_block_reason.get(symbol) != current_block_state:
+                            logger.info(f"[BLOCK] {symbol}: entry confirmation failed (need {need_bars} close(s) beyond level)")
+                            self._last_block_reason[symbol] = current_block_state
+                        return None
 
-            # TA-Lib candlestick confirmation (gate). If disabled/unavailable, pass-through.
+            # TA-Lib candlestick pattern confirmation (mandatory for trade entry)
             pattern_info = None
             if self.enable_patterns:
-                ok, info = self._candlestick_confirm(completed, bo, symbol)
-                if not ok:
+                try:
+                    pattern_ok, info = self._candlestick_confirm(completed, bo, symbol)
+                    pattern_info = info or None
+
+                    # Block if no pattern detected
+                    if not pattern_info or pattern_info.get('score', 0.0) == 0:
+                        current_block_state = "NO_PATTERN_CONFIRMATION"
+                        if self._last_block_reason.get(symbol) != current_block_state:
+                            logger.info(f"[BLOCK] {symbol}: no pattern confirmation (score=0)")
+                            self._last_block_reason[symbol] = current_block_state
+                        return None
+
+                    score = float(pattern_info.get('score', 0.0) or 0.0)
+                    pattern_dir = pattern_info.get('dir')
+
+                    # Block if pattern opposes breakout direction
+                    if pattern_dir and pattern_dir != bo.type:
+                        current_block_state = "PATTERN_DIRECTION_MISMATCH"
+                        if self._last_block_reason.get(symbol) != current_block_state:
+                            logger.info(f"[BLOCK] {symbol}: pattern opposes breakout (pattern={pattern_dir}, breakout={bo.type}, score={score:.2f})")
+                            self._last_block_reason[symbol] = current_block_state
+                        return None
+
+                    # Block if pattern score below threshold
+                    if score < float(self.pattern_score_threshold):
+                        current_block_state = "PATTERN_SCORE_LOW"
+                        if self._last_block_reason.get(symbol) != current_block_state:
+                            logger.info(f"[BLOCK] {symbol}: pattern score too low ({score:.2f} < {self.pattern_score_threshold})")
+                            self._last_block_reason[symbol] = current_block_state
+                        return None
+
+                    # Pattern confirmed - proceed with trade
+                    logger.debug(f"{symbol}: pattern confirmed ({pattern_dir}, score={score:.2f})")
+
+                except Exception as e:
+                    # Pattern analysis failed - block trade for safety (fail-closed)
+                    current_block_state = "PATTERN_ANALYSIS_ERROR"
+                    if self._last_block_reason.get(symbol) != current_block_state:
+                        logger.warning(f"[BLOCK] {symbol}: pattern analysis failed ({str(e)})")
+                        self._last_block_reason[symbol] = current_block_state
+                    pattern_info = None
                     return None
-                pattern_info = info or None
 
             # Emit at most one signal per closed bar for the same side
             try:
                 bar_time = completed.index[-1]
                 keyb = (symbol, bo.type)
                 if self._last_breakout_bar.get(keyb) == bar_time:
+                    logger.debug(f"{symbol}: duplicate signal for same bar/direction; skipping")
                     return None
                 self._last_breakout_bar[keyb] = bar_time
             except Exception:
@@ -516,25 +514,12 @@ class PurePriceActionStrategy:
             sl_pips = abs(bo.entry_price - sl) / pip
             # Enforce max SL distance if configured
             if max_sl_pips is not None and sl_pips > float(max_sl_pips):
-                logger.debug((f"{symbol}: SL {sl_pips:.1f}p > max {float(max_sl_pips):.1f}p; skipping"))
+                current_block_state = "MAX_SL_EXCEEDED"
+                if self._last_block_reason.get(symbol) != current_block_state:
+                    logger.info(f"[BLOCK] {symbol}: SL {sl_pips:.1f}p > max {float(max_sl_pips):.1f}p; skipping")
+                    self._last_block_reason[symbol] = current_block_state
                 return None
 
-            # Headroom filter: require sufficient space to next obstacle
-            obstacle = None
-            try:
-                obstacle = self._next_obstacle_level(bo.type, bo.entry_price, ctx_res, ctx_sup)
-            except Exception:
-                obstacle = None
-            if obstacle is not None:
-                buf = float(self.obstacle_buffer_pips) * float(pip)
-                headroom_price = max(0.0, abs(obstacle - bo.entry_price) - buf)
-                headroom_pips = headroom_price / float(pip)
-
-                logger.debug(f"{symbol}: obstacle={obstacle:.5f} headroom={headroom_pips:.1f}p sl={sl_pips:.1f}p req={min_headroom_rr:.2f}xSL")
-
-                if headroom_pips < (min_headroom_rr * sl_pips):
-                    logger.debug(f"{symbol}: insufficient headroom ({headroom_pips:.1f}p < {min_headroom_rr:.2f}×{sl_pips:.1f}p); skipping")
-                    return None
 
             # RR and cap for TP
             rr_eff = float(rr)
@@ -558,6 +543,43 @@ class PurePriceActionStrategy:
             sl_pips = abs(bo.entry_price - sl) / pip
             if sl_pips <= 0:
                 return None
+
+            # Re-evaluate headroom after rounding using live entry (ask/bid)
+            try:
+                entry_eff = float(tick.ask) if bo.type == 'bullish' else float(tick.bid)
+            except Exception:
+                entry_eff = bo.entry_price
+
+            # Recompute obstacle relative to the effective entry
+            obstacle2 = None
+            try:
+                obstacle2 = self._next_obstacle_level(bo.type, entry_eff, ctx_res, ctx_sup)
+            except Exception:
+                obstacle2 = None
+
+            if obstacle2 is not None:
+                # Headroom parameters (no pattern-based relax; patterns are advisory)
+                min_headroom_rr_eff = float(min_headroom_rr)
+                obstacle_buffer_pips_eff = float(self.obstacle_buffer_pips)
+
+                buf = float(obstacle_buffer_pips_eff) * float(pip)
+                headroom_price = max(0.0, abs(obstacle2 - entry_eff) - buf)
+                headroom_pips = headroom_price / float(pip)
+
+                # Do not require headroom to exceed configured RR cap
+                threshold_rr = float(min(min_headroom_rr_eff, rr_eff))
+
+                try:
+                    logger.debug(f"{symbol}: obstacle={obstacle2:.5f} entry_eff={entry_eff:.5f} headroom={headroom_pips:.1f}p sl={sl_pips:.1f}p req={threshold_rr:.2f}xSL")
+                except Exception:
+                    pass
+
+                if headroom_pips < (threshold_rr * sl_pips):
+                    current_block_state = "INSUFFICIENT_HEADROOM"
+                    if self._last_block_reason.get(symbol) != current_block_state:
+                        logger.info(f"[BLOCK] {symbol}: insufficient headroom ({headroom_pips:.1f}p < {threshold_rr:.2f}x{sl_pips:.1f}p); skipping")
+                        self._last_block_reason[symbol] = current_block_state
+                    return None
 
             try:
                 # Provide visibility into context decisioning
@@ -598,10 +620,6 @@ class PurePriceActionStrategy:
                     parts.append(f"pat={pat_label}:{pat_score}")
                 parts.append(f"ATR={str(self.atr_source).upper()}")
                 # Add AMD context if available
-                if amd_context:
-                    amd_phase = amd_context.get('phase', 'UNKNOWN')
-                    amd_session = amd_context.get('session', 'UNKNOWN')
-                    parts.append(f"AMD={amd_phase}/{amd_session}")
                 logger.info(" ".join(parts))
             except Exception:
                 logger.info(

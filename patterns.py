@@ -70,16 +70,16 @@ def candlestick_confirm(
     if df is None or len(df) == 0:
         return False, info
 
-    # Clamp window to df size
-    w = max(1, min(int(window), int(len(df))))
-    src = df.tail(w)
-
-    o = src["open"].values
-    h = src["high"].values
-    l = src["low"].values
-    c = src["close"].values
+    # Pass FULL DataFrame to TA-Lib for context (patterns need prior bars to validate trends)
+    o = df["open"].values
+    h = df["high"].values
+    l = df["low"].values
+    c = df["close"].values
 
     patterns = allowed_patterns if allowed_patterns else list(_DEFAULT_PATTERNS.keys())
+
+    # Clamp window to result array size (how many recent bars to check for patterns)
+    w = max(1, min(int(window), len(df)))
 
     # Collect last non-zero signals across patterns for the evaluation window
     signals: List[Tuple[str, int]] = []
@@ -91,12 +91,14 @@ def candlestick_confirm(
         if fn is None:
             continue
         try:
+            # TA-Lib gets full context to detect trends and validate pattern requirements
             arr = fn(o, h, l, c)
         except Exception:
             continue
         if arr is None or len(arr) == 0:
             continue
         # Look back within window for the most recent non-zero value
+        # Only check last `window` bars for actual pattern occurrence
         val = 0
         for v in reversed(arr[-w:]):
             if int(v) != 0:

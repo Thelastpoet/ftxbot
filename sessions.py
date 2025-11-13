@@ -54,7 +54,6 @@ def get_current_session(dt: datetime = None,
     else:
         return "UNKNOWN"
 
-
 def is_session_open(session: SessionType, dt: datetime = None,
                    asia_hours: tuple = (0, 8),
                    london_hours: tuple = (8, 16),
@@ -74,7 +73,6 @@ def is_session_open(session: SessionType, dt: datetime = None,
     """
     current = get_current_session(dt, asia_hours, london_hours, ny_hours)
     return current == session
-
 
 def get_session_start_hour(session: SessionType,
                            asia_hours: tuple = (0, 8),
@@ -99,7 +97,6 @@ def get_session_start_hour(session: SessionType,
     }
     return session_map.get(session, 0)
 
-
 def get_session_end_hour(session: SessionType,
                          asia_hours: tuple = (0, 8),
                          london_hours: tuple = (8, 16),
@@ -122,7 +119,6 @@ def get_session_end_hour(session: SessionType,
         "NY": ny_hours[1]
     }
     return session_map.get(session, 24)
-
 
 def is_near_session_open(session: SessionType, dt: datetime = None,
                          window_minutes: int = 15,
@@ -162,3 +158,39 @@ def is_near_session_open(session: SessionType, dt: datetime = None,
     minutes_since_open = (dt_utc - session_start).total_seconds() / 60
 
     return 0 <= minutes_since_open <= window_minutes
+
+def get_minutes_until_session_close(dt: datetime = None,
+                                     asia_hours: tuple = (0, 8),
+                                     london_hours: tuple = (8, 16),
+                                     ny_hours: tuple = (13, 22)) -> int:
+    """
+    Get minutes remaining until current session closes.
+    Returns 0 if not in a defined session or past close time.
+
+    Args:
+        dt: datetime object (timezone-aware UTC). If None, uses current UTC time.
+        asia_hours: (start_hour, end_hour) for Asia session
+        london_hours: (start_hour, end_hour) for London session
+        ny_hours: (start_hour, end_hour) for NY session
+
+    Returns:
+        int: Minutes until session close (0 if not in session)
+    """
+    if dt is None:
+        dt = datetime.now(timezone.utc)
+
+    if dt.tzinfo is None:
+        raise ValueError("DateTime must be timezone-aware (use timezone.utc)")
+
+    dt_utc = dt.astimezone(timezone.utc)
+    current_session = get_current_session(dt, asia_hours, london_hours, ny_hours)
+
+    if current_session == "UNKNOWN":
+        return 0
+
+    end_hour = get_session_end_hour(current_session, asia_hours, london_hours, ny_hours)
+    session_end = dt_utc.replace(hour=end_hour, minute=0, second=0, microsecond=0)
+
+    minutes_remaining = (session_end - dt_utc).total_seconds() / 60
+
+    return int(max(0, minutes_remaining))
