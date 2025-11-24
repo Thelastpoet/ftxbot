@@ -3,7 +3,9 @@
     "allow": [
       "WebSearch",
       "Bash(python -m py_compile \"C:\\Users\\Manu\\Documents\\Development\\fxtrading\\ftxbot\\sessions.py\")",
-      "Bash(python -c \"import json; json.load(open(r''C:\\Users\\Manu\\Documents\\Development\\fxtrading\\ftxbot\\config.json'')); print(''Valid JSON'')\")"
+      "Bash(python -c \"import json; json.load(open(r''C:\\Users\\Manu\\Documents\\Development\\fxtrading\\ftxbot\\config.json'')); print(''Valid JSON'')\")",
+      "Bash(python -m py_compile \"C:\\Users\\Manu\\Documents\\Development\\fxtrading\\ftxbot\\history_analysis.py\")",
+      "Bash(python -m py_compile \"C:\\Users\\Manu\\Documents\\Development\\fxtrading\\ftxbot\\strategy.py\")"
     ],
     "deny": [],
     "ask": []

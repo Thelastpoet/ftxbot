@@ -10,11 +10,9 @@ from typing import Dict, List, Optional, Tuple
 
 import pandas as pd
 
-
 # Map friendly names to TA-Lib function attribute names
 _DEFAULT_PATTERNS: Dict[str, str] = {
     # Core reversals/continuations commonly effective intraday
-    "engulfing": "CDLENGULFING",
     "hammer": "CDLHAMMER",
     "shooting_star": "CDLSHOOTINGSTAR",
     "harami": "CDLHARAMI",
@@ -26,14 +24,12 @@ _DEFAULT_PATTERNS: Dict[str, str] = {
     "three_line_strike": "CDL3LINESTRIKE",
 }
 
-
 def _try_import_talib():
     try:
         import talib as ta  # type: ignore
         return ta
     except Exception:
         return None
-
 
 def candlestick_confirm(
     df: pd.DataFrame,

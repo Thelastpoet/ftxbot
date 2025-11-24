@@ -8,13 +8,16 @@ import logging
 import json
 import argparse
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
+
+import pandas as pd
 from pathlib import Path
 from typing import Optional, Dict
 
 from utils import resolve_pip_size
 from strategy import PurePriceActionStrategy, TradingSignal
 from state_manager import StateManager, save_strategy_state, load_strategy_state
+from history_analysis import HistoricalAnalyzer, HistoricalSnapshot
 
 def configure_logging(console_level: str = 'INFO') -> None:
     """Configure production-friendly logging for console and file.
@@ -83,6 +86,11 @@ class Config:
             self.pattern_score_threshold = trading.get('pattern_score_threshold', 0.6)
             self.pattern_strong_threshold = trading.get('pattern_strong_threshold', 0.8)
             self.allowed_patterns = trading.get('allowed_patterns', None)
+            self.pattern_use_trading_tf = trading.get('pattern_use_trading_tf', False)
+            self.htf_pattern_timeframe = trading.get('htf_pattern_timeframe', None)
+            self.htf_pattern_window = trading.get('htf_pattern_window', self.pattern_window)
+            self.htf_pattern_score_threshold = trading.get('htf_pattern_score_threshold', self.pattern_score_threshold)
+            self.require_htf_pattern_alignment = trading.get('require_htf_pattern_alignment', True)
             self.dup_relax_on_strong_pattern = trading.get('dup_relax_on_strong_pattern', True)
             self.headroom_relax_pct_on_strong = trading.get('headroom_relax_pct_on_strong', 0.25)
             self.obstacle_buffer_relax_pct_on_strong = trading.get('obstacle_buffer_relax_pct_on_strong', 0.3)
@@ -125,6 +133,9 @@ class Config:
             self.amd_reversal_confirmation_bars = manip.get('reversal_confirmation_bars', 3)
             self.amd_reversal_threshold_pips = manip.get('reversal_threshold_pips', 15)
 
+            # Historical analysis defaults
+            self.historical_analysis = data.get('historical_analysis', {}) or {}
+
             # Symbols
             self.symbols = []
             for s in data.get('symbols', []) or []:
@@ -160,6 +171,11 @@ class Config:
         self.pattern_score_threshold = 0.6
         self.pattern_strong_threshold = 0.8
         self.allowed_patterns = None
+        self.pattern_use_trading_tf = False
+        self.htf_pattern_timeframe = None
+        self.htf_pattern_window = self.pattern_window
+        self.htf_pattern_score_threshold = self.pattern_score_threshold
+        self.require_htf_pattern_alignment = False
         self.dup_relax_on_strong_pattern = True
         self.headroom_relax_pct_on_strong = 0.25
         self.obstacle_buffer_relax_pct_on_strong = 0.3
@@ -180,6 +196,7 @@ class Config:
         self.symbols = [{'name': 'EURUSD', 'timeframes': ['M15']}]
         # AMD defaults (disabled)
         self.amd_enabled = False
+        self.historical_analysis = {}
         # No momentum filter config; price-action + MTF context only
 
 class TradingBot:
@@ -190,6 +207,9 @@ class TradingBot:
         self.strategy = None
         self.risk_manager = None
         self.trade_logger = None
+        self.historical_analyzer = HistoricalAnalyzer(config) if getattr(config, 'historical_analysis', None) else None
+        self._historical_snapshots: Dict[str, HistoricalSnapshot] = {}
+        self._historical_last_refresh: Dict[str, datetime] = {}
         
         # Persist state files under a dedicated folder
         self.state_manager = StateManager('symbol_state')
@@ -211,6 +231,114 @@ class TradingBot:
             'spring_confirmations': 0,
             'upthrust_confirmations': 0
         }
+
+    async def _get_historical_snapshot(self, symbol: str, pip_size: float, trading_df: Optional[pd.DataFrame]) -> Optional[HistoricalSnapshot]:
+        if not self.historical_analyzer or not getattr(self.config, 'historical_analysis', {}):
+            return None
+        try:
+            params = self.historical_analyzer.resolve_params(symbol)
+        except Exception:
+            params = getattr(self.config, 'historical_analysis', {}) or {}
+        if not params.get('enabled', False):
+            return None
+
+        refresh_minutes = float(
+            params.get(
+                'refresh_interval_minutes',
+                getattr(self.config, 'historical_analysis', {}).get('refresh_interval_minutes', 60),
+            )
+            or 60.0
+        )
+        now = datetime.now(timezone.utc)
+        last = self._historical_last_refresh.get(symbol)
+        if last and (now - last) < timedelta(minutes=refresh_minutes):
+            return self._historical_snapshots.get(symbol)
+
+        daily_tf = params.get('daily_timeframe', 'D1')
+        macro_bars = int(params.get('macro_window_bars', 240) or 240)
+        try:
+            daily_df = await self.market_data.fetch_data(symbol, daily_tf, macro_bars + 5)
+        except Exception as exc:
+            logger.warning("%s: failed to fetch %s history for analysis: %s", symbol, daily_tf, exc)
+            return self._historical_snapshots.get(symbol)
+        if daily_df is None:
+            return self._historical_snapshots.get(symbol)
+
+        def _fetcher(sym: str, tf: str, bars: int):
+            if sym == symbol and tf == daily_tf:
+                return daily_df
+            try:
+                rates = self.mt5_client.copy_rates_from_pos(sym, tf, 0, bars)
+                if rates is None or len(rates) == 0:
+                    return None
+                return self.market_data._process_rates(rates)
+            except Exception as exc:
+                logger.warning("%s: failed to fetch %s (%s) for historical analysis", sym, tf, exc)
+                return None
+
+        intraday_df = trading_df
+        intraday_tf = params.get('intraday_timeframe')
+        intraday_bars = params.get('intraday_bars')
+        if intraday_tf and intraday_tf != daily_tf:
+            try:
+                bars = int(intraday_bars or self._approx_bars_per_day(intraday_tf) or 100)
+                intraday_df = await self.market_data.fetch_data(symbol, intraday_tf, bars)
+            except Exception as exc:
+                logger.warning("%s: failed to fetch %s intraday data (%s); falling back to trading timeframe", symbol, intraday_tf, exc)
+                intraday_df = trading_df
+
+        intraday_today = self._intraday_today(intraday_df, intraday_tf or daily_tf)
+
+        snapshot = self.historical_analyzer.refresh_symbol(
+            symbol,
+            fetcher=_fetcher,
+            pip_size=pip_size,
+            intraday_df=intraday_today,
+        )
+        if snapshot:
+            self._historical_snapshots[symbol] = snapshot
+            self._historical_last_refresh[symbol] = now
+            return snapshot
+        return self._historical_snapshots.get(symbol)
+
+    def _intraday_today(self, df: Optional[pd.DataFrame], timeframe: str) -> Optional[pd.DataFrame]:
+        if df is None or len(df) == 0:
+            return None
+        try:
+            idx = pd.to_datetime(df.index)
+        except Exception:
+            return None
+        if len(idx) == 0:
+            return None
+        if idx.tz is None:
+            idx = idx.tz_localize(timezone.utc)
+        else:
+            idx = idx.tz_convert(timezone.utc)
+        last_ts = idx[-1]
+        start_of_day = last_ts.normalize()
+        try:
+            mask = idx >= start_of_day
+            subset = df.loc[mask]
+            if subset is not None and len(subset):
+                return subset
+        except Exception:
+            pass
+        approx = self._approx_bars_per_day(timeframe)
+        if approx:
+            return df.tail(int(approx))
+        return None
+
+    def _approx_bars_per_day(self, tf: str) -> Optional[int]:
+        tfu = (tf or '').upper()
+        mapping = {
+            'M1': 1440,
+            'M5': 288,
+            'M15': 96,
+            'M30': 48,
+            'H1': 24,
+            'H4': 6,
+        }
+        return mapping.get(tfu)
 
     async def initialize(self):
         try:
@@ -360,6 +488,31 @@ class TradingBot:
                 type_filling_override=self.symbol_fillings.get(symbol)
             )
             if result and getattr(result, 'retcode', None) == self.mt5_client.mt5.TRADE_RETCODE_DONE:
+                order_ticket = getattr(result, 'order', None)
+                deal_ticket = getattr(result, 'deal', None)
+
+                # Get position ID - MT5 might return it directly, or we need to find it
+                position_id = getattr(result, 'position', None)
+
+                # If not in result, query MT5 immediately using order or deal ticket
+                if position_id is None and (order_ticket or deal_ticket):
+                    try:
+                        import time
+                        time.sleep(0.1)  # Brief delay for MT5 to register position
+                        positions = self.mt5_client.get_positions(symbol)
+                        for pos in (positions or []):
+                            # Match by deal ticket (position opened by this deal)
+                            pos_ticket = getattr(pos, 'ticket', None)
+                            if pos_ticket == deal_ticket or pos_ticket == order_ticket:
+                                position_id = pos_ticket
+                                break
+                            # Also check position identifier
+                            if getattr(pos, 'identifier', None) == deal_ticket:
+                                position_id = getattr(pos, 'ticket', None)
+                                break
+                    except Exception as e:
+                        logger.warning(f"{symbol}: Failed to get position_id: {e}")
+
                 trade = {
                     'timestamp': datetime.now(timezone.utc),
                     'symbol': symbol,
@@ -370,9 +523,9 @@ class TradingBot:
                     'volume': volume,
                     'stop_loss': signal.stop_loss,
                     'take_profit': signal.take_profit,
-                    'order_ticket': getattr(result, 'order', None),
-                    'deal_ticket': getattr(result, 'deal', None),
-                    'position_id': getattr(result, 'position', None),
+                    'order_ticket': order_ticket,
+                    'deal_ticket': deal_ticket,
+                    'position_id': position_id,
                     'reason': signal.reason,
                     'confidence': signal.confidence,
                     'signal_time': signal.timestamp,
@@ -380,11 +533,15 @@ class TradingBot:
                     'pattern_score': getattr(signal, 'pattern_score', None),
                     'pattern_dir': getattr(signal, 'pattern_dir', None),
                     'pattern_primary': getattr(signal, 'pattern_primary', None),
+                    'pattern_timeframe': getattr(signal, 'pattern_timeframe', None),
+                    'hist_trend_bias': getattr(signal, 'hist_trend_bias', None),
+                    'hist_breakout_rate': getattr(signal, 'hist_breakout_rate', None),
+                    'hist_adr_progress': getattr(signal, 'hist_adr_progress', None),
                     'status': 'OPEN'
                 }
                 self.trade_logger.log_trade(trade)
                 ep = trade['entry_price'] if trade['entry_price'] is not None else exec_price
-                logger.info(f"EXECUTED {symbol} {trade['order_type']} @{ep:.5f} vol={volume:.2f} order={trade['order_ticket']} deal={trade['deal_ticket']}")
+                logger.info(f"EXECUTED {symbol} {trade['order_type']} @{ep:.5f} vol={volume:.2f} order={order_ticket} deal={deal_ticket} pos={position_id}")
                 return result
             else:
                 err = getattr(result, 'comment', 'No result') if result else 'No result'
@@ -423,6 +580,16 @@ class TradingBot:
             candles = await self.market_data.fetch_data(symbol, timeframe, _required_bars_for_timeframe(timeframe))
             if candles is None:
                 return
+            intraday_today = self._intraday_today(candles, timeframe)
+
+            symbol_info = None
+            pip_for_hist = None
+            try:
+                symbol_info = self.mt5_client.get_symbol_info(symbol)
+                if symbol_info:
+                    pip_for_hist = resolve_pip_size(symbol, symbol_info, self.config)
+            except Exception:
+                pip_for_hist = None
 
             # Fetch additional timeframes for multi-timeframe context (do not trade them here)
             mtf_context = {}
@@ -434,11 +601,16 @@ class TradingBot:
             except Exception:
                 mtf_context = {}
 
-            
+            hist_snapshot = None
+            if pip_for_hist and pip_for_hist > 0:
+                hist_snapshot = await self._get_historical_snapshot(symbol, pip_for_hist, intraday_today)
 
-            
-
-            signal = self.strategy.generate_signal(candles, symbol, mtf_context=mtf_context if mtf_context else None)
+            signal = self.strategy.generate_signal(
+                candles,
+                symbol,
+                mtf_context=mtf_context if mtf_context else None,
+                historical_snapshot=hist_snapshot,
+            )
             if signal:
                 # Skip if an existing position with same direction and our magic exists
                 try:
@@ -463,30 +635,68 @@ class TradingBot:
             if not open_trades:
                 return
 
-            open_positions = self.mt5_client.get_all_positions()
-
             for trade in open_trades:
-                # Find the position for this trade
+                symbol = trade.get('symbol')
                 position_id = trade.get('position_id')
                 deal_ticket = trade.get('deal_ticket')
+                order_ticket = trade.get('order_ticket')
 
-                # If position_id is None, try to find it from the open positions using deal_ticket
-                if position_id is None and deal_ticket is not None:
-                    for p in (open_positions or []):
-                        # Match by checking if this position was opened by our deal
-                        if getattr(p, 'identifier', None) == deal_ticket or getattr(p, 'ticket', None) == deal_ticket:
-                            position_id = getattr(p, 'ticket', None)
-                            # Update the trade with the found position_id for future reference
-                            trade['position_id'] = position_id
-                            self.trade_logger.persist_all()
-                            break
-
-                # Skip monitoring if we still can't find a valid position_id
+                # If position_id is still None, try to find it from history or current positions
                 if position_id is None:
+                    if deal_ticket or order_ticket:
+                        try:
+                            # First check current positions
+                            positions = self.mt5_client.get_positions(symbol) if symbol else self.mt5_client.get_all_positions()
+                            for pos in (positions or []):
+                                pos_ticket = getattr(pos, 'ticket', None)
+                                if pos_ticket == deal_ticket or pos_ticket == order_ticket:
+                                    position_id = pos_ticket
+                                    trade['position_id'] = position_id
+                                    self.trade_logger.persist_all()
+                                    logger.debug(f"Found position_id {position_id} for trade {order_ticket}")
+                                    break
+                                # Check identifier field
+                                if getattr(pos, 'identifier', None) == deal_ticket:
+                                    position_id = getattr(pos, 'ticket', None)
+                                    trade['position_id'] = position_id
+                                    self.trade_logger.persist_all()
+                                    logger.debug(f"Found position_id {position_id} via identifier for trade {order_ticket}")
+                                    break
+                        except Exception as e:
+                            logger.warning(f"Error finding position_id for {order_ticket}: {e}")
+
+                # If we still don't have position_id, try to find closed position in history
+                if position_id is None and deal_ticket:
+                    try:
+                        # Query history to find the position
+                        from_date = datetime.now(timezone.utc) - timedelta(days=7)
+                        to_date = datetime.now(timezone.utc)
+                        history_deals = self.mt5_client.get_history_deals(from_date, to_date)
+
+                        for deal in (history_deals or []):
+                            if getattr(deal, 'deal', None) == deal_ticket or getattr(deal, 'order', None) == order_ticket:
+                                position_id = getattr(deal, 'position_id', None)
+                                if position_id:
+                                    trade['position_id'] = position_id
+                                    self.trade_logger.persist_all()
+                                    logger.debug(f"Found position_id {position_id} from history for trade {order_ticket}")
+                                    break
+                    except Exception as e:
+                        logger.warning(f"Error searching history for position_id: {e}")
+
+                # Skip if we still can't find position_id
+                if position_id is None:
+                    logger.debug(f"Cannot find position_id for trade {order_ticket}, skipping monitor")
                     continue
 
-                # Check if position is still open
-                position_still_open = any(getattr(p, 'ticket', None) == position_id for p in (open_positions or []))
+                # Check if position is still open by querying MT5 directly
+                position_still_open = False
+                try:
+                    current_positions = self.mt5_client.get_positions(symbol) if symbol else self.mt5_client.get_all_positions()
+                    position_still_open = any(getattr(p, 'ticket', None) == position_id for p in (current_positions or []))
+                except Exception as e:
+                    logger.warning(f"Error checking if position {position_id} is open: {e}")
+                    continue
 
                 if not position_still_open:
                     # The trade is no longer open, so we need to update its status
