@@ -114,25 +114,6 @@ class Config:
             self.risk_reward_ratio = risk.get('risk_reward_ratio', 2.0)
             self.use_equity = risk.get('use_equity', True)
 
-            # AMD settings
-            amd = data.get('amd_settings', {})
-            self.amd_enabled = amd.get('enabled', False)
-            self.amd_asian_session_hours = tuple(amd.get('asian_session_hours', [0, 8]))
-            self.amd_london_session_hours = tuple(amd.get('london_session_hours', [8, 16]))
-            self.amd_ny_session_hours = tuple(amd.get('ny_session_hours', [13, 22]))
-            self.amd_late_ny_hour_utc = amd.get('late_ny_hour_utc', 19)
-            self.amd_asia_accumulation_threshold_pips = amd.get('asia_accumulation_threshold_pips', 30.0)
-            self.amd_london_accumulation_threshold_pips = amd.get('london_accumulation_threshold_pips', 25.0)
-            self.level_merge_proximity_pips = amd.get('level_merge_proximity_pips', 10)
-            # AMD logging preferences
-            self.amd_log_on_change = amd.get('log_on_change', True)
-            self.amd_log_each_loop = amd.get('log_each_loop', False)
-            # Manipulation detection
-            manip = amd.get('manipulation_detection', {})
-            self.amd_sweep_threshold_pips = manip.get('sweep_threshold_pips', 5)
-            self.amd_reversal_confirmation_bars = manip.get('reversal_confirmation_bars', 3)
-            self.amd_reversal_threshold_pips = manip.get('reversal_threshold_pips', 15)
-
             # Historical analysis defaults
             self.historical_analysis = data.get('historical_analysis', {}) or {}
 
@@ -194,8 +175,6 @@ class Config:
         self.max_drawdown = 0.05
         self.risk_reward_ratio = 2.0
         self.symbols = [{'name': 'EURUSD', 'timeframes': ['M15']}]
-        # AMD defaults (disabled)
-        self.amd_enabled = False
         self.historical_analysis = {}
         # No momentum filter config; price-action + MTF context only
 
@@ -216,8 +195,7 @@ class TradingBot:
         self.running = False
         self.symbol_fillings = {}
 
-        # Session and statistics tracking
-        self._last_session = None
+        # Statistics tracking
         self._last_hour = None
         self._hourly_stats = {
             'symbols_processed': 0,
@@ -340,6 +318,15 @@ class TradingBot:
         }
         return mapping.get(tfu)
 
+    def _log_talib_status(self):
+        """Log whether TA-Lib is importable for pattern gates."""
+        try:
+            import talib  # type: ignore
+            ver = getattr(talib, '__version__', 'unknown')
+            logger.info(f"TA-Lib available (version {ver}); pattern gates active")
+        except Exception:
+            logger.warning("TA-Lib not available; pattern gates will fail-open (no blocking)")
+
     async def initialize(self):
         try:
             from mt5_client import MetaTrader5Client
@@ -352,12 +339,10 @@ class TradingBot:
                 raise RuntimeError('Failed to initialize MT5 connection')
 
             self.market_data = MarketData(self.mt5_client, self.config)
-            self.strategy = PurePriceActionStrategy(self.config)
+            self.strategy = PurePriceActionStrategy(self.config, self.mt5_client)
             self.risk_manager = RiskManager(self.config, self.mt5_client)
             self.trade_logger = TradeLogger('trades.log')
-
-            # Initialize AMD analyzer if enabled
-            
+            self._log_talib_status()
 
             # Load strategy state (duplicate prevention)
             try:
@@ -365,20 +350,6 @@ class TradingBot:
                     logger.info("Strategy: Duplicate prevention state restored")
             except Exception as e:
                 logger.warning(f"Strategy: Failed to restore state: {e}")
-
-            # Log current trading session (UTC) on startup
-            try:
-                from sessions import get_current_session
-                now_utc = datetime.now(timezone.utc)
-                session = get_current_session(
-                    now_utc,
-                    self.config.amd_asian_session_hours,
-                    self.config.amd_london_session_hours,
-                    self.config.amd_ny_session_hours,
-                )
-                logger.info(f"Current session (UTC): {session}")
-            except Exception:
-                pass
 
             # Strategy snapshot
             try:
@@ -768,27 +739,6 @@ class TradingBot:
         except Exception as e:
             logger.error(f"Error monitoring open trades: {e}", exc_info=True)
 
-    def _check_session_transition(self):
-        """Check if trading session has changed and log transition."""
-        try:
-            from sessions import get_current_session
-            now = datetime.now(timezone.utc)
-            current_session = get_current_session(
-                now,
-                self.config.amd_asian_session_hours,
-                self.config.amd_london_session_hours,
-                self.config.amd_ny_session_hours
-            )
-
-            if self._last_session is not None and current_session != self._last_session:
-                logger.info(f"{'='*60}")
-                logger.info(f"SESSION TRANSITION: {self._last_session} → {current_session} ({now.strftime('%H:%M UTC')})")
-                logger.info(f"{'='*60}")
-
-            self._last_session = current_session
-        except Exception:
-            pass
-
     def _check_hourly_stats(self):
         """Check if hour has changed and log hourly statistics."""
         try:
@@ -837,15 +787,21 @@ class TradingBot:
         logger.info("Starting core trading loop")
 
         # Initialize tracking
-        self._check_session_transition()
         self._check_hourly_stats()
 
         loop_count = 0  # For periodic state persistence
 
         while self.running:
             try:
-                # Check for session/hour transitions
-                self._check_session_transition()
+                # Ensure MT5 connectivity before processing
+                if not self.mt5_client.is_connected():
+                    logger.warning("MT5 disconnected; attempting reconnect before processing loop")
+                    self.mt5_client.reconnect()
+                    if not self.mt5_client.is_connected():
+                        await asyncio.sleep(self.config.main_loop_interval)
+                        continue
+
+                # Check for hour transitions
                 self._check_hourly_stats()
 
                 await self.monitor_open_trades()

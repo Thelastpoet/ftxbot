@@ -20,8 +20,7 @@
     "htf_pattern_score_threshold": 0.6,
     "require_htf_pattern_alignment": true,
     "spread_multiplier_threshold": 1.5,
-    "spread_lookback_bars": 20,
-    "session_close_buffer_minutes": 20
+    "spread_lookback_bars": 20
   },
   "risk_management": {
     "risk_per_trade": 0.01,
@@ -53,23 +52,6 @@
     "breakout_threshold_pips": 5,
     "min_breakout_samples": 10,
     "min_breakout_success_rate": 0.45
-  },
-  "amd_settings": {
-    "enabled": true,
-    "log_on_change": true,
-    "log_each_loop": false,
-    "asian_session_hours": [0, 8],
-    "london_session_hours": [8, 16],
-    "ny_session_hours": [13, 22],
-    "late_ny_hour_utc": 19,
-    "asia_accumulation_threshold_pips": 30.0,
-    "london_accumulation_threshold_pips": 25.0,
-    "level_merge_proximity_pips": 10,
-    "manipulation_detection": {
-      "sweep_threshold_pips": 5,
-      "reversal_confirmation_bars": 3,
-      "reversal_threshold_pips": 15
-    }
   },
   "symbols": [
   {

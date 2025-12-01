@@ -45,8 +45,11 @@ class BreakoutInfo(NamedTuple):
 class PurePriceActionStrategy:
     """Minimal breakout strategy based on swing levels and fixed pip thresholds."""
 
-    def __init__(self, config):
+    def __init__(self, config, mt5_client=None):
         self.config = config
+        # Prefer injected MT5 client (with reconnect/selection) over raw module access
+        self.mt5_client = mt5_client
+        self.mt5 = getattr(mt5_client, "mt5", mt5)
         # Core params only
         self.lookback_period = getattr(config, 'lookback_period', 20)
         self.swing_window = getattr(config, 'swing_window', 5)
@@ -81,6 +84,19 @@ class PurePriceActionStrategy:
         # Breakout acceptance controls
         self.entry_mode = str(getattr(config, 'entry_mode', 'confirm')).lower()
         self.entry_confirmation_bars = int(getattr(config, 'entry_confirmation_bars', 1))
+
+    # -----------------------------
+    # MT5 helpers (fail-safe)
+    # -----------------------------
+    def _get_tick(self, symbol: str):
+        if self.mt5_client:
+            return self.mt5_client.get_symbol_info_tick(symbol)
+        return mt5.symbol_info_tick(symbol)
+
+    def _get_symbol_info(self, symbol: str):
+        if self.mt5_client:
+            return self.mt5_client.get_symbol_info(symbol)
+        return mt5.symbol_info(symbol)
 
     # -----------------------------
     # Swing points and S/R levels
@@ -118,7 +134,7 @@ class PurePriceActionStrategy:
         Number of levels is configurable via max_sr_levels (default 5).
         Proximity threshold can be overridden per symbol.
         """
-        symbol_info = mt5.symbol_info(symbol)
+        symbol_info = self._get_symbol_info(symbol)
         if not symbol_info:
             return [], []
         pip = get_pip_size(symbol_info)
@@ -264,6 +280,16 @@ class PurePriceActionStrategy:
     ) -> bool:
         if snapshot is None or not params.get('enabled', False):
             return False
+
+        try:
+            max_age = float(params.get('max_data_age_minutes', 0) or 0)
+            if max_age > 0 and getattr(snapshot, 'generated_at', None):
+                age_minutes = (datetime.now(timezone.utc) - snapshot.generated_at).total_seconds() / 60.0
+                if age_minutes > max_age:
+                    logger.info(f"[INFO] {symbol}: historical snapshot stale ({age_minutes:.1f}m > {max_age:.1f}m); skipping historical gate")
+                    return False
+        except Exception:
+            pass
 
         if params.get('block_on_adr_exhaustion', True) and getattr(snapshot, 'adr_exhausted', False):
             current_block_state = "HIST_ADR_EXHAUSTED"
@@ -429,16 +455,13 @@ class PurePriceActionStrategy:
             if data is None or len(data) < max(20, self.lookback_period):
                 return None
 
-            tick = mt5.symbol_info_tick(symbol)
-            info = mt5.symbol_info(symbol)
+            tick = self._get_tick(symbol)
+            info = self._get_symbol_info(symbol)
             if not tick or not info:
                 return None
             pip = resolve_pip_size(symbol, info, self.config)
             if pip <= 0:
                 return None
-
-            # AMD Filter
-            # Directional filtering applied later after breakout detection (see AMD Filter 2)
 
             # Calculate current spread
             current_spread_pips = abs(float(tick.ask) - float(tick.bid)) / float(pip)
@@ -484,28 +507,6 @@ class PurePriceActionStrategy:
                         current_block_state = "ELEVATED_SPREAD"
                         if self._last_block_reason.get(symbol) != current_block_state:
                             logger.info(f"[BLOCK] {symbol}: elevated spread ({current_spread_pips:.1f}p > {spread_multiplier}x avg {avg_spread_pips:.1f}p)")
-                            self._last_block_reason[symbol] = current_block_state
-                        return None
-            except Exception:
-                pass
-
-            # Session awareness: Block new entries near session close
-            try:
-                session_close_buffer = int(getattr(self.config, 'session_close_buffer_minutes', 20))
-
-                if session_close_buffer > 0:
-                    from sessions import get_minutes_until_session_close
-
-                    minutes_remaining = get_minutes_until_session_close(
-                        asia_hours=getattr(self.config, 'amd_asian_session_hours', (0, 8)),
-                        london_hours=getattr(self.config, 'amd_london_session_hours', (8, 16)),
-                        ny_hours=getattr(self.config, 'amd_ny_session_hours', (13, 22))
-                    )
-
-                    if minutes_remaining > 0 and minutes_remaining < session_close_buffer:
-                        current_block_state = "SESSION_CLOSE_APPROACHING"
-                        if self._last_block_reason.get(symbol) != current_block_state:
-                            logger.info(f"[BLOCK] {symbol}: session close approaching ({minutes_remaining}min remaining)")
                             self._last_block_reason[symbol] = current_block_state
                         return None
             except Exception:
@@ -568,7 +569,7 @@ class PurePriceActionStrategy:
             except Exception:
                 pass
 
-            # Do not inject AMD levels into S/R; keep breakout engine independent
+            # Keep breakout engine independent from external level injectors
 
             # Debug observability
             logger.debug(f"{symbol}: pip={pip:.5f} thr_pips={self.breakout_threshold_pips} res={resistance} sup={support}")
@@ -594,7 +595,7 @@ class PurePriceActionStrategy:
             # Use last closed candle close for breakout confirmation
             last_close = float(completed.iloc[-1]['close'])
 
-            # Use configured breakout threshold (constant, not AMD-adjusted)
+            # Use configured breakout threshold (constant)
             bo = self._detect_breakout_close(last_close, resistance, support, thr_pips, pip)
             if not bo:
                 return None
@@ -602,39 +603,42 @@ class PurePriceActionStrategy:
             logger.debug(f"{symbol}: breakout type={bo.type} level={bo.level:.5f} entry={bo.entry_price:.5f}")
 
             # Zone-size filter: Skip if opposing S/R is too close (whipsaw risk)
+            enable_zone_guard = bool(getattr(self.config, 'enable_zone_guard', True))
             min_zone_pips = float(getattr(self.config, 'min_breakout_zone_pips', 20))
             try:
                 for sc in getattr(self.config, 'symbols', []) or []:
                     if sc.get('name') == symbol:
+                        enable_zone_guard = bool(sc.get('enable_zone_guard', enable_zone_guard))
                         min_zone_pips = float(sc.get('min_breakout_zone_pips', min_zone_pips))
                         break
             except Exception:
                 pass
 
-            if bo.type == 'bullish':
-                # Check nearest support below broken resistance
-                supports_below = [s for s in ctx_sup if s < bo.level]
-                if supports_below:
-                    nearest_support = max(supports_below)
-                    zone_size_pips = (bo.level - nearest_support) / pip
-                    if zone_size_pips < min_zone_pips:
-                        current_block_state = "ZONE_TOO_TIGHT"
-                        if self._last_block_reason.get(symbol) != current_block_state:
-                            logger.info(f"[BLOCK] {symbol}: breakout zone too tight ({zone_size_pips:.1f}p < {min_zone_pips:.1f}p min); high whipsaw risk")
-                            self._last_block_reason[symbol] = current_block_state
-                        return None
-            else:  # bearish
-                # Check nearest resistance above broken support
-                resistances_above = [r for r in ctx_res if r > bo.level]
-                if resistances_above:
-                    nearest_resistance = min(resistances_above)
-                    zone_size_pips = (nearest_resistance - bo.level) / pip
-                    if zone_size_pips < min_zone_pips:
-                        current_block_state = "ZONE_TOO_TIGHT"
-                        if self._last_block_reason.get(symbol) != current_block_state:
-                            logger.info(f"[BLOCK] {symbol}: breakout zone too tight ({zone_size_pips:.1f}p < {min_zone_pips:.1f}p min); high whipsaw risk")
-                            self._last_block_reason[symbol] = current_block_state
-                        return None
+            if enable_zone_guard and min_zone_pips > 0:
+                if bo.type == 'bullish':
+                    # Check nearest support below broken resistance
+                    supports_below = [s for s in ctx_sup if s < bo.level]
+                    if supports_below:
+                        nearest_support = max(supports_below)
+                        zone_size_pips = (bo.level - nearest_support) / pip
+                        if zone_size_pips < min_zone_pips:
+                            current_block_state = "ZONE_TOO_TIGHT"
+                            if self._last_block_reason.get(symbol) != current_block_state:
+                                logger.info(f"[BLOCK] {symbol}: breakout zone too tight ({zone_size_pips:.1f}p < {min_zone_pips:.1f}p min); high whipsaw risk")
+                                self._last_block_reason[symbol] = current_block_state
+                            return None
+                else:  # bearish
+                    # Check nearest resistance above broken support
+                    resistances_above = [r for r in ctx_res if r > bo.level]
+                    if resistances_above:
+                        nearest_resistance = min(resistances_above)
+                        zone_size_pips = (nearest_resistance - bo.level) / pip
+                        if zone_size_pips < min_zone_pips:
+                            current_block_state = "ZONE_TOO_TIGHT"
+                            if self._last_block_reason.get(symbol) != current_block_state:
+                                logger.info(f"[BLOCK] {symbol}: breakout zone too tight ({zone_size_pips:.1f}p < {min_zone_pips:.1f}p min); high whipsaw risk")
+                                self._last_block_reason[symbol] = current_block_state
+                            return None
 
             hist_params = self._resolve_historical_params(symbol)
             if self._historical_gate(symbol, hist_snapshot, hist_params, bo):
@@ -708,6 +712,7 @@ class PurePriceActionStrategy:
             # Optional trading timeframe confirmation (disabled by default to avoid delays)
             if self.enable_patterns and self.pattern_use_trading_tf:
                 try:
+                    gate_skipped = False
                     pattern_ok, info = self._candlestick_confirm(
                         completed,
                         bo,
@@ -716,12 +721,22 @@ class PurePriceActionStrategy:
                         scope="LTF",
                     )
                     pattern_info_entry = info or None
+
+                    if isinstance(pattern_info_entry, dict) and pattern_info_entry.get('skipped'):
+                        logger.warning(f"{symbol}: TA-Lib unavailable; skipping trading-tf pattern gate")
+                        pattern_info_entry = None
+                        gate_skipped = True
+                        pattern_ok = True
+
                     if pattern_info_entry is not None:
                         pattern_info_entry = dict(pattern_info_entry)
                         pattern_info_entry.setdefault('timeframe', 'trading')
                         pattern_info_entry['scope'] = 'entry'
 
-                    if not pattern_info_entry or pattern_info_entry.get('score', 0.0) == 0:
+                    if gate_skipped:
+                        logger.debug(f"{symbol}: pattern gate skipped (trading timeframe)")
+                        pattern_info_entry = None
+                    elif not pattern_info_entry or pattern_info_entry.get('score', 0.0) == 0:
                         current_block_state = "NO_PATTERN_CONFIRMATION"
                         if self._last_block_reason.get(symbol) != current_block_state:
                             logger.info(f"[BLOCK] {symbol}: no LTF pattern confirmation (score=0)")
@@ -779,6 +794,7 @@ class PurePriceActionStrategy:
                             return None
                     else:
                         try:
+                            gate_skipped = False
                             pattern_ok, info = self._candlestick_confirm(
                                 htf_completed,
                                 bo,
@@ -787,6 +803,13 @@ class PurePriceActionStrategy:
                                 scope=f"HTF-{htf_tf}",
                             )
                             pattern_info_bias = info or None
+
+                            if isinstance(pattern_info_bias, dict) and pattern_info_bias.get('skipped'):
+                                logger.warning(f"{symbol}: TA-Lib unavailable; skipping HTF ({htf_tf}) pattern gate")
+                                gate_skipped = True
+                                pattern_info_bias = None
+                                pattern_ok = True
+
                             if pattern_info_bias is not None:
                                 pattern_info_bias = dict(pattern_info_bias)
                                 pattern_info_bias.setdefault('timeframe', htf_tf)
@@ -795,7 +818,10 @@ class PurePriceActionStrategy:
                             bias_dir = pattern_info_bias.get('dir') if isinstance(pattern_info_bias, dict) else None
                             bias_score = float((pattern_info_bias or {}).get('score', 0.0) or 0.0)
 
-                            if not pattern_ok:
+                            if gate_skipped:
+                                logger.debug(f"{symbol}: pattern gate skipped (HTF {htf_tf})")
+                                pattern_info_bias = None
+                            elif not pattern_ok:
                                 if not bias_dir:
                                     current_block_state = "HTF_PATTERN_ABSENT"
                                     if self._last_block_reason.get(symbol) != current_block_state:
@@ -884,7 +910,16 @@ class PurePriceActionStrategy:
             obstacle_buffer_pips_eff = float(self.obstacle_buffer_pips)
             buf = float(obstacle_buffer_pips_eff) * float(pip)
 
-            if obstacle is not None:
+            enable_headroom_guard = bool(getattr(self.config, 'enable_headroom_guard', True))
+            try:
+                for sc in getattr(self.config, 'symbols', []) or []:
+                    if sc.get('name') == symbol:
+                        enable_headroom_guard = bool(sc.get('enable_headroom_guard', enable_headroom_guard))
+                        break
+            except Exception:
+                pass
+
+            if obstacle is not None and enable_headroom_guard:
                 # Calculate distance to obstacle
                 headroom_price = abs(obstacle - entry_eff) - buf
                 headroom_pips = max(0.0, headroom_price / float(pip))
@@ -1021,7 +1056,7 @@ class PurePriceActionStrategy:
                 if signal.hist_adr_progress is not None:
                     parts.append(f"ADRprog={float(signal.hist_adr_progress):.2f}")
                 parts.append(f"ATR={str(self.atr_source).upper()}")
-                # Add AMD context if available
+                # Add context if available
                 logger.info(" ".join(parts))
             except Exception:
                 logger.info(

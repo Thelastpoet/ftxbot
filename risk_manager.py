@@ -133,6 +133,15 @@ class RiskManager:
 
             # Side-aware current price
             current_price = float(tick.ask) if int(order_type) == 0 else float(tick.bid)
+            # Validate SL/TP are on correct sides of current price
+            if int(order_type) == 0:
+                if not (take_profit > current_price > stop_loss):
+                    logger.error("Invalid price placement for BUY: expected TP > price > SL")
+                    return False
+            else:
+                if not (take_profit < current_price < stop_loss):
+                    logger.error("Invalid price placement for SELL: expected TP < price < SL")
+                    return False
             min_stop_distance = float(symbol_info.trade_stops_level) * float(symbol_info.point)
 
             if abs(current_price - stop_loss) < min_stop_distance:

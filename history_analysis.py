@@ -119,7 +119,6 @@ class HistoricalAnalyzer:
 
         daily_tf = params.get("daily_timeframe", "D1")
         macro_bars = int(params.get("macro_window_bars", 240))
-        max_age_minutes = self._resolve_max_age_minutes(daily_tf, params)
         try:
             daily_df_raw = fetcher(symbol, daily_tf, macro_bars + 1)
         except Exception as exc:
@@ -129,7 +128,6 @@ class HistoricalAnalyzer:
             daily_df_raw,
             symbol=symbol,
             timeframe=daily_tf,
-            max_age_minutes=max_age_minutes,
         )
         if daily_df is None or len(daily_df) == 0:
             return None
@@ -269,7 +267,6 @@ class HistoricalAnalyzer:
         *,
         symbol: str,
         timeframe: str,
-        max_age_minutes: Optional[float],
     ) -> Optional[pd.DataFrame]:
         if df is None or len(df) == 0:
             logger.warning("%s: no data returned for timeframe %s", symbol, timeframe)
@@ -287,26 +284,6 @@ class HistoricalAnalyzer:
         if cleaned.empty:
             logger.warning("%s: dataframe empty after cleaning for %s", symbol, timeframe)
             return None
-        if max_age_minutes:
-            try:
-                last_ts = pd.to_datetime(cleaned.index[-1]).to_pydatetime()
-            except Exception:
-                last_ts = None
-            if last_ts:
-                if last_ts.tzinfo is None:
-                    last_ts = last_ts.replace(tzinfo=timezone.utc)
-                else:
-                    last_ts = last_ts.astimezone(timezone.utc)
-                max_age_delta = timedelta(minutes=float(max_age_minutes))
-                if datetime.now(timezone.utc) - last_ts > max_age_delta:
-                    logger.warning(
-                        "%s: %s data stale (last=%s, max_age=%s min). Attempting fallback to most recent bar.",
-                        symbol,
-                        timeframe,
-                        last_ts.isoformat(),
-                        max_age_minutes,
-                    )
-                    # allow stale data but log once; caller can decide whether to use snapshot
         return cleaned
 
     def _closed_bars(self, df: pd.DataFrame) -> Optional[pd.DataFrame]:
@@ -315,32 +292,6 @@ class HistoricalAnalyzer:
         if len(df) == 1:
             return df.copy()
         return df.iloc[:-1].copy()
-
-    def _resolve_max_age_minutes(self, timeframe: str, params: Dict[str, Any]) -> Optional[float]:
-        default = self._default_age_for_timeframe(timeframe)
-        cfg_val = params.get("max_data_age_minutes", None)
-        try:
-            if cfg_val is not None:
-                return max(float(cfg_val), default or 0.0)
-        except Exception:
-            logger.warning("Invalid max_data_age_minutes override for %s; falling back to default", timeframe)
-        return default
-
-    def _default_age_for_timeframe(self, timeframe: str) -> Optional[float]:
-        tf = (timeframe or "").upper()
-        if tf == "D1":
-            return 60 * 27  # >1 day to allow for weekend gaps
-        if tf == "H4":
-            return 60 * 6
-        if tf == "H1":
-            return 60 * 2
-        if tf == "M30":
-            return 60
-        if tf == "M15":
-            return 30
-        if tf == "M5":
-            return 15
-        return None
 
     def _compute_adr(
         self,

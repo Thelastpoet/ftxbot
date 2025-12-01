@@ -61,6 +61,8 @@ def candlestick_confirm(
     ta = _try_import_talib()
     if ta is None:
         # Fail-open in live: do not block trades if TA-Lib not importable
+        info["skipped"] = True
+        info["reason"] = "talib_unavailable"
         return True, info
 
     if df is None or len(df) == 0:
