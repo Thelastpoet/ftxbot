@@ -10,57 +10,13 @@ import argparse
 import sys
 from datetime import datetime, timezone, timedelta
 
-import pandas as pd
 from pathlib import Path
 from typing import Optional, Dict
 
 from utils import resolve_pip_size
 from strategy import PurePriceActionStrategy, TradingSignal
 from state_manager import StateManager, save_strategy_state, load_strategy_state
-from history_analysis import HistoricalAnalyzer, HistoricalSnapshot
-
-def configure_logging(console_level: str = 'INFO') -> None:
-    """Configure production-friendly logging for console and file.
-
-    - Console: concise format at requested level (default INFO).
-    - File: full detail at DEBUG in forex_bot.log.
-    - Suppress noisy third-party debug (e.g., asyncio proactor message).
-    """
-    level_map = {
-        'DEBUG': logging.DEBUG,
-        'INFO': logging.INFO,
-        'WARNING': logging.WARNING,
-        'ERROR': logging.ERROR,
-        'CRITICAL': logging.CRITICAL,
-    }
-    root = logging.getLogger()
-    root.setLevel(logging.DEBUG)
-    # Clear existing handlers to avoid duplicates on reload
-    for h in list(root.handlers):
-        root.removeHandler(h)
-
-    # File handler: verbose
-    fh = logging.FileHandler('forex_bot.log', encoding='utf-8')
-    fh.setLevel(logging.DEBUG)
-    fh.setFormatter(logging.Formatter(
-        fmt='%(asctime)s | %(levelname)s | %(name)s | %(message)s',
-        datefmt='%Y-%m-%d %H:%M:%S'
-    ))
-
-    # Console handler: concise
-    ch = logging.StreamHandler()
-    ch.setLevel(level_map.get(str(console_level).upper(), logging.INFO))
-    ch.setFormatter(logging.Formatter(
-        fmt='%(asctime)s | %(levelname)s | %(name)s | %(message)s',
-        datefmt='%H:%M:%S'
-    ))
-
-    root.addHandler(fh)
-    root.addHandler(ch)
-
-    # Tame noisy libraries
-    logging.getLogger('asyncio').setLevel(logging.WARNING)
-    logging.getLogger('MetaTrader5').setLevel(logging.WARNING)
+from logging_utils import configure_logging
 
 logger = logging.getLogger(__name__)
 
@@ -80,49 +36,40 @@ class Config:
             self.breakout_threshold = trading.get('breakout_threshold_pips', 7)
             self.min_stop_loss_pips = trading.get('min_stop_loss_pips', 20)
             self.stop_loss_buffer_pips = trading.get('stop_loss_buffer_pips', 15)
-            # Patterns and ATR (TA-Lib) integration
-            self.enable_patterns = trading.get('enable_patterns', True)
-            self.pattern_window = trading.get('pattern_window', 3)
-            self.pattern_score_threshold = trading.get('pattern_score_threshold', 0.6)
-            self.pattern_strong_threshold = trading.get('pattern_strong_threshold', 0.8)
-            self.allowed_patterns = trading.get('allowed_patterns', None)
-            self.pattern_use_trading_tf = trading.get('pattern_use_trading_tf', False)
-            self.htf_pattern_timeframe = trading.get('htf_pattern_timeframe', None)
-            self.htf_pattern_window = trading.get('htf_pattern_window', self.pattern_window)
-            self.htf_pattern_score_threshold = trading.get('htf_pattern_score_threshold', self.pattern_score_threshold)
-            self.require_htf_pattern_alignment = trading.get('require_htf_pattern_alignment', True)
-            self.dup_relax_on_strong_pattern = trading.get('dup_relax_on_strong_pattern', True)
-            self.headroom_relax_pct_on_strong = trading.get('headroom_relax_pct_on_strong', 0.25)
-            self.obstacle_buffer_relax_pct_on_strong = trading.get('obstacle_buffer_relax_pct_on_strong', 0.3)
-            self.atr_source = trading.get('atr_source', 'talib')
-            # ATR/headroom controls
+            # ATR for dynamic SL buffer
             self.atr_period = trading.get('atr_period', 14)
             self.atr_sl_k = trading.get('atr_sl_k', 0.6)
             self.min_sl_buffer_pips = trading.get('min_sl_buffer_pips', 10)
             self.max_sl_pips = trading.get('max_sl_pips', None)
-            self.min_headroom_rr = trading.get('min_headroom_rr', 1.2)
-            self.max_rr_cap = trading.get('max_rr_cap', None)
-            # Optional global guards (used as defaults when per-symbol not set)
             self.spread_guard_pips_default = trading.get('spread_guard_pips', None)
-            self.duplicate_breakout_distance_pips_default = trading.get('duplicate_breakout_distance_pips', None)
-            self.duplicate_breakout_window_seconds_default = trading.get('duplicate_breakout_window_seconds', None)
 
             risk = data.get('risk_management', {})
             self.risk_per_trade = risk.get('risk_per_trade', 0.01)
             self.fixed_lot_size = risk.get('fixed_lot_size', None)
             self.max_drawdown = risk.get('max_drawdown_percentage', 0.05)
             self.risk_reward_ratio = risk.get('risk_reward_ratio', 2.0)
+            self.min_rr = risk.get('min_rr', 1.0)
             self.use_equity = risk.get('use_equity', True)
-
-            # Historical analysis defaults
-            self.historical_analysis = data.get('historical_analysis', {}) or {}
 
             # Symbols
             self.symbols = []
             for s in data.get('symbols', []) or []:
-                entry = dict(s)
+                entry = {
+                    'name': s.get('name'),
+                    'timeframes': s.get('timeframes', ['M15']),
+                    # Per-symbol overrides (only essential ones)
+                    'pip_unit': s.get('pip_unit'),
+                    'min_stop_loss_pips': s.get('min_stop_loss_pips'),
+                    'stop_loss_buffer_pips': s.get('stop_loss_buffer_pips'),
+                    'breakout_threshold_pips': s.get('breakout_threshold_pips'),
+                    'risk_reward_ratio': s.get('risk_reward_ratio'),
+                    'spread_guard_pips': s.get('spread_guard_pips'),
+                    'max_sl_pips': s.get('max_sl_pips'),
+                }
+                # Remove None values
+                entry = {k: v for k, v in entry.items() if v is not None}
                 entry.setdefault('name', s.get('name'))
-                entry.setdefault('timeframes', s.get('timeframes', ['M15']))
+                entry.setdefault('timeframes', ['M15'])
                 self.symbols.append(entry)
 
             # CLI overrides
@@ -147,36 +94,17 @@ class Config:
         self.breakout_threshold = 7
         self.min_stop_loss_pips = 20
         self.stop_loss_buffer_pips = 15
-        self.enable_patterns = True
-        self.pattern_window = 3
-        self.pattern_score_threshold = 0.6
-        self.pattern_strong_threshold = 0.8
-        self.allowed_patterns = None
-        self.pattern_use_trading_tf = False
-        self.htf_pattern_timeframe = None
-        self.htf_pattern_window = self.pattern_window
-        self.htf_pattern_score_threshold = self.pattern_score_threshold
-        self.require_htf_pattern_alignment = False
-        self.dup_relax_on_strong_pattern = True
-        self.headroom_relax_pct_on_strong = 0.25
-        self.obstacle_buffer_relax_pct_on_strong = 0.3
-        self.atr_source = 'talib'
         self.atr_period = 14
         self.atr_sl_k = 0.6
         self.min_sl_buffer_pips = 10
         self.max_sl_pips = None
-        self.min_headroom_rr = 1.2
-        self.max_rr_cap = None
         self.spread_guard_pips_default = None
-        self.duplicate_breakout_distance_pips_default = None
-        self.duplicate_breakout_window_seconds_default = None
         self.risk_per_trade = 0.01
         self.fixed_lot_size = None
         self.max_drawdown = 0.05
         self.risk_reward_ratio = 2.0
+        self.min_rr = 1.0
         self.symbols = [{'name': 'EURUSD', 'timeframes': ['M15']}]
-        self.historical_analysis = {}
-        # No momentum filter config; price-action + MTF context only
 
 class TradingBot:
     def __init__(self, config: Config):
@@ -186,146 +114,28 @@ class TradingBot:
         self.strategy = None
         self.risk_manager = None
         self.trade_logger = None
-        self.historical_analyzer = HistoricalAnalyzer(config) if getattr(config, 'historical_analysis', None) else None
-        self._historical_snapshots: Dict[str, HistoricalSnapshot] = {}
-        self._historical_last_refresh: Dict[str, datetime] = {}
-        
+
         # Persist state files under a dedicated folder
         self.state_manager = StateManager('symbol_state')
         self.running = False
         self.symbol_fillings = {}
 
-        # Statistics tracking
-        self._last_hour = None
-        self._hourly_stats = {
-            'symbols_processed': 0,
-            'breakouts_detected': 0,
-            'breakouts_bullish': 0,
-            'breakouts_bearish': 0,
-            'signals_generated': 0,
-            'signals_blocked': 0,
-            'block_reasons': {},
-            'trades_executed': 0,
-            'spring_confirmations': 0,
-            'upthrust_confirmations': 0
-        }
+    def _is_rollover_period(self) -> bool:
+        """Check if current time is during daily Forex rollover (avoid trading).
 
-    async def _get_historical_snapshot(self, symbol: str, pip_size: float, trading_df: Optional[pd.DataFrame]) -> Optional[HistoricalSnapshot]:
-        if not self.historical_analyzer or not getattr(self.config, 'historical_analysis', {}):
-            return None
-        try:
-            params = self.historical_analyzer.resolve_params(symbol)
-        except Exception:
-            params = getattr(self.config, 'historical_analysis', {}) or {}
-        if not params.get('enabled', False):
-            return None
-
-        refresh_minutes = float(
-            params.get(
-                'refresh_interval_minutes',
-                getattr(self.config, 'historical_analysis', {}).get('refresh_interval_minutes', 60),
-            )
-            or 60.0
-        )
-        now = datetime.now(timezone.utc)
-        last = self._historical_last_refresh.get(symbol)
-        if last and (now - last) < timedelta(minutes=refresh_minutes):
-            return self._historical_snapshots.get(symbol)
-
-        daily_tf = params.get('daily_timeframe', 'D1')
-        macro_bars = int(params.get('macro_window_bars', 240) or 240)
-        try:
-            daily_df = await self.market_data.fetch_data(symbol, daily_tf, macro_bars + 5)
-        except Exception as exc:
-            logger.warning("%s: failed to fetch %s history for analysis: %s", symbol, daily_tf, exc)
-            return self._historical_snapshots.get(symbol)
-        if daily_df is None:
-            return self._historical_snapshots.get(symbol)
-
-        def _fetcher(sym: str, tf: str, bars: int):
-            if sym == symbol and tf == daily_tf:
-                return daily_df
-            try:
-                rates = self.mt5_client.copy_rates_from_pos(sym, tf, 0, bars)
-                if rates is None or len(rates) == 0:
-                    return None
-                return self.market_data._process_rates(rates)
-            except Exception as exc:
-                logger.warning("%s: failed to fetch %s (%s) for historical analysis", sym, tf, exc)
-                return None
-
-        intraday_df = trading_df
-        intraday_tf = params.get('intraday_timeframe')
-        intraday_bars = params.get('intraday_bars')
-        if intraday_tf and intraday_tf != daily_tf:
-            try:
-                bars = int(intraday_bars or self._approx_bars_per_day(intraday_tf) or 100)
-                intraday_df = await self.market_data.fetch_data(symbol, intraday_tf, bars)
-            except Exception as exc:
-                logger.warning("%s: failed to fetch %s intraday data (%s); falling back to trading timeframe", symbol, intraday_tf, exc)
-                intraday_df = trading_df
-
-        intraday_today = self._intraday_today(intraday_df, intraday_tf or daily_tf)
-
-        snapshot = self.historical_analyzer.refresh_symbol(
-            symbol,
-            fetcher=_fetcher,
-            pip_size=pip_size,
-            intraday_df=intraday_today,
-        )
-        if snapshot:
-            self._historical_snapshots[symbol] = snapshot
-            self._historical_last_refresh[symbol] = now
-            return snapshot
-        return self._historical_snapshots.get(symbol)
-
-    def _intraday_today(self, df: Optional[pd.DataFrame], timeframe: str) -> Optional[pd.DataFrame]:
-        if df is None or len(df) == 0:
-            return None
-        try:
-            idx = pd.to_datetime(df.index)
-        except Exception:
-            return None
-        if len(idx) == 0:
-            return None
-        if idx.tz is None:
-            idx = idx.tz_localize(timezone.utc)
-        else:
-            idx = idx.tz_convert(timezone.utc)
-        last_ts = idx[-1]
-        start_of_day = last_ts.normalize()
-        try:
-            mask = idx >= start_of_day
-            subset = df.loc[mask]
-            if subset is not None and len(subset):
-                return subset
-        except Exception:
-            pass
-        approx = self._approx_bars_per_day(timeframe)
-        if approx:
-            return df.tail(int(approx))
-        return None
-
-    def _approx_bars_per_day(self, tf: str) -> Optional[int]:
-        tfu = (tf or '').upper()
-        mapping = {
-            'M1': 1440,
-            'M5': 288,
-            'M15': 96,
-            'M30': 48,
-            'H1': 24,
-            'H4': 6,
-        }
-        return mapping.get(tfu)
-
-    def _log_talib_status(self):
-        """Log whether TA-Lib is importable for pattern gates."""
-        try:
-            import talib  # type: ignore
-            ver = getattr(talib, '__version__', 'unknown')
-            logger.info(f"TA-Lib available (version {ver}); pattern gates active")
-        except Exception:
-            logger.warning("TA-Lib not available; pattern gates will fail-open (no blocking)")
+        Rollover occurs around 17:00 New York time (21:00-22:00 UTC depending on DST).
+        During this ~70 minute window, liquidity disappears and spreads explode.
+        """
+        now_utc = datetime.now(timezone.utc)
+        hour, minute = now_utc.hour, now_utc.minute
+        # Rollover window: 21:55 - 23:05 UTC (covers DST variations)
+        if hour == 21 and minute >= 55:
+            return True
+        if hour == 22:
+            return True
+        if hour == 23 and minute <= 5:
+            return True
+        return False
 
     async def initialize(self):
         try:
@@ -342,7 +152,6 @@ class TradingBot:
             self.strategy = PurePriceActionStrategy(self.config, self.mt5_client)
             self.risk_manager = RiskManager(self.config, self.mt5_client)
             self.trade_logger = TradeLogger('trades.log')
-            self._log_talib_status()
 
             # Load strategy state (duplicate prevention)
             try:
@@ -352,20 +161,13 @@ class TradingBot:
                 logger.warning(f"Strategy: Failed to restore state: {e}")
 
             # Strategy snapshot
-            try:
-                logger.info(
-                    "Strategy init: patterns=%s window=%s thr=%s/%s atr=%s rr=%.2f lookback=%s swing=%s",
-                    'ON' if getattr(self.config, 'enable_patterns', True) else 'OFF',
-                    getattr(self.config, 'pattern_window', 3),
-                    getattr(self.config, 'pattern_score_threshold', 0.6),
-                    getattr(self.config, 'pattern_strong_threshold', 0.8),
-                    getattr(self.config, 'atr_source', 'talib'),
-                    float(getattr(self.config, 'risk_reward_ratio', 2.0)),
-                    getattr(self.config, 'lookback_period', 20),
-                    getattr(self.config, 'swing_window', 5),
-                )
-            except Exception:
-                pass
+            logger.info(
+                "Strategy init: breakout_thr=%s rr=%.2f lookback=%s swing=%s",
+                getattr(self.config, 'breakout_threshold', 7),
+                float(getattr(self.config, 'risk_reward_ratio', 2.0)),
+                getattr(self.config, 'lookback_period', 20),
+                getattr(self.config, 'swing_window', 5),
+            )
 
             # Preflight introspection for configured symbols
             for sc in (self.config.symbols or []):
@@ -408,35 +210,15 @@ class TradingBot:
 
             # Adjust risk calc using execution price
             actual_sl_pips = abs(exec_price - signal.stop_loss) / pip
-            # Drift guard relative to signal
-            try:
-                drift_pips = abs(exec_price - signal.entry_price) / pip
-                drift_max_pips = None
-                drift_fraction_of_sl = 0.5
-                for sc in getattr(self.config, 'symbols', []) or []:
-                    if sc.get('name') == symbol:
-                        drift_max_pips = sc.get('drift_max_pips', None)
-                        drift_fraction_of_sl = float(sc.get('drift_fraction_of_sl', drift_fraction_of_sl))
-                        break
-                allowed_drift = actual_sl_pips * drift_fraction_of_sl
-                if drift_max_pips is not None:
-                    allowed_drift = min(float(drift_max_pips), allowed_drift)
-                if drift_pips > allowed_drift:
-                    logger.debug(f"{symbol}: Execution drift {drift_pips:.1f}p exceeds allowed {allowed_drift:.1f}p")
-                    return None
-            except Exception:
-                pass
 
-            # Per-symbol min SL override with small slack to account for drift
+            # Verify SL is not too tight
             min_sl_pips = float(self.config.min_stop_loss_pips)
-            min_slack_fraction = 0.05
             for sc in getattr(self.config, 'symbols', []) or []:
                 if sc.get('name') == symbol:
                     min_sl_pips = float(sc.get('min_stop_loss_pips', min_sl_pips))
-                    min_slack_fraction = float(sc.get('min_stop_loss_slack_fraction', min_slack_fraction))
                     break
-            if actual_sl_pips < (min_sl_pips * (1.0 - min_slack_fraction)):
-                logger.debug(f"{symbol}: SL too tight after price drift ({actual_sl_pips:.1f}p < {min_sl_pips*(1-min_slack_fraction):.1f}p)")
+            if actual_sl_pips < min_sl_pips * 0.95:  # 5% tolerance
+                logger.info(f"{symbol}: SL too tight ({actual_sl_pips:.1f}p < {min_sl_pips:.1f}p)")
                 return None
 
             if not self.risk_manager.check_risk_limits():
@@ -447,6 +229,17 @@ class TradingBot:
                 return None
 
             if not self.risk_manager.validate_trade_parameters(symbol, volume, signal.stop_loss, signal.take_profit, signal.type):
+                return None
+
+            # Final spread check before execution (spreads can spike in milliseconds)
+            current_spread_pips = abs(float(tick.ask) - float(tick.bid)) / pip
+            spread_guard = self.config.spread_guard_pips_default or 5.0  # Default 5 pips
+            for sc in getattr(self.config, 'symbols', []) or []:
+                if sc.get('name') == symbol:
+                    spread_guard = sc.get('spread_guard_pips', spread_guard)
+                    break
+            if current_spread_pips > float(spread_guard):
+                logger.info(f"{symbol}: Spread {current_spread_pips:.1f}p > guard {spread_guard}p at execution - rejected")
                 return None
 
             result = self.mt5_client.place_order(
@@ -498,16 +291,8 @@ class TradingBot:
                     'deal_ticket': deal_ticket,
                     'position_id': position_id,
                     'reason': signal.reason,
-                    'confidence': signal.confidence,
                     'signal_time': signal.timestamp,
                     'breakout_level': signal.breakout_level,
-                    'pattern_score': getattr(signal, 'pattern_score', None),
-                    'pattern_dir': getattr(signal, 'pattern_dir', None),
-                    'pattern_primary': getattr(signal, 'pattern_primary', None),
-                    'pattern_timeframe': getattr(signal, 'pattern_timeframe', None),
-                    'hist_trend_bias': getattr(signal, 'hist_trend_bias', None),
-                    'hist_breakout_rate': getattr(signal, 'hist_breakout_rate', None),
-                    'hist_adr_progress': getattr(signal, 'hist_adr_progress', None),
                     'status': 'OPEN'
                 }
                 self.trade_logger.log_trade(trade)
@@ -524,76 +309,36 @@ class TradingBot:
 
     async def process_symbol(self, symbol_config: Dict):
         symbol = symbol_config['name']
-        tfs = (symbol_config.get('timeframes') or ['M15'])
-        timeframe = tfs[0]
+        timeframe = (symbol_config.get('timeframes') or ['M15'])[0]
+
+        # Skip trading during daily rollover (21:55 - 23:05 UTC)
+        if self._is_rollover_period():
+            return
 
         try:
-            # Determine how many bars are needed to include today's Asia session
-            def _required_bars_for_timeframe(tf: str) -> int:
-                tfu = (tf or '').upper()
-                if tfu == 'M1':
-                    return 1500   # ~25h
-                if tfu == 'M5':
-                    return 350    # ~29h
-                if tfu == 'M15':
-                    return 120    # ~30h
-                if tfu == 'M30':
-                    return 60     # ~30h
-                if tfu == 'H1':
-                    return 36     # ~36h
-                if tfu == 'H4':
-                    return 12     # ~48h
-                if tfu == 'D1':
-                    return 7      # 1 week
-                return 300        # safe default
+            # Determine how many bars needed for analysis (250 ensures 200 EMA can calculate)
+            bars_needed = {
+                'M1': 250, 'M5': 250, 'M15': 250, 'M30': 250,
+                'H1': 250, 'H4': 250, 'D1': 250
+            }.get(timeframe.upper(), 250)
 
-            # Base timeframe data
-            candles = await self.market_data.fetch_data(symbol, timeframe, _required_bars_for_timeframe(timeframe))
+            candles = await self.market_data.fetch_data(symbol, timeframe, bars_needed)
             if candles is None:
                 return
-            intraday_today = self._intraday_today(candles, timeframe)
 
-            symbol_info = None
-            pip_for_hist = None
-            try:
-                symbol_info = self.mt5_client.get_symbol_info(symbol)
-                if symbol_info:
-                    pip_for_hist = resolve_pip_size(symbol, symbol_info, self.config)
-            except Exception:
-                pip_for_hist = None
+            # Fetch H1 data for trend filter (anchoring trend on higher timeframe)
+            h1_data = None
+            if timeframe.upper() != 'H1':
+                h1_data = await self.market_data.fetch_data(symbol, 'H1', 250)
 
-            # Fetch additional timeframes for multi-timeframe context (do not trade them here)
-            mtf_context = {}
-            try:
-                for tf in tfs[1:]:
-                    df_tf = await self.market_data.fetch_data(symbol, tf, _required_bars_for_timeframe(tf))
-                    if df_tf is not None:
-                        mtf_context[tf] = df_tf
-            except Exception:
-                mtf_context = {}
-
-            hist_snapshot = None
-            if pip_for_hist and pip_for_hist > 0:
-                hist_snapshot = await self._get_historical_snapshot(symbol, pip_for_hist, intraday_today)
-
-            signal = self.strategy.generate_signal(
-                candles,
-                symbol,
-                mtf_context=mtf_context if mtf_context else None,
-                historical_snapshot=hist_snapshot,
-            )
+            signal = self.strategy.generate_signal(candles, symbol, trend_data=h1_data)
             if signal:
-                # Skip if an existing position with same direction and our magic exists
+                # Skip if same-direction position already exists
                 try:
                     open_positions = self.mt5_client.get_positions(symbol)
-                    same_dir_exists = False
                     for p in open_positions or []:
-                        # 0=BUY,1=SELL per MT5
-                        if int(getattr(p, 'type', -1)) == int(signal.type) and int(getattr(p, 'magic', 0)) == 234000:
-                            same_dir_exists = True
-                            break
-                    if same_dir_exists:
-                        return
+                        if int(getattr(p, 'type', -1)) == int(signal.type):
+                            return  # Already have position in this direction
                 except Exception:
                     pass
                 await self.execute_trade(signal, symbol)
@@ -739,76 +484,26 @@ class TradingBot:
         except Exception as e:
             logger.error(f"Error monitoring open trades: {e}", exc_info=True)
 
-    def _check_hourly_stats(self):
-        """Check if hour has changed and log hourly statistics."""
-        try:
-            now = datetime.now(timezone.utc)
-            current_hour = now.hour
-
-            if self._last_hour is not None and current_hour != self._last_hour:
-                # Log previous hour's stats
-                logger.info(f"")
-                logger.info(f"[HOURLY STATS {self._last_hour:02d}:00-{current_hour:02d}:00 UTC]")
-                logger.info(f"  Symbols processed: {self._hourly_stats['symbols_processed']}")
-                logger.info(f"  Breakouts detected: {self._hourly_stats['breakouts_detected']} (bullish: {self._hourly_stats['breakouts_bullish']}, bearish: {self._hourly_stats['breakouts_bearish']})")
-                logger.info(f"  Signals generated: {self._hourly_stats['signals_generated']}")
-                logger.info(f"  Signals blocked: {self._hourly_stats['signals_blocked']}")
-
-                if self._hourly_stats['block_reasons']:
-                    for reason, count in sorted(self._hourly_stats['block_reasons'].items(), key=lambda x: x[1], reverse=True)[:3]:
-                        logger.info(f"    - {reason}: {count}")
-
-                logger.info(f"  Trades executed: {self._hourly_stats['trades_executed']}")
-
-                open_count = len([t for t in self.trade_logger.trades if t.get('status') == 'OPEN'])
-                logger.info(f"  Open positions: {open_count}")
-                logger.info(f"")
-
-                # Reset stats for new hour
-                self._hourly_stats = {
-                    'symbols_processed': 0,
-                    'breakouts_detected': 0,
-                    'breakouts_bullish': 0,
-                    'breakouts_bearish': 0,
-                    'signals_generated': 0,
-                    'signals_blocked': 0,
-                    'block_reasons': {},
-                    'trades_executed': 0,
-                    'spring_confirmations': 0,
-                    'upthrust_confirmations': 0
-                }
-
-            self._last_hour = current_hour
-        except Exception as e:
-            logger.debug(f"Error checking hourly stats: {e}")
-
     async def run(self):
         self.running = True
-        logger.info("Starting core trading loop")
-
-        # Initialize tracking
-        self._check_hourly_stats()
-
-        loop_count = 0  # For periodic state persistence
+        logger.info("Starting trading loop")
+        loop_count = 0
 
         while self.running:
             try:
-                # Ensure MT5 connectivity before processing
+                # Ensure MT5 connectivity
                 if not self.mt5_client.is_connected():
-                    logger.warning("MT5 disconnected; attempting reconnect before processing loop")
+                    logger.warning("MT5 disconnected; reconnecting...")
                     self.mt5_client.reconnect()
                     if not self.mt5_client.is_connected():
                         await asyncio.sleep(self.config.main_loop_interval)
                         continue
 
-                # Check for hour transitions
-                self._check_hourly_stats()
-
                 await self.monitor_open_trades()
                 for sym in self.config.symbols:
                     await self.process_symbol(sym)
 
-                # Periodic state persistence (every 10 loops = ~50 seconds at 5s interval)
+                # Periodic state persistence
                 loop_count += 1
                 if loop_count % 10 == 0:
                     try:

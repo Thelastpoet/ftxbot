@@ -1,2 +1,0 @@
-tabula-py
-PyPDF2

@@ -500,7 +500,7 @@ class MetaTrader5Client:
             except TypeError:
                 # Older builds may not support the `position` kwarg; fetch all and filter client-side
                 all_deals = mt5.history_deals_get(from_date, now)
-                deals = [d for d in (all_deals or []) if getattr(d, 'position', None) == position_id]
+                deals = [d for d in (all_deals or []) if getattr(d, 'position_id', None) == position_id]
             if deals:
                 deals = sorted(deals, key=lambda d: d.time)
             return list(deals) if deals else []

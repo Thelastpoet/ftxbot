@@ -4,68 +4,26 @@
     "lookback_period": 20,
     "swing_window": 5,
     "breakout_threshold_pips": 5,
+    "breakout_threshold_atr_mult": 0.3,
     "min_stop_loss_pips": 20,
     "stop_loss_buffer_pips": 15,
-    "max_sr_levels": 5,
-    "min_breakout_zone_pips": 20,
-    "enable_patterns": false,
-    "pattern_use_trading_tf": false,
-    "htf_pattern_timeframe": "H1",
-    "htf_pattern_window": 3,
-    "pattern_window": 5,
+    "atr_period": 14,
+    "atr_sl_k": 0.6,
+    "min_sl_buffer_pips": 10,
     "spread_guard_pips": 4,
-    "min_headroom_rr": 1.2,
-    "entry_confirmation_bars": 2,
-    "pattern_score_threshold": 0.6,
-    "htf_pattern_score_threshold": 0.6,
-    "require_htf_pattern_alignment": true,
-    "spread_multiplier_threshold": 1.5,
-    "spread_lookback_bars": 20
+    "use_trend_filter": true,
+    "trend_ema_period": 200
   },
   "risk_management": {
     "risk_per_trade": 0.01,
     "fixed_lot_size": null,
     "max_drawdown_percentage": 0.05,
     "risk_reward_ratio": 1.5,
-    "min_rr_tier2": 1.2,
-    "min_rr_tier3": 1.0,
-    "obstacle_buffer_pips": 5
-  },
-  "historical_analysis": {
-    "enabled": true,
-    "daily_timeframe": "D1",
-    "max_data_age_minutes": 180,
-    "refresh_interval_minutes": 60,
-    "intraday_timeframe": null,
-    "intraday_bars": null,
-    "adr_window": 14,
-    "adr_exhaustion_pct": 0.9,
-    "block_on_adr_exhaustion": true,
-    "donchian_window": 55,
-    "macro_window_bars": 240,
-    "trend_swing_window": 5,
-    "trend_lookback_bars": 100,
-    "trend_min_swings": 3,
-    "enforce_trend_alignment": true,
-    "breakout_lookback_bars": 180,
-    "breakout_lookahead_bars": 6,
-    "breakout_threshold_pips": 5,
-    "min_breakout_samples": 10,
-    "min_breakout_success_rate": 0.45
+    "min_rr": 1.0
   },
   "symbols": [
-  {
-    "name": "EURUSD",
-    "timeframes": ["M15", "H1"],
-    "historical_analysis": {
-      "enabled": true,
-      "intraday_timeframe": "M15",
-      "adr_exhaustion_pct": 0.85,
-      "breakout_threshold_pips": 7,
-      "min_breakout_success_rate": 0.5
-    }
-  },
-  {
+    {"name": "EURUSD", "timeframes": ["M15", "H1"]},
+    {
     "name": "GBPUSD",
     "timeframes": ["M15", "H1"]
   },
@@ -94,23 +52,11 @@
     "timeframes": ["M15", "H1"]
   },
   {
-    "name": "GBPJPY",
-    "timeframes": ["M15", "H1"]
-  },
-  {
     "name": "AUDJPY",
     "timeframes": ["M15", "H1"]
   },
   {
     "name": "NZDJPY",
-    "timeframes": ["M15", "H1"]
-  },
-  {
-    "name": "EURGBP",
-    "timeframes": ["M15", "H1"]
-  },
-  {
-    "name": "EURCHF",
     "timeframes": ["M15", "H1"]
   },
   {
@@ -133,36 +79,15 @@
     "name": "GBPCAD",
     "timeframes": ["M15", "H1"]
   },
-  {
-    "name": "AUDCAD",
-    "timeframes": ["M15", "H1"]
-  },
-  {
-    "name": "AUDNZD",
-    "timeframes": ["M15", "H1"]
-  },
     {
       "name": "XAUUSD",
-      "timeframes": ["M15", "H1"],
+      "timeframes": ["M15"],
       "pip_unit": 0.01,
-      "min_stop_loss_pips": 500,
-      "stop_loss_buffer_pips": 100,
-      "breakout_threshold_pips": 50,
+      "min_stop_loss_pips": 1500,
+      "stop_loss_buffer_pips": 300,
+      "breakout_threshold_pips": 100,
       "risk_reward_ratio": 1.5,
-      "spread_guard_pips": 100,
-      "drift_max_pips": 100,
-      "drift_fraction_of_sl": 0.5,
-      "sweep_threshold_pips": 100,
-      "reversal_threshold_pips": 300,
-      "level_proximity_pips": 50,
-      "min_breakout_zone_pips": 200,
-      "historical_analysis": {
-        "intraday_timeframe": "M15",
-        "intraday_bars": 200,
-        "adr_exhaustion_pct": 0.75,
-        "donchian_window": 34,
-        "breakout_threshold_pips": 120
-      }
+      "spread_guard_pips": 50
     }
   ]
 }

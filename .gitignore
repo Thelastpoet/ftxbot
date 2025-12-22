@@ -13,3 +13,5 @@ calibrator_states/
 optimizer_states/
 pump_spot/
 QWEN.md
+backtest_results/
+.claude/

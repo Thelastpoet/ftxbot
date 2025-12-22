@@ -5,7 +5,6 @@ Risk Manager - Core version
 import logging
 from typing import Any
 
-from utils import get_pip_size
 from utils import resolve_pip_size
 
 logger = logging.getLogger(__name__)

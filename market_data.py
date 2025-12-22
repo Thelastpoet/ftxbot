@@ -1,6 +1,6 @@
 """
 Market Data - Core version
-Fetches candle data from MT5 and returns a simple DataFrame.
+Fetches candle data from MT5 and returns a DataFrame.
 """
 
 import logging
