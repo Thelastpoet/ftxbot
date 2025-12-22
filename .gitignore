@@ -15,3 +15,6 @@ pump_spot/
 QWEN.md
 backtest_results/
 .claude/
+symbol_state/
+backtest_results_v2/
+sl_tp_research_results/

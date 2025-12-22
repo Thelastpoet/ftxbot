@@ -1166,6 +1166,8 @@ def load_symbols_from_config(config_path: str) -> Tuple[List[str], Dict[str, Dic
                 params['breakout_threshold_atr_mult'] = float(s['breakout_threshold_atr_mult'])
             if s.get('risk_reward_ratio') is not None:
                 params['risk_reward_ratio'] = float(s['risk_reward_ratio'])
+            if s.get('min_rr') is not None:
+                params['min_rr'] = float(s['min_rr'])
             if s.get('spread_guard_pips') is not None:
                 params['spread_pips'] = float(s['spread_guard_pips'])
 
@@ -1329,6 +1331,7 @@ def main():
                 breakout_threshold_pips=sym_overrides.get('breakout_threshold_pips', config.breakout_threshold_pips),
                 breakout_threshold_atr_mult=sym_overrides.get('breakout_threshold_atr_mult', config.breakout_threshold_atr_mult),
                 risk_reward_ratio=sym_overrides.get('risk_reward_ratio', config.risk_reward_ratio),
+                min_rr=sym_overrides.get('min_rr', config.min_rr),
                 min_stop_loss_pips=sym_overrides.get('min_stop_loss_pips', config.min_stop_loss_pips),
                 stop_loss_buffer_pips=sym_overrides.get('stop_loss_buffer_pips', config.stop_loss_buffer_pips),
                 use_trend_filter=config.use_trend_filter,

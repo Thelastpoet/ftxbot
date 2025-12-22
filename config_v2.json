@@ -1,0 +1,177 @@
+{
+  "trading_settings": {
+    "main_loop_interval_seconds": 5,
+    "lookback_period": 20,
+    "swing_window": 5,
+    "breakout_threshold_pips": 5,
+    "breakout_threshold_atr_mult": 0.3,
+    "min_stop_loss_pips": 35,
+    "stop_loss_buffer_pips": 15,
+    "atr_period": 14,
+    "atr_sl_k": 0.6,
+    "min_sl_buffer_pips": 10,
+    "spread_guard_pips": 4,
+    "use_trend_filter": true,
+    "trend_ema_period": 200
+  },
+  "risk_management": {
+    "risk_per_trade": 0.01,
+    "fixed_lot_size": null,
+    "max_drawdown_percentage": 0.05,
+    "risk_reward_ratio": 0.75,
+    "min_rr": 0.4
+  },
+  "symbols": [
+    {
+      "name": "EURUSD",
+      "timeframes": ["M15", "H1"],
+      "min_stop_loss_pips": 40,
+      "risk_reward_ratio": 0.62,
+      "min_rr": 0.5
+    },
+    {
+      "name": "GBPUSD",
+      "timeframes": ["M15", "H1"],
+      "min_stop_loss_pips": 10,
+      "risk_reward_ratio": 4.0,
+      "min_rr": 1.0
+    },
+    {
+      "name": "USDJPY",
+      "timeframes": ["M15", "H1"],
+      "min_stop_loss_pips": 35,
+      "risk_reward_ratio": 1.43,
+      "min_rr": 1.0
+    },
+    {
+      "name": "NZDUSD",
+      "timeframes": ["M15", "H1"],
+      "min_stop_loss_pips": 40,
+      "risk_reward_ratio": 0.62,
+      "min_rr": 0.5
+    },
+    {
+      "name": "USDCHF",
+      "timeframes": ["M15", "H1"],
+      "min_stop_loss_pips": 40,
+      "risk_reward_ratio": 0.62,
+      "min_rr": 0.5
+    },
+    {
+      "name": "AUDUSD",
+      "timeframes": ["M15", "H1"],
+      "min_stop_loss_pips": 40,
+      "risk_reward_ratio": 0.62,
+      "min_rr": 0.5
+    },
+    {
+      "name": "USDCAD",
+      "timeframes": ["M15", "H1"],
+      "min_stop_loss_pips": 40,
+      "risk_reward_ratio": 0.5,
+      "min_rr": 0.4
+    },
+    {
+      "name": "EURJPY",
+      "timeframes": ["M15", "H1"],
+      "min_stop_loss_pips": 10,
+      "risk_reward_ratio": 2.5,
+      "min_rr": 1.0
+    },
+    {
+      "name": "AUDJPY",
+      "timeframes": ["M15", "H1"],
+      "min_stop_loss_pips": 10,
+      "risk_reward_ratio": 3.0,
+      "min_rr": 1.0
+    },
+    {
+      "name": "NZDJPY",
+      "timeframes": ["M15", "H1"],
+      "min_stop_loss_pips": 35,
+      "risk_reward_ratio": 0.86,
+      "min_rr": 0.7
+    },
+    {
+      "name": "GBPJPY",
+      "timeframes": ["M15", "H1"],
+      "min_stop_loss_pips": 15,
+      "risk_reward_ratio": 1.67,
+      "min_rr": 1.0
+    },
+    {
+      "name": "GBPCHF",
+      "timeframes": ["M15", "H1"],
+      "min_stop_loss_pips": 30,
+      "risk_reward_ratio": 0.83,
+      "min_rr": 0.7
+    },
+    {
+      "name": "EURAUD",
+      "timeframes": ["M15", "H1"],
+      "min_stop_loss_pips": 10,
+      "risk_reward_ratio": 2.0,
+      "min_rr": 1.0
+    },
+    {
+      "name": "EURCAD",
+      "timeframes": ["M15", "H1"],
+      "min_stop_loss_pips": 40,
+      "risk_reward_ratio": 0.75,
+      "min_rr": 0.6
+    },
+    {
+      "name": "EURCHF",
+      "timeframes": ["M15", "H1"],
+      "min_stop_loss_pips": 40,
+      "risk_reward_ratio": 0.5,
+      "min_rr": 0.4
+    },
+    {
+      "name": "EURGBP",
+      "timeframes": ["M15", "H1"],
+      "min_stop_loss_pips": 40,
+      "risk_reward_ratio": 0.75,
+      "min_rr": 0.6
+    },
+    {
+      "name": "GBPAUD",
+      "timeframes": ["M15", "H1"],
+      "min_stop_loss_pips": 10,
+      "risk_reward_ratio": 1.5,
+      "min_rr": 1.0
+    },
+    {
+      "name": "GBPCAD",
+      "timeframes": ["M15", "H1"],
+      "min_stop_loss_pips": 20,
+      "risk_reward_ratio": 0.75,
+      "min_rr": 0.6
+    },
+    {
+      "name": "AUDNZD",
+      "timeframes": ["M15", "H1"],
+      "min_stop_loss_pips": 40,
+      "risk_reward_ratio": 0.5,
+      "min_rr": 0.4
+    },
+    {
+      "name": "AUDCAD",
+      "timeframes": ["M15", "H1"],
+      "min_stop_loss_pips": 40,
+      "risk_reward_ratio": 0.62,
+      "min_rr": 0.5
+    },
+    {
+      "name": "XAUUSD",
+      "timeframes": ["M15"],
+      "pip_unit": 0.01,
+      "min_stop_loss_pips": 1500,
+      "stop_loss_buffer_pips": 300,
+      "breakout_threshold_pips": 100,
+      "risk_reward_ratio": 1.5,
+      "min_rr": 1.0,
+      "spread_guard_pips": 50
+    }
+  ]
+}
