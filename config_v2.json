@@ -58,13 +58,6 @@
       "min_rr": 0.5
     },
     {
-      "name": "AUDUSD",
-      "timeframes": ["M15", "H1"],
-      "min_stop_loss_pips": 40,
-      "risk_reward_ratio": 0.62,
-      "min_rr": 0.5
-    },
-    {
       "name": "USDCAD",
       "timeframes": ["M15", "H1"],
       "min_stop_loss_pips": 40,
@@ -128,13 +121,6 @@
       "min_rr": 0.4
     },
     {
-      "name": "EURGBP",
-      "timeframes": ["M15", "H1"],
-      "min_stop_loss_pips": 40,
-      "risk_reward_ratio": 0.75,
-      "min_rr": 0.6
-    },
-    {
       "name": "GBPAUD",
       "timeframes": ["M15", "H1"],
       "min_stop_loss_pips": 10,
@@ -154,13 +140,6 @@
       "min_stop_loss_pips": 40,
       "risk_reward_ratio": 0.5,
       "min_rr": 0.4
-    },
-    {
-      "name": "AUDCAD",
-      "timeframes": ["M15", "H1"],
-      "min_stop_loss_pips": 40,
-      "risk_reward_ratio": 0.62,
-      "min_rr": 0.5
     },
     {
       "name": "XAUUSD",

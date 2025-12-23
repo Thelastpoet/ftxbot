@@ -26,6 +26,8 @@ import math
 import pandas as pd
 import numpy as np
 
+from trailing_stop import SYMBOL_TRAILING_CONFIGS, DEFAULT_TRAILING_CONFIG, create_backtest_trailing_manager
+
 # Import MT5 for historical data
 try:
     import MetaTrader5 as mt5
@@ -87,6 +89,14 @@ class BacktestConfig:
     spread_pips: float = 1.5  # Average spread
     slippage_pips: float = 0.5  # Average slippage
 
+    # Trailing stop settings
+    use_trailing_stop: bool = False  # Enable trailing stop mode
+    trailing_break_even_pips: float = 15.0  # Move to BE after this profit
+    trailing_break_even_offset_pips: float = 1.0  # Offset from entry
+    trailing_trigger_pips: float = 25.0  # Start trailing after this profit
+    trailing_distance_pips: float = 15.0  # Trail this far behind price
+    trailing_max_hours: float = 48.0  # Close after N hours (0=disabled)
+
     # Output
     output_dir: str = "backtest_results"
 
@@ -105,7 +115,7 @@ class Trade:
     volume: float = 0.0
     pnl: float = 0.0
     pnl_pips: float = 0.0
-    status: str = "OPEN"  # OPEN, CLOSED_TP, CLOSED_SL, CLOSED_TIME
+    status: str = "OPEN"  # OPEN, CLOSED_TP, CLOSED_SL, CLOSED_TIME, CLOSED_TRAIL
     reason: str = ""
     breakout_level: float = 0.0
 
@@ -113,6 +123,14 @@ class Trade:
     atr_at_entry: Optional[float] = None
     trend_direction: Optional[str] = None  # "UP", "DOWN", "FLAT"
     session: Optional[str] = None  # "LONDON", "NY", "OVERLAP", "ASIAN", "OFF"
+
+    # Trailing stop tracking
+    original_sl: Optional[float] = None  # Original SL before trailing
+    current_sl: Optional[float] = None  # Current SL (may be trailed)
+    trailing_state: str = "INITIAL"  # INITIAL, BREAK_EVEN, TRAILING
+    max_favorable_pips: float = 0.0  # Maximum favorable excursion
+    max_adverse_pips: float = 0.0  # Maximum adverse excursion
+    sl_updates: int = 0  # Number of SL modifications
 
 
 @dataclass
@@ -694,6 +712,8 @@ class BacktestEngine:
         self.peak_equity = config.initial_balance
         self.equity_curve: List[float] = [config.initial_balance]
         self.max_drawdown = 0.0
+        # Initialize trailing manager
+        self.trailing_manager = create_backtest_trailing_manager()
 
     def reset(self):
         """Reset engine state for a new symbol backtest."""
@@ -725,41 +745,108 @@ class BacktestEngine:
     def simulate_trade_exit(self, trade: Trade, bar: pd.Series,
                            symbol_info: Dict) -> bool:
         """
-        Check if trade hits SL or TP on given bar.
+        Check if trade hits SL or TP on given bar, with optional trailing stop logic.
         Returns True if trade closed.
         """
         high = bar['high']
         low = bar['low']
         close = bar['close']
-
+        bar_time = bar.name
         pip = symbol_info['pip_size']
         slippage = self.config.slippage_pips * pip
 
+        # Initialize original SL if needed
+        if trade.original_sl is None:
+            trade.original_sl = trade.stop_loss
+            trade.current_sl = trade.stop_loss
+
+        # --- Delegate to Trailing Manager if Enabled ---
+        if self.config.use_trailing_stop:
+            # Update manager with current price (using close for calculation stability)
+            update_res = self.trailing_manager.update_position(
+                position_id=id(trade),
+                current_price=close,
+                current_time=bar_time
+            )
+            
+            # Apply updates back to Trade object
+            if update_res['new_sl']:
+                trade.current_sl = update_res['new_sl']
+                trade.sl_updates += 1
+            
+            # Sync state strings
+            if update_res['state']:
+                trade.trailing_state = update_res['state']
+            
+            # Sync stats
+            trade.max_favorable_pips = update_res['mfe_pips']
+            # MAE is not tracked by manager in same way, keep local calc below
+            
+            # Check for Time Exit signal from Manager
+            if update_res['should_close_time']:
+                trade.exit_price = close
+                trade.status = "CLOSED_TIME"
+                trade.exit_time = bar_time
+                self.trailing_manager.unregister_position(id(trade))
+                return True
+
+        # --- Standard Exit Logic (SL/TP) ---
+        
+        # Use active SL
+        active_sl = trade.current_sl if trade.current_sl else trade.stop_loss
+
+        # Update MAE locally (Manager tracks MFE)
         if trade.direction == "BUY":
-            # Check SL (low touches SL)
-            if low <= trade.stop_loss:
-                trade.exit_price = trade.stop_loss - slippage
-                trade.status = "CLOSED_SL"
-                trade.exit_time = bar.name
+            current_adverse_pips = (trade.entry_price - low) / pip
+        else:
+            current_adverse_pips = (high - trade.entry_price) / pip
+        trade.max_adverse_pips = max(trade.max_adverse_pips, current_adverse_pips)
+
+        if trade.direction == "BUY":
+            # Check SL (Low touches SL)
+            if low <= active_sl:
+                trade.exit_price = active_sl - slippage
+                # Determine exit reason
+                if trade.trailing_state != "INITIAL":
+                    trade.status = "CLOSED_TRAIL"
+                else:
+                    trade.status = "CLOSED_SL"
+                trade.exit_time = bar_time
+                if self.config.use_trailing_stop:
+                    self.trailing_manager.unregister_position(id(trade))
                 return True
-            # Check TP (high touches TP)
-            if high >= trade.take_profit:
-                trade.exit_price = trade.take_profit - slippage  # Less favorable
-                trade.status = "CLOSED_TP"
-                trade.exit_time = bar.name
+                
+            # Check TP (High touches TP)
+            # Only check TP if it's reachable and we aren't in "infinite trail" mode
+            # But the manager handles logic. If use_fixed_tp is False, TP is huge.
+            if trade.take_profit and high >= trade.take_profit:
+                 trade.exit_price = trade.take_profit - slippage
+                 trade.status = "CLOSED_TP"
+                 trade.exit_time = bar_time
+                 if self.config.use_trailing_stop:
+                    self.trailing_manager.unregister_position(id(trade))
+                 return True
+
+        else: # SELL
+            # Check SL (High touches SL)
+            if high >= active_sl:
+                trade.exit_price = active_sl + slippage
+                if trade.trailing_state != "INITIAL":
+                    trade.status = "CLOSED_TRAIL"
+                else:
+                    trade.status = "CLOSED_SL"
+                trade.exit_time = bar_time
+                if self.config.use_trailing_stop:
+                    self.trailing_manager.unregister_position(id(trade))
                 return True
-        else:  # SELL
-            # Check SL (high touches SL)
-            if high >= trade.stop_loss:
-                trade.exit_price = trade.stop_loss + slippage
-                trade.status = "CLOSED_SL"
-                trade.exit_time = bar.name
-                return True
-            # Check TP (low touches TP)
-            if low <= trade.take_profit:
+
+            # Check TP (Low touches TP)
+            if trade.take_profit and low <= trade.take_profit:
                 trade.exit_price = trade.take_profit + slippage
                 trade.status = "CLOSED_TP"
-                trade.exit_time = bar.name
+                trade.exit_time = bar_time
+                if self.config.use_trailing_stop:
+                    self.trailing_manager.unregister_position(id(trade))
                 return True
 
         return False
@@ -863,6 +950,19 @@ class BacktestEngine:
                             trend_direction=signal['trend'],
                             session=signal['session'],
                         )
+                        
+                        # Register with trailing manager
+                        if self.config.use_trailing_stop:
+                            self.trailing_manager.register_position(
+                                position_id=id(open_trade), # Use object ID as unique ID
+                                symbol=symbol,
+                                direction=open_trade.direction,
+                                entry_price=open_trade.entry_price,
+                                entry_time=open_trade.entry_time,
+                                stop_loss=open_trade.stop_loss,
+                                take_profit=open_trade.take_profit,
+                                pip_size=symbol_info['pip_size']
+                            )
 
         # Close any remaining open trade at end
         if open_trade and open_trade.status == "OPEN":
@@ -988,6 +1088,8 @@ def print_report(result: BacktestResult):
         print(f"[Session Filter: ENABLED ({result.config.session_start_utc}:00-{result.config.session_end_utc}:00 UTC)]")
     if result.config.use_retest_confirmation:
         print("[Retest Confirmation: ENABLED]")
+    if result.config.use_trailing_stop:
+        print(f"[Trailing Stop: ENABLED (BE@{result.config.trailing_break_even_pips}p, Trail@{result.config.trailing_trigger_pips}p/{result.config.trailing_distance_pips}p)]")
 
     print("\n" + "=" * 70)
 
@@ -995,7 +1097,15 @@ def print_report(result: BacktestResult):
     if result.trades:
         sl_trades = [t for t in result.trades if t.status == "CLOSED_SL"]
         tp_trades = [t for t in result.trades if t.status == "CLOSED_TP"]
-        print(f"\nTrade Outcomes: {len(tp_trades)} TP hits, {len(sl_trades)} SL hits")
+        trail_trades = [t for t in result.trades if t.status == "CLOSED_TRAIL"]
+        time_trades = [t for t in result.trades if t.status == "CLOSED_TIME"]
+
+        outcome_str = f"{len(tp_trades)} TP, {len(sl_trades)} SL"
+        if trail_trades:
+            outcome_str += f", {len(trail_trades)} TRAIL"
+        if time_trades:
+            outcome_str += f", {len(time_trades)} TIME"
+        print(f"\nTrade Outcomes: {outcome_str}")
 
 
 def save_results(result: BacktestResult, output_dir: str):
@@ -1024,6 +1134,13 @@ def save_results(result: BacktestResult, output_dir: str):
                 'status': t.status,
                 'trend': t.trend_direction,
                 'session': t.session,
+                # Trailing stop data
+                'original_sl': t.original_sl,
+                'current_sl': t.current_sl,
+                'trailing_state': t.trailing_state,
+                'max_favorable_pips': t.max_favorable_pips,
+                'max_adverse_pips': t.max_adverse_pips,
+                'sl_updates': t.sl_updates,
             })
 
         trades_df = pd.DataFrame(trades_data)
@@ -1110,6 +1227,20 @@ def parse_args():
                        help='Average spread in pips')
     parser.add_argument('--slippage', type=float, default=0.5,
                        help='Average slippage in pips')
+
+    # Trailing stop settings
+    parser.add_argument('--trailing', action='store_true',
+                       help='Enable trailing stop mode')
+    parser.add_argument('--trail-be-pips', type=float, default=15.0,
+                       help='Move to break-even after this profit (pips)')
+    parser.add_argument('--trail-be-offset', type=float, default=1.0,
+                       help='Break-even offset from entry (pips)')
+    parser.add_argument('--trail-trigger-pips', type=float, default=25.0,
+                       help='Start trailing after this profit (pips)')
+    parser.add_argument('--trail-distance-pips', type=float, default=15.0,
+                       help='Trail this far behind price (pips)')
+    parser.add_argument('--trail-max-hours', type=float, default=48.0,
+                       help='Close after this many hours (0=disabled)')
 
     # Output
     parser.add_argument('--output', type=str, default='backtest_results',
@@ -1278,6 +1409,13 @@ def main():
         use_retest_confirmation=args.retest,
         spread_pips=args.spread,
         slippage_pips=args.slippage,
+        # Trailing stop settings
+        use_trailing_stop=args.trailing,
+        trailing_break_even_pips=args.trail_be_pips,
+        trailing_break_even_offset_pips=args.trail_be_offset,
+        trailing_trigger_pips=args.trail_trigger_pips,
+        trailing_distance_pips=args.trail_distance_pips,
+        trailing_max_hours=args.trail_max_hours,
         output_dir=args.output,
     )
 
@@ -1339,6 +1477,13 @@ def main():
                 use_retest_confirmation=config.use_retest_confirmation,
                 spread_pips=sym_overrides.get('spread_pips', config.spread_pips),
                 slippage_pips=config.slippage_pips,
+                # Trailing stop settings
+                use_trailing_stop=config.use_trailing_stop,
+                trailing_break_even_pips=config.trailing_break_even_pips,
+                trailing_break_even_offset_pips=config.trailing_break_even_offset_pips,
+                trailing_trigger_pips=config.trailing_trigger_pips,
+                trailing_distance_pips=config.trailing_distance_pips,
+                trailing_max_hours=config.trailing_max_hours,
                 output_dir=config.output_dir,
             )
 
