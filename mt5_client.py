@@ -483,15 +483,28 @@ class MetaTrader5Client:
             # so pass the range to `history_deals_get` and filter by position.
             now = datetime.now(timezone.utc)
             from_date = datetime(now.year - 2, 1, 1, tzinfo=timezone.utc)
+            deals = None
             try:
                 deals = mt5.history_deals_get(from_date, now, position=position_id)
             except TypeError:
                 # Older builds may not support the `position` kwarg; fetch all and filter client-side
-                all_deals = mt5.history_deals_get(from_date, now)
-                deals = [d for d in (all_deals or []) if getattr(d, 'position_id', None) == position_id]
-            if deals:
-                deals = sorted(deals, key=lambda d: d.time)
-            return list(deals) if deals else []
+                deals = mt5.history_deals_get(from_date, now)
+
+            if not deals:
+                return []
+
+            # Some MT5 builds silently ignore the `position` kwarg; always filter client-side.
+            filtered = []
+            for d in deals:
+                pid = getattr(d, 'position_id', None)
+                if pid is None:
+                    pid = getattr(d, 'position', None)
+                if pid == position_id:
+                    filtered.append(d)
+
+            if filtered:
+                filtered = sorted(filtered, key=lambda d: d.time)
+            return list(filtered) if filtered else []
         except Exception as e:
             logger.error(f"Error getting deals for position {position_id}: {e}")
             return []

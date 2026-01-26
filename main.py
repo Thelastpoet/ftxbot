@@ -301,6 +301,7 @@ class TradingBot:
             logger.warning("State reconcile skipped: no positions returned")
             return
 
+        mt5 = self.mt5_client.mt5
         open_positions = {getattr(p, 'ticket', None): p for p in positions if getattr(p, 'ticket', None) is not None}
         open_tickets = set(open_positions.keys())
 
@@ -353,6 +354,23 @@ class TradingBot:
         # Close any trades marked OPEN but not found in MT5
         for trade in open_trades:
             pid = trade.get('position_id')
+            symbol = trade.get('symbol')
+
+            # If position_id missing, try to match against currently open positions.
+            if pid is None and (trade.get('deal_ticket') or trade.get('order_ticket')):
+                for pos in open_positions.values():
+                    pos_ticket = getattr(pos, 'ticket', None)
+                    if pos_ticket == trade.get('deal_ticket') or pos_ticket == trade.get('order_ticket'):
+                        pid = pos_ticket
+                        trade['position_id'] = pid
+                        updated = True
+                        break
+                    if getattr(pos, 'identifier', None) == trade.get('deal_ticket'):
+                        pid = pos_ticket
+                        trade['position_id'] = pid
+                        updated = True
+                        break
+
             if pid is not None and pid in open_tickets:
                 continue
 
@@ -362,21 +380,61 @@ class TradingBot:
                 if deals:
                     closing_deals = [
                         d for d in deals
-                        if d.entry == self.mt5_client.mt5.DEAL_ENTRY_OUT or d.entry == self.mt5_client.mt5.DEAL_ENTRY_INOUT
+                        if d.entry == mt5.DEAL_ENTRY_OUT or d.entry == mt5.DEAL_ENTRY_INOUT
                     ]
+                    if symbol:
+                        closing_deals = [d for d in closing_deals if getattr(d, 'symbol', None) == symbol]
                     if closing_deals:
                         closing_deal = closing_deals[-1]
 
+            history_deals = None
             if closing_deal is None and (trade.get('deal_ticket') or trade.get('order_ticket')):
                 try:
-                    from_date = datetime.now(timezone.utc) - timedelta(days=30)
+                    from_date = datetime.now(timezone.utc) - timedelta(days=120)
                     to_date = datetime.now(timezone.utc)
                     history_deals = self.mt5_client.get_history_deals(from_date, to_date)
+
+                    # Resolve position_id from the opening deal if possible.
+                    open_deal = None
                     for deal in (history_deals or []):
-                        if getattr(deal, 'deal', None) == trade.get('deal_ticket') or getattr(deal, 'order', None) == trade.get('order_ticket'):
-                            if deal.entry == self.mt5_client.mt5.DEAL_ENTRY_OUT or deal.entry == self.mt5_client.mt5.DEAL_ENTRY_INOUT:
-                                closing_deal = deal
+                        if deal.entry == mt5.DEAL_ENTRY_IN or deal.entry == mt5.DEAL_ENTRY_INOUT:
+                            if getattr(deal, 'deal', None) == trade.get('deal_ticket') or getattr(deal, 'order', None) == trade.get('order_ticket'):
+                                open_deal = deal
                                 break
+                    if open_deal is not None:
+                        pid_candidate = getattr(open_deal, 'position_id', None) or getattr(open_deal, 'position', None)
+                        if pid_candidate is not None and pid_candidate != trade.get('position_id'):
+                            trade['position_id'] = pid_candidate
+                            pid = pid_candidate
+                            updated = True
+
+                        if pid is not None and pid in open_tickets:
+                            continue
+
+                        if pid is not None:
+                            deals = self.mt5_client.get_history_deals_by_position(pid)
+                            if deals:
+                                closing_deals = [
+                                    d for d in deals
+                                    if d.entry == mt5.DEAL_ENTRY_OUT or d.entry == mt5.DEAL_ENTRY_INOUT
+                                ]
+                                if symbol:
+                                    closing_deals = [d for d in closing_deals if getattr(d, 'symbol', None) == symbol]
+                                if closing_deals:
+                                    closing_deal = closing_deals[-1]
+
+                    # Last resort: match close deal directly by ticket.
+                    if closing_deal is None:
+                        candidates = []
+                        for deal in (history_deals or []):
+                            if deal.entry == mt5.DEAL_ENTRY_OUT or deal.entry == mt5.DEAL_ENTRY_INOUT:
+                                if getattr(deal, 'deal', None) == trade.get('deal_ticket') or getattr(deal, 'order', None) == trade.get('order_ticket'):
+                                    if symbol and getattr(deal, 'symbol', None) != symbol:
+                                        continue
+                                    candidates.append(deal)
+                        if candidates:
+                            candidates.sort(key=lambda d: d.time)
+                            closing_deal = candidates[-1]
                 except Exception:
                     closing_deal = None
 
