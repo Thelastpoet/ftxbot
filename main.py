@@ -48,6 +48,7 @@ class Config:
             self.spread_guard_pips_default = trading.get('spread_guard_pips', None)
             self.sr_lookback_period = trading.get('sr_lookback_period', 80)
             self.sr_proximity_pips = trading.get('sr_proximity_pips', 10)
+            self.tp_buffer_pips = trading.get('tp_buffer_pips', 2)
             # Trend filter settings
             self.use_trend_filter = trading.get('use_trend_filter', True)
             self.trend_ema_period = trading.get('trend_ema_period', 200)
@@ -88,6 +89,7 @@ class Config:
                     'max_extension_atr_mult': s.get('max_extension_atr_mult'),
                     'sr_lookback_period': s.get('sr_lookback_period'),
                     'sr_proximity_pips': s.get('sr_proximity_pips'),
+                    'tp_buffer_pips': s.get('tp_buffer_pips'),
                 }
                 # Remove None values
                 entry = {k: v for k, v in entry.items() if v is not None}
@@ -129,6 +131,7 @@ class Config:
         self.spread_guard_pips_default = None
         self.sr_lookback_period = 80
         self.sr_proximity_pips = 10
+        self.tp_buffer_pips = 2
         self.use_trend_filter = True
         self.trend_ema_period = 200
         self.use_ema_slope_filter = True

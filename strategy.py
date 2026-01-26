@@ -60,6 +60,7 @@ class PurePriceActionStrategy:
         self.max_extension_atr_mult = getattr(config, 'max_extension_atr_mult', None)
         self.sr_lookback_period = int(getattr(config, 'sr_lookback_period', 80))
         self.sr_proximity_pips = float(getattr(config, 'sr_proximity_pips', 10.0))
+        self.tp_buffer_pips = float(getattr(config, 'tp_buffer_pips', 2.0))
 
         # ATR for dynamic SL buffer and breakout threshold
         self.atr_period = int(getattr(config, 'atr_period', 14))
@@ -312,10 +313,23 @@ class PurePriceActionStrategy:
             sl_min = entry + min_sl
             return max(sl_struct, sl_min)
 
-    def _calculate_take_profit(self, entry: float, stop: float, rr: float, side: str) -> float:
-        """Calculate TP based on risk-reward ratio."""
-        dist = abs(entry - stop) * rr
-        return entry + dist if side == 'bullish' else entry - dist
+    def _calculate_structure_take_profit(self, breakout: BreakoutInfo, support: List[float],
+                                         resistance: List[float], pip: float,
+                                         tp_buffer_pips: float) -> Optional[float]:
+        """Calculate TP at the next structure level in the trade direction."""
+        buffer_price = float(tp_buffer_pips) * pip
+        if breakout.type == 'bullish':
+            targets = [r for r in resistance if r > breakout.level]
+            if not targets:
+                return None
+            target = min(targets)
+            return target - buffer_price
+        else:
+            targets = [s for s in support if s < breakout.level]
+            if not targets:
+                return None
+            target = max(targets)
+            return target + buffer_price
 
     # ----- Main Signal Generation -----
     def generate_signal(self, data: pd.DataFrame, symbol: str,
@@ -366,6 +380,7 @@ class PurePriceActionStrategy:
             max_ext_atr = self.max_extension_atr_mult
             sr_lookback = int(self.sr_lookback_period)
             sr_proximity_pips = float(self.sr_proximity_pips)
+            tp_buffer_pips = float(self.tp_buffer_pips)
 
             for sc in getattr(self.config, 'symbols', []) or []:
                 if sc.get('name') == symbol:
@@ -378,6 +393,7 @@ class PurePriceActionStrategy:
                     max_ext_atr = sc.get('max_extension_atr_mult', max_ext_atr)
                     sr_lookback = int(sc.get('sr_lookback_period', sr_lookback) or sr_lookback)
                     sr_proximity_pips = float(sc.get('sr_proximity_pips', sr_proximity_pips) or sr_proximity_pips)
+                    tp_buffer_pips = float(sc.get('tp_buffer_pips', tp_buffer_pips) or tp_buffer_pips)
                     break
 
             # Use completed candles only (exclude current forming bar)
@@ -479,8 +495,11 @@ class PurePriceActionStrategy:
                 logger.info(f"{symbol}: No valid structure for SL - trade rejected")
                 return None
 
-            # Calculate TP
-            tp = self._calculate_take_profit(entry_eff, sl, rr, breakout.type)
+            # Calculate TP from next structure level
+            tp = self._calculate_structure_take_profit(breakout, support, resistance, pip, tp_buffer_pips)
+            if tp is None:
+                logger.info(f"{symbol}: No valid structure for TP - trade rejected")
+                return None
 
             # Round to broker precision
             point = getattr(info, 'point', None)
@@ -488,6 +507,16 @@ class PurePriceActionStrategy:
             if point and digits is not None:
                 sl = round(round(sl / point) * point, int(digits))
                 tp = round(round(tp / point) * point, int(digits))
+
+            # Ensure TP is on correct side of entry after rounding
+            if breakout.type == 'bullish':
+                if tp <= entry_eff:
+                    logger.info(f"{symbol}: TP {tp:.5f} not above entry {entry_eff:.5f}")
+                    return None
+            else:
+                if tp >= entry_eff:
+                    logger.info(f"{symbol}: TP {tp:.5f} not below entry {entry_eff:.5f}")
+                    return None
 
             # Calculate actual RR
             sl_pips = abs(entry_eff - sl) / pip
@@ -502,10 +531,11 @@ class PurePriceActionStrategy:
                 return None
 
             actual_rr = tp_pips / sl_pips
+            required_rr = max(min_rr, rr)
 
             # Minimum RR check
-            if actual_rr < min_rr:
-                logger.info(f"{symbol}: RR {actual_rr:.2f} < min {min_rr}")
+            if actual_rr < required_rr:
+                logger.info(f"{symbol}: RR {actual_rr:.2f} < min {required_rr:.2f}")
                 return None
 
             signal = TradingSignal(
