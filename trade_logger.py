@@ -132,6 +132,7 @@ class TradeLogger:
                 raw = self.json_file.read_text(encoding="utf-8")
                 if raw.strip():
                     self.trades = json.loads(raw)
+                    self._coerce_trade_types()
                 else:
                     self.trades = []
             else:
@@ -139,6 +140,24 @@ class TradeLogger:
         except Exception:
             # On corrupt JSON, start fresh (optionally back up here)
             self.trades = []
+
+    def _coerce_trade_types(self) -> None:
+        """Best-effort coercion for datetime fields loaded from JSON."""
+        dt_keys = {
+            "timestamp",
+            "signal_time",
+            "close_time",
+            "entry_time",
+            "trailing_last_update_time",
+        }
+        for t in self.trades:
+            for k in dt_keys:
+                v = t.get(k)
+                if isinstance(v, str):
+                    try:
+                        t[k] = datetime.fromisoformat(v)
+                    except Exception:
+                        t[k] = v
 
     def _write_json_snapshot(self, rows: List[Dict[str, Any]]) -> None:
         """Atomic JSON snapshot write."""

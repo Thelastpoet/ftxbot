@@ -231,9 +231,171 @@ class TradingBot:
                     )
                 except Exception as e:
                     logger.warning(f"{sym}: preflight error: {e}")
+
+            # Reconcile persisted trades with live MT5 positions
+            try:
+                self._reconcile_state()
+            except Exception as e:
+                logger.warning(f"State reconcile failed: {e}")
         except Exception as e:
             logger.error(f"Initialization failed: {e}")
             raise
+
+    def _classify_close_deal(self, closing_deal):
+        mt5 = self.mt5_client.mt5
+        reason_code = getattr(closing_deal, 'reason', None)
+        status = 'CLOSED'
+        reason_label = None
+        try:
+            if reason_code is not None:
+                if reason_code == getattr(mt5, 'DEAL_REASON_SL', -1):
+                    status, reason_label = 'CLOSED_SL', 'SL'
+                elif reason_code == getattr(mt5, 'DEAL_REASON_TP', -1):
+                    status, reason_label = 'CLOSED_TP', 'TP'
+                elif reason_code in (
+                    getattr(mt5, 'DEAL_REASON_SO', None),
+                    getattr(mt5, 'DEAL_REASON_STOPOUT', None),
+                ):
+                    status, reason_label = 'CLOSED_STOPOUT', 'STOPOUT'
+                elif reason_code in (
+                    getattr(mt5, 'DEAL_REASON_CLIENT', None),
+                    getattr(mt5, 'DEAL_REASON_MOBILE', None),
+                    getattr(mt5, 'DEAL_REASON_WEB', None),
+                ):
+                    status, reason_label = 'CLOSED_MANUAL', 'MANUAL'
+                elif reason_code == getattr(mt5, 'DEAL_REASON_EXPERT', None):
+                    status, reason_label = 'CLOSED_STRATEGY', 'EXPERT'
+                elif reason_code == getattr(mt5, 'DEAL_REASON_DEALER', None):
+                    status, reason_label = 'CLOSED_DEALER', 'DEALER'
+        except Exception:
+            pass
+
+        if reason_label is None:
+            try:
+                ctext = str(getattr(closing_deal, 'comment', '') or '').lower()
+                if 'sl' in ctext:
+                    status, reason_label = 'CLOSED_SL', 'COMMENT_SL'
+                elif 'tp' in ctext:
+                    status, reason_label = 'CLOSED_TP', 'COMMENT_TP'
+                else:
+                    status, reason_label = 'CLOSED_MANUAL', 'COMMENT'
+            except Exception:
+                status, reason_label = 'CLOSED', None
+
+        try:
+            close_time = datetime.fromtimestamp(
+                getattr(closing_deal, 'time', 0), tz=timezone.utc
+            ) if getattr(closing_deal, 'time', None) else None
+        except Exception:
+            close_time = None
+
+        return status, reason_label, reason_code, close_time
+
+    def _reconcile_state(self):
+        if not self.mt5_client or not self.mt5_client.is_connected():
+            logger.warning("State reconcile skipped: MT5 not connected")
+            return
+
+        positions = self.mt5_client.get_all_positions()
+        if positions is None:
+            logger.warning("State reconcile skipped: no positions returned")
+            return
+
+        open_positions = {getattr(p, 'ticket', None): p for p in positions if getattr(p, 'ticket', None) is not None}
+        open_tickets = set(open_positions.keys())
+
+        open_trades = [t for t in self.trade_logger.trades if t.get('status') == 'OPEN']
+        trades_by_pos = {t.get('position_id'): t for t in open_trades if t.get('position_id') is not None}
+
+        updated = False
+
+        # Ensure every MT5 position has a corresponding OPEN trade entry
+        for pid, pos in open_positions.items():
+            trade = trades_by_pos.get(pid)
+            if trade is None:
+                entry_time = datetime.fromtimestamp(getattr(pos, 'time', 0), tz=timezone.utc) if getattr(pos, 'time', None) else datetime.now(timezone.utc)
+                trade = {
+                    'timestamp': entry_time,
+                    'symbol': getattr(pos, 'symbol', None),
+                    'order_type': 'BUY' if int(getattr(pos, 'type', 0)) == 0 else 'SELL',
+                    'entry_price': float(getattr(pos, 'price_open', 0.0) or 0.0),
+                    'requested_price': None,
+                    'signal_price': None,
+                    'volume': float(getattr(pos, 'volume', 0.0) or 0.0),
+                    'stop_loss': float(getattr(pos, 'sl', 0.0) or 0.0),
+                    'take_profit': float(getattr(pos, 'tp', 0.0) or 0.0),
+                    'order_ticket': pid,
+                    'deal_ticket': None,
+                    'position_id': pid,
+                    'reason': 'RECONCILED',
+                    'signal_time': None,
+                    'breakout_level': None,
+                    'status': 'OPEN'
+                }
+                self.trade_logger.trades.append(trade)
+                updated = True
+            else:
+                # Update with MT5 truth
+                trade['symbol'] = getattr(pos, 'symbol', trade.get('symbol'))
+                trade['order_type'] = 'BUY' if int(getattr(pos, 'type', 0)) == 0 else 'SELL'
+                trade['entry_price'] = float(getattr(pos, 'price_open', trade.get('entry_price') or 0.0) or 0.0)
+                trade['volume'] = float(getattr(pos, 'volume', trade.get('volume') or 0.0) or 0.0)
+                if getattr(pos, 'sl', None) is not None:
+                    trade['stop_loss'] = float(pos.sl)
+                if getattr(pos, 'tp', None) is not None:
+                    trade['take_profit'] = float(pos.tp)
+                trade['position_id'] = pid
+                trade['status'] = 'OPEN'
+                if trade.get('timestamp') is None and getattr(pos, 'time', None):
+                    trade['timestamp'] = datetime.fromtimestamp(pos.time, tz=timezone.utc)
+                updated = True
+
+        # Close any trades marked OPEN but not found in MT5
+        for trade in open_trades:
+            pid = trade.get('position_id')
+            if pid is not None and pid in open_tickets:
+                continue
+
+            closing_deal = None
+            if pid is not None:
+                deals = self.mt5_client.get_history_deals_by_position(pid)
+                if deals:
+                    closing_deals = [
+                        d for d in deals
+                        if d.entry == self.mt5_client.mt5.DEAL_ENTRY_OUT or d.entry == self.mt5_client.mt5.DEAL_ENTRY_INOUT
+                    ]
+                    if closing_deals:
+                        closing_deal = closing_deals[-1]
+
+            if closing_deal is None and (trade.get('deal_ticket') or trade.get('order_ticket')):
+                try:
+                    from_date = datetime.now(timezone.utc) - timedelta(days=30)
+                    to_date = datetime.now(timezone.utc)
+                    history_deals = self.mt5_client.get_history_deals(from_date, to_date)
+                    for deal in (history_deals or []):
+                        if getattr(deal, 'deal', None) == trade.get('deal_ticket') or getattr(deal, 'order', None) == trade.get('order_ticket'):
+                            if deal.entry == self.mt5_client.mt5.DEAL_ENTRY_OUT or deal.entry == self.mt5_client.mt5.DEAL_ENTRY_INOUT:
+                                closing_deal = deal
+                                break
+                except Exception:
+                    closing_deal = None
+
+            if closing_deal:
+                status, reason_label, reason_code, close_time = self._classify_close_deal(closing_deal)
+                trade['exit_price'] = closing_deal.price
+                trade['profit'] = closing_deal.profit
+                trade['status'] = status
+                trade['close_reason_code'] = reason_code
+                trade['close_reason'] = reason_label
+                trade['close_time'] = close_time
+            else:
+                trade['status'] = 'CLOSED_UNKNOWN'
+                trade['close_reason'] = 'MISSING_ON_RESTART'
+                trade['close_time'] = datetime.now(timezone.utc)
+            updated = True
+
+        if updated:
+            self.trade_logger.persist_all()
 
     async def execute_trade(self, signal: TradingSignal, symbol: str):
         try:
@@ -467,9 +629,14 @@ class TradingBot:
 
                 # Check if position is still open by querying MT5 directly
                 position_still_open = False
+                position_obj = None
                 try:
                     current_positions = self.mt5_client.get_positions(symbol) if symbol else self.mt5_client.get_all_positions()
-                    position_still_open = any(getattr(p, 'ticket', None) == position_id for p in (current_positions or []))
+                    for p in (current_positions or []):
+                        if getattr(p, 'ticket', None) == position_id:
+                            position_still_open = True
+                            position_obj = p
+                            break
                 except Exception as e:
                     logger.warning(f"Error checking if position {position_id} is open: {e}")
                     continue
@@ -538,7 +705,8 @@ class TradingBot:
                                 status=status,
                                 close_reason_code=reason_code,
                                 close_reason=reason_label,
-                                close_time=close_time
+                                close_time=close_time,
+                                position_id=position_id
                             )
                             logger.info(f"Trade {trade.get('order_ticket')} closed ({status}) profit {profit}")
                     if self.trailing_manager:
@@ -557,16 +725,50 @@ class TradingBot:
                             pip = resolve_pip_size(symbol, sym_info, self.config) if sym_info else 0.0
                             entry_price = trade.get('entry_price')
                             stop_loss = trade.get('stop_loss')
+                            entry_time = trade.get('timestamp')
+                            # Parse persisted timestamp if needed
+                            if isinstance(entry_time, str):
+                                try:
+                                    entry_time = datetime.fromisoformat(entry_time)
+                                except Exception:
+                                    entry_time = None
+
+                            # Fall back to position time if available
+                            if entry_time is None and position_obj is not None:
+                                try:
+                                    ptime = getattr(position_obj, 'time', None)
+                                    if ptime:
+                                        entry_time = datetime.fromtimestamp(ptime, tz=timezone.utc)
+                                except Exception:
+                                    entry_time = None
+
+                            entry_time = entry_time or datetime.now(timezone.utc)
+                            # Prefer actual SL from MT5 if present
+                            current_sl = None
+                            try:
+                                if position_obj is not None and getattr(position_obj, 'sl', None):
+                                    current_sl = float(position_obj.sl)
+                            except Exception:
+                                current_sl = None
+
+                            if current_sl is None:
+                                current_sl = trade.get('trailing_current_sl') or stop_loss
+
                             if pip > 0 and entry_price is not None and stop_loss is not None:
                                 self.trailing_manager.register_position(
                                     position_id=position_id,
                                     symbol=symbol,
                                     direction=trade.get('order_type', ''),
                                     entry_price=float(entry_price),
-                                    entry_time=trade.get('timestamp') or datetime.now(timezone.utc),
+                                    entry_time=entry_time,
                                     stop_loss=float(stop_loss),
                                     take_profit=trade.get('take_profit'),
                                     pip_size=pip,
+                                    current_sl=current_sl,
+                                    state=trade.get('trailing_state'),
+                                    highest_profit_pips=trade.get('trailing_mfe_pips'),
+                                    sl_updates=trade.get('trailing_sl_updates'),
+                                    last_update_time=trade.get('trailing_last_update_time'),
                                 )
 
                         tick = self.mt5_client.get_symbol_info_tick(symbol) if symbol else None
@@ -582,6 +784,23 @@ class TradingBot:
                                     logger.debug(f"{symbol}: Failed trailing SL update for {position_id}")
                             if update.get('should_close_time'):
                                 self.trailing_manager.close_position_live(position_id, reason="TIME_EXIT")
+
+                            # Persist trailing state changes
+                            if isinstance(update, dict):
+                                prev_state = trade.get('trailing_state')
+                                cur_state = update.get('state')
+                                if new_sl is not None or (cur_state and cur_state != prev_state):
+                                    state_obj = self.trailing_manager.get_position_state(position_id)
+                                    fields = {
+                                        'trailing_state': cur_state,
+                                        'trailing_current_sl': update.get('current_sl'),
+                                        'trailing_profit_pips': update.get('profit_pips'),
+                                        'trailing_mfe_pips': update.get('mfe_pips'),
+                                        'trailing_last_update_time': datetime.now(timezone.utc),
+                                    }
+                                    if state_obj is not None:
+                                        fields['trailing_sl_updates'] = state_obj.sl_updates
+                                    self.trade_logger.update_trade(ticket=trade.get('order_ticket'), **fields)
                     except Exception as e:
                         logger.warning(f"{symbol}: Trailing stop error for {position_id}: {e}")
         except Exception as e:

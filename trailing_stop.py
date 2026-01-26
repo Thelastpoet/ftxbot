@@ -146,9 +146,14 @@ class TrailingStopManager:
     def get_config(self, symbol: str) -> TrailingStopConfig:
         return self.configs.get(symbol, DEFAULT_TRAILING_CONFIG)
 
-    def register_position(self, position_id, symbol, direction, entry_price, 
-                         entry_time, stop_loss, take_profit, pip_size) -> TrailingStopState:
-        state = TrailingStopState(
+    def register_position(self, position_id, symbol, direction, entry_price,
+                         entry_time, stop_loss, take_profit, pip_size,
+                         current_sl: Optional[float] = None,
+                         state: Optional[Any] = None,
+                         highest_profit_pips: Optional[float] = None,
+                         sl_updates: Optional[int] = None,
+                         last_update_time: Optional[datetime] = None) -> TrailingStopState:
+        pos_state = TrailingStopState(
             position_id=position_id,
             symbol=symbol,
             direction=direction.upper(),
@@ -159,9 +164,36 @@ class TrailingStopManager:
             current_sl=stop_loss,
             pip_size=pip_size
         )
-        self.positions[position_id] = state
-        logger.debug(f"Registered {symbol} pos {position_id}. Risk: {state.initial_risk_pips:.1f} pips")
-        return state
+        # Restore persisted state if provided
+        if current_sl is not None:
+            pos_state.current_sl = current_sl
+        if state is not None:
+            try:
+                if isinstance(state, TrailingState):
+                    pos_state.state = state
+                else:
+                    pos_state.state = TrailingState(str(state))
+            except Exception:
+                pass
+        if highest_profit_pips is not None:
+            pos_state.highest_profit_pips = float(highest_profit_pips)
+        if sl_updates is not None:
+            pos_state.sl_updates = int(sl_updates)
+        if last_update_time is not None:
+            pos_state.last_update_time = last_update_time
+
+        # Infer at least BREAK_EVEN if SL is already beyond entry
+        try:
+            if pos_state.state == TrailingState.INITIAL:
+                if pos_state.direction == "BUY" and pos_state.current_sl >= pos_state.entry_price:
+                    pos_state.state = TrailingState.BREAK_EVEN
+                elif pos_state.direction == "SELL" and pos_state.current_sl <= pos_state.entry_price:
+                    pos_state.state = TrailingState.BREAK_EVEN
+        except Exception:
+            pass
+        self.positions[position_id] = pos_state
+        logger.debug(f"Registered {symbol} pos {position_id}. Risk: {pos_state.initial_risk_pips:.1f} pips")
+        return pos_state
 
     def unregister_position(self, position_id: Any):
         if position_id in self.positions:
@@ -203,8 +235,11 @@ class TrailingStopManager:
                     new_sl = state.entry_price + (be_offset * pip)
                 else:
                     new_sl = state.entry_price - (be_offset * pip)
-                new_state = TrailingState.BREAK_EVEN
-                logger.info(f"{state.symbol} {state.position_id}: BE Triggered (+{profit_pips:.1f} pips / {profit_pips/state.initial_risk_pips:.1f}R)")
+                if self._is_better_sl(state.direction, new_sl, state.current_sl):
+                    new_state = TrailingState.BREAK_EVEN
+                    logger.info(f"{state.symbol} {state.position_id}: BE Triggered (+{profit_pips:.1f} pips / {profit_pips/state.initial_risk_pips:.1f}R)")
+                else:
+                    new_sl = None
 
         # 2. Trailing Logic
         # Check if we should start trailing (from either Initial or BE state)
