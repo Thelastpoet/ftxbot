@@ -34,6 +34,10 @@ class Config:
             self.lookback_period = trading.get('lookback_period', 20)
             self.swing_window = trading.get('swing_window', 5)
             self.breakout_threshold = trading.get('breakout_threshold_pips', 7)
+            self.breakout_threshold_atr_mult = trading.get('breakout_threshold_atr_mult', None)
+            self.breakout_window_bars = trading.get('breakout_window_bars', 1)
+            self.max_extension_pips = trading.get('max_extension_pips', None)
+            self.max_extension_atr_mult = trading.get('max_extension_atr_mult', None)
             self.min_stop_loss_pips = trading.get('min_stop_loss_pips', 20)
             self.stop_loss_buffer_pips = trading.get('stop_loss_buffer_pips', 15)
             # ATR for dynamic SL buffer
@@ -42,6 +46,14 @@ class Config:
             self.min_sl_buffer_pips = trading.get('min_sl_buffer_pips', 10)
             self.max_sl_pips = trading.get('max_sl_pips', None)
             self.spread_guard_pips_default = trading.get('spread_guard_pips', None)
+            self.sr_lookback_period = trading.get('sr_lookback_period', 80)
+            self.sr_proximity_pips = trading.get('sr_proximity_pips', 10)
+            # Trend filter settings
+            self.use_trend_filter = trading.get('use_trend_filter', True)
+            self.trend_ema_period = trading.get('trend_ema_period', 200)
+            self.use_ema_slope_filter = trading.get('use_ema_slope_filter', True)
+            self.ema_slope_period = trading.get('ema_slope_period', 20)
+            self.min_ema_slope_pips_per_bar = trading.get('min_ema_slope_pips_per_bar', 0.1)
 
             risk = data.get('risk_management', {})
             self.risk_per_trade = risk.get('risk_per_trade', 0.01)
@@ -54,22 +66,34 @@ class Config:
             # Symbols
             self.symbols = []
             for s in data.get('symbols', []) or []:
+                # Prefer explicit entry/trend timeframes; fall back to legacy timeframes list
+                legacy_tfs = s.get('timeframes') or []
+                entry_tf = s.get('entry_timeframe') or (legacy_tfs[0] if legacy_tfs else 'M15')
+                trend_tf = s.get('trend_timeframe') or (legacy_tfs[1] if len(legacy_tfs) > 1 else 'H1')
                 entry = {
                     'name': s.get('name'),
-                    'timeframes': s.get('timeframes', ['M15']),
+                    'entry_timeframe': entry_tf,
+                    'trend_timeframe': trend_tf,
                     # Per-symbol overrides (only essential ones)
                     'pip_unit': s.get('pip_unit'),
                     'min_stop_loss_pips': s.get('min_stop_loss_pips'),
                     'stop_loss_buffer_pips': s.get('stop_loss_buffer_pips'),
                     'breakout_threshold_pips': s.get('breakout_threshold_pips'),
+                    'breakout_threshold_atr_mult': s.get('breakout_threshold_atr_mult'),
                     'risk_reward_ratio': s.get('risk_reward_ratio'),
                     'spread_guard_pips': s.get('spread_guard_pips'),
                     'max_sl_pips': s.get('max_sl_pips'),
+                    'breakout_window_bars': s.get('breakout_window_bars'),
+                    'max_extension_pips': s.get('max_extension_pips'),
+                    'max_extension_atr_mult': s.get('max_extension_atr_mult'),
+                    'sr_lookback_period': s.get('sr_lookback_period'),
+                    'sr_proximity_pips': s.get('sr_proximity_pips'),
                 }
                 # Remove None values
                 entry = {k: v for k, v in entry.items() if v is not None}
                 entry.setdefault('name', s.get('name'))
-                entry.setdefault('timeframes', ['M15'])
+                entry.setdefault('entry_timeframe', 'M15')
+                entry.setdefault('trend_timeframe', 'H1')
                 self.symbols.append(entry)
 
             # CLI overrides
@@ -77,10 +101,10 @@ class Config:
                 if self.args.risk_per_trade is not None:
                     self.risk_per_trade = float(self.args.risk_per_trade)
                 if self.args.symbol:
-                    self.symbols = [{'name': self.args.symbol, 'timeframes': ['M15']}]
+                    self.symbols = [{'name': self.args.symbol, 'entry_timeframe': 'M15', 'trend_timeframe': 'H1'}]
                 if self.args.timeframe:
                     for sym in self.symbols:
-                        sym['timeframes'] = [self.args.timeframe]
+                        sym['entry_timeframe'] = self.args.timeframe
 
             logger.info(f"Config loaded from {self.config_path}")
         except Exception as e:
@@ -92,6 +116,10 @@ class Config:
         self.lookback_period = 20
         self.swing_window = 5
         self.breakout_threshold = 7
+        self.breakout_threshold_atr_mult = None
+        self.breakout_window_bars = 1
+        self.max_extension_pips = None
+        self.max_extension_atr_mult = None
         self.min_stop_loss_pips = 20
         self.stop_loss_buffer_pips = 15
         self.atr_period = 14
@@ -99,12 +127,19 @@ class Config:
         self.min_sl_buffer_pips = 10
         self.max_sl_pips = None
         self.spread_guard_pips_default = None
+        self.sr_lookback_period = 80
+        self.sr_proximity_pips = 10
+        self.use_trend_filter = True
+        self.trend_ema_period = 200
+        self.use_ema_slope_filter = True
+        self.ema_slope_period = 20
+        self.min_ema_slope_pips_per_bar = 0.1
         self.risk_per_trade = 0.01
         self.fixed_lot_size = None
         self.max_drawdown = 0.05
         self.risk_reward_ratio = 2.0
         self.min_rr = 1.0
-        self.symbols = [{'name': 'EURUSD', 'timeframes': ['M15']}]
+        self.symbols = [{'name': 'EURUSD', 'entry_timeframe': 'M15', 'trend_timeframe': 'H1'}]
 
 class TradingBot:
     def __init__(self, config: Config):
@@ -114,6 +149,7 @@ class TradingBot:
         self.strategy = None
         self.risk_manager = None
         self.trade_logger = None
+        self.trailing_manager = None
 
         # Persist state files under a dedicated folder
         self.state_manager = StateManager('symbol_state')
@@ -143,6 +179,7 @@ class TradingBot:
             from market_data import MarketData
             from risk_manager import RiskManager
             from trade_logger import TradeLogger
+            from trailing_stop import create_live_trailing_manager
 
             self.mt5_client = MetaTrader5Client()
             if not self.mt5_client.initialized:
@@ -152,6 +189,7 @@ class TradingBot:
             self.strategy = PurePriceActionStrategy(self.config, self.mt5_client)
             self.risk_manager = RiskManager(self.config, self.mt5_client)
             self.trade_logger = TradeLogger('trades.log')
+            self.trailing_manager = create_live_trailing_manager(self.mt5_client)
 
             # Load strategy state (duplicate prevention)
             try:
@@ -233,12 +271,12 @@ class TradingBot:
 
             # Final spread check before execution (spreads can spike in milliseconds)
             current_spread_pips = abs(float(tick.ask) - float(tick.bid)) / pip
-            spread_guard = self.config.spread_guard_pips_default or 5.0  # Default 5 pips
+            spread_guard = self.config.spread_guard_pips_default
             for sc in getattr(self.config, 'symbols', []) or []:
                 if sc.get('name') == symbol:
                     spread_guard = sc.get('spread_guard_pips', spread_guard)
                     break
-            if current_spread_pips > float(spread_guard):
+            if spread_guard is not None and float(spread_guard) > 0 and current_spread_pips > float(spread_guard):
                 logger.info(f"{symbol}: Spread {current_spread_pips:.1f}p > guard {spread_guard}p at execution - rejected")
                 return None
 
@@ -296,6 +334,20 @@ class TradingBot:
                     'status': 'OPEN'
                 }
                 self.trade_logger.log_trade(trade)
+                if self.trailing_manager and position_id is not None:
+                    try:
+                        self.trailing_manager.register_position(
+                            position_id=position_id,
+                            symbol=symbol,
+                            direction=trade['order_type'],
+                            entry_price=trade['entry_price'] if trade['entry_price'] is not None else float(exec_price),
+                            entry_time=trade['timestamp'],
+                            stop_loss=trade['stop_loss'],
+                            take_profit=trade['take_profit'],
+                            pip_size=pip,
+                        )
+                    except Exception as e:
+                        logger.warning(f"{symbol}: Failed to register trailing stop: {e}")
                 ep = trade['entry_price'] if trade['entry_price'] is not None else exec_price
                 logger.info(f"EXECUTED {symbol} {trade['order_type']} @{ep:.5f} vol={volume:.2f} order={order_ticket} deal={deal_ticket} pos={position_id}")
                 return result
@@ -309,7 +361,8 @@ class TradingBot:
 
     async def process_symbol(self, symbol_config: Dict):
         symbol = symbol_config['name']
-        timeframe = (symbol_config.get('timeframes') or ['M15'])[0]
+        entry_tf = symbol_config.get('entry_timeframe', 'M15')
+        trend_tf = symbol_config.get('trend_timeframe', 'H1')
 
         # Skip trading during daily rollover (21:55 - 23:05 UTC)
         if self._is_rollover_period():
@@ -320,18 +373,22 @@ class TradingBot:
             bars_needed = {
                 'M1': 250, 'M5': 250, 'M15': 250, 'M30': 250,
                 'H1': 250, 'H4': 250, 'D1': 250
-            }.get(timeframe.upper(), 250)
+            }.get(str(entry_tf).upper(), 250)
 
-            candles = await self.market_data.fetch_data(symbol, timeframe, bars_needed)
+            candles = await self.market_data.fetch_data(symbol, entry_tf, bars_needed)
             if candles is None:
                 return
 
-            # Fetch H1 data for trend filter (anchoring trend on higher timeframe)
-            h1_data = None
-            if timeframe.upper() != 'H1':
-                h1_data = await self.market_data.fetch_data(symbol, 'H1', 250)
+            # Fetch higher timeframe data for trend filter
+            trend_data = None
+            if trend_tf and str(trend_tf).upper() != str(entry_tf).upper():
+                trend_bars_needed = {
+                    'M1': 250, 'M5': 250, 'M15': 250, 'M30': 250,
+                    'H1': 250, 'H4': 250, 'D1': 250
+                }.get(str(trend_tf).upper(), 250)
+                trend_data = await self.market_data.fetch_data(symbol, trend_tf, trend_bars_needed)
 
-            signal = self.strategy.generate_signal(candles, symbol, trend_data=h1_data)
+            signal = self.strategy.generate_signal(candles, symbol, trend_data=trend_data)
             if signal:
                 # Skip if same-direction position already exists
                 try:
@@ -481,6 +538,49 @@ class TradingBot:
                                 close_time=close_time
                             )
                             logger.info(f"Trade {trade.get('order_ticket')} closed ({status}) profit {profit}")
+                    if self.trailing_manager:
+                        try:
+                            self.trailing_manager.unregister_position(position_id)
+                        except Exception:
+                            pass
+                    continue
+
+                # Trailing stop management for open positions
+                if self.trailing_manager:
+                    try:
+                        # Register position for trailing if missing
+                        if self.trailing_manager.get_position_state(position_id) is None:
+                            sym_info = self.mt5_client.get_symbol_info(symbol) if symbol else None
+                            pip = resolve_pip_size(symbol, sym_info, self.config) if sym_info else 0.0
+                            entry_price = trade.get('entry_price')
+                            stop_loss = trade.get('stop_loss')
+                            if pip > 0 and entry_price is not None and stop_loss is not None:
+                                self.trailing_manager.register_position(
+                                    position_id=position_id,
+                                    symbol=symbol,
+                                    direction=trade.get('order_type', ''),
+                                    entry_price=float(entry_price),
+                                    entry_time=trade.get('timestamp') or datetime.now(timezone.utc),
+                                    stop_loss=float(stop_loss),
+                                    take_profit=trade.get('take_profit'),
+                                    pip_size=pip,
+                                )
+
+                        tick = self.mt5_client.get_symbol_info_tick(symbol) if symbol else None
+                        if tick:
+                            direction = str(trade.get('order_type', '')).upper()
+                            current_price = float(tick.bid) if direction == 'BUY' else float(tick.ask)
+                            update = self.trailing_manager.update_position(
+                                position_id, current_price, datetime.now(timezone.utc)
+                            )
+                            new_sl = update.get('new_sl') if isinstance(update, dict) else None
+                            if new_sl is not None:
+                                if not self.trailing_manager.update_sl_live(position_id, new_sl):
+                                    logger.debug(f"{symbol}: Failed trailing SL update for {position_id}")
+                            if update.get('should_close_time'):
+                                self.trailing_manager.close_position_live(position_id, reason="TIME_EXIT")
+                    except Exception as e:
+                        logger.warning(f"{symbol}: Trailing stop error for {position_id}: {e}")
         except Exception as e:
             logger.error(f"Error monitoring open trades: {e}", exc_info=True)
 

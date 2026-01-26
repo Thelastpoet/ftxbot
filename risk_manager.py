@@ -77,19 +77,6 @@ class RiskManager:
             logger.error(f"Error calculating pip value: {e}")
             return 0.0
 
-    def calculate_stop_loss_pips(self, entry_price: float, stop_loss: float, symbol_info: Any) -> float:
-        """Calculate stop loss distance in pips."""
-        try:
-            if not symbol_info:
-                return 0.0
-            pip = resolve_pip_size("", symbol_info, self.config)
-            if pip <= 0:
-                return 0.0
-            return abs(float(entry_price) - float(stop_loss)) / pip
-        except Exception as e:
-            logger.error(f"Error calculating stop loss pips: {e}")
-            return 0.0
-
     def check_risk_limits(self) -> bool:
         """Basic drawdown and margin checks."""
         try:

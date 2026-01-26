@@ -1,5 +1,4 @@
 import json
-import csv
 import os
 from pathlib import Path
 from threading import RLock
@@ -20,7 +19,7 @@ class TradeLogger:
     Single-source-of-truth trade logger for a live trading bot.
 
     - Keeps all trades in memory: self.trades (List[Dict]).
-    - Centralizes persistence via persist_all(): writes JSON & CSV snapshots atomically.
+    - Centralizes persistence via persist_all(): writes a JSON snapshot atomically.
     - No JSON re-load on each append/update.
     - Backwards compatible with main.py usage:
         TradeLogger('trades.log')
@@ -29,19 +28,17 @@ class TradeLogger:
     """
 
     def __init__(self, base_path: str,
-                 json_path: Optional[str] = None,
-                 csv_path: Optional[str] = None) -> None:
+                 json_path: Optional[str] = None) -> None:
         """
         Args:
-            base_path: Passed as 'trades.log' in your code; we derive .json/.csv alongside it.
-            json_path, csv_path: Optional explicit paths if you want to override.
+            base_path: Passed as 'trades.log' in your code; we derive .json alongside it.
+            json_path: Optional explicit path override.
         """
         base = Path(base_path)
         stem = base.stem or "trades"
 
         # Files used for persistence
         self.json_file: Path = Path(json_path) if json_path else base.with_name(f"{stem}.json")
-        self.csv_file: Path = Path(csv_path) if csv_path else base.with_name(f"{stem}.csv")
 
         # In-memory store (source of truth)
         self.trades: List[Dict[str, Any]] = []
@@ -121,48 +118,9 @@ class TradeLogger:
     def persist_all(self) -> None:
         """
         Single serialization path:
-        - Writes full JSON snapshot of self.trades.
-        - Writes full CSV snapshot of self.trades.
-        Both writes are atomic (tmp + replace).
+        - Writes full JSON snapshot of self.trades (atomic: tmp + replace).
         """
         self._write_json_snapshot(self.trades)
-        self._write_csv_snapshot(self.trades)
-
-    # Optional convenience: quick metrics without touching I/O
-    def get_performance_metrics(self) -> Dict[str, Any]:
-        """
-        Read-only analytics over in-memory trades. Safe to keep; not required by the bot.
-        """
-        closed = [t for t in self.trades if str(t.get("status", "")).startswith("CLOSED")]
-        if not closed:
-            return {
-                "total_trades": 0,
-                "win_rate": 0.0,
-                "avg_win": 0.0,
-                "avg_loss": 0.0,
-                "net_profit": 0.0,
-                "expectancy": 0.0,
-            }
-
-        profits = [float(t.get("profit", 0.0) or 0.0) for t in closed]
-        wins = [p for p in profits if p > 0]
-        losses = [p for p in profits if p <= 0]
-
-        total = len(closed)
-        win_rate = (len(wins) / total) if total else 0.0
-        avg_win = (sum(wins) / len(wins)) if wins else 0.0
-        avg_loss = (sum(losses) / len(losses)) if losses else 0.0
-        net_profit = sum(profits)
-        expectancy = (net_profit / total) if total else 0.0
-
-        return {
-            "total_trades": total,
-            "win_rate": win_rate,
-            "avg_win": avg_win,
-            "avg_loss": avg_loss,
-            "net_profit": net_profit,
-            "expectancy": expectancy,
-        }
 
     # -------------------------------------------------------------------------
     # Internals (I/O)
@@ -188,27 +146,3 @@ class TradeLogger:
         with tmp.open("w", encoding="utf-8") as f:
             json.dump(rows, f, indent=2, cls=_DateTimeEncoder, ensure_ascii=False)
         os.replace(tmp, self.json_file)
-
-    def _write_csv_snapshot(self, rows: List[Dict[str, Any]]) -> None:
-        """Atomic CSV snapshot write with header = union of keys across rows."""
-        tmp = self.csv_file.with_suffix(self.csv_file.suffix + ".tmp")
-
-        if not rows:
-            # Create/clear file to empty (headerless) CSV
-            with tmp.open("w", newline="", encoding="utf-8") as f:
-                pass
-            os.replace(tmp, self.csv_file)
-            return
-
-        # Stable, schema-safe header
-        header = sorted({k for r in rows for k in r.keys()})
-
-        with tmp.open("w", newline="", encoding="utf-8") as f:
-            writer = csv.DictWriter(f, fieldnames=header, extrasaction="ignore")
-            writer.writeheader()
-            for r in rows:
-                # Convert datetimes to ISO in CSV as well
-                safe_row = {k: (v.isoformat() if isinstance(v, datetime) else v) for k, v in r.items()}
-                writer.writerow(safe_row)
-
-        os.replace(tmp, self.csv_file)

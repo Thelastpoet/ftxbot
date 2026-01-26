@@ -8,7 +8,6 @@ Performance: < 1ms for small state files (<1KB)
 """
 
 import json
-import os
 from pathlib import Path
 from typing import Dict, Any, Optional
 from datetime import datetime, date
@@ -105,31 +104,6 @@ class StateManager:
         except Exception as e:
             logger.warning(f"Failed to load state for {component}: {e}")
             return None
-
-    def clear_state(self, component: str) -> bool:
-        """
-        Delete state file for component.
-
-        Args:
-            component: Component name
-
-        Returns:
-            True if deleted or didn't exist, False on error
-        """
-        try:
-            state_path = self._get_state_path(component)
-            if state_path.exists():
-                state_path.unlink()
-                logger.info(f"State cleared: {component}")
-            return True
-        except Exception as e:
-            logger.error(f"Failed to clear state for {component}: {e}")
-            return False
-
-    def state_exists(self, component: str) -> bool:
-        """Check if state file exists for component."""
-        return self._get_state_path(component).exists()
-
 
 """Convenience functions for common use cases"""
 

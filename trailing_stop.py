@@ -146,9 +146,6 @@ class TrailingStopManager:
     def get_config(self, symbol: str) -> TrailingStopConfig:
         return self.configs.get(symbol, DEFAULT_TRAILING_CONFIG)
 
-    def set_config(self, symbol: str, config: TrailingStopConfig):
-        self.configs[symbol] = config
-
     def register_position(self, position_id, symbol, direction, entry_price, 
                          entry_time, stop_loss, take_profit, pip_size) -> TrailingStopState:
         state = TrailingStopState(
@@ -306,9 +303,6 @@ class TrailingStopManager:
     def get_all_positions(self) -> Dict[Any, TrailingStopState]:
         return self.positions.copy()
 
-
-def create_backtest_trailing_manager() -> TrailingStopManager:
-    return TrailingStopManager(mt5_client=None)
 
 def create_live_trailing_manager(mt5_client) -> TrailingStopManager:
     return TrailingStopManager(mt5_client=mt5_client)

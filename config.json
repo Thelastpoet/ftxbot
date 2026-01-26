@@ -5,14 +5,22 @@
     "swing_window": 5,
     "breakout_threshold_pips": 5,
     "breakout_threshold_atr_mult": 0.3,
+    "breakout_window_bars": 1,
+    "max_extension_pips": null,
+    "max_extension_atr_mult": 0.5,
     "min_stop_loss_pips": 20,
     "stop_loss_buffer_pips": 15,
     "atr_period": 14,
     "atr_sl_k": 0.6,
     "min_sl_buffer_pips": 10,
+    "sr_lookback_period": 80,
+    "sr_proximity_pips": 10,
     "spread_guard_pips": 4,
     "use_trend_filter": true,
-    "trend_ema_period": 200
+    "trend_ema_period": 200,
+    "use_ema_slope_filter": true,
+    "ema_slope_period": 20,
+    "min_ema_slope_pips_per_bar": 0.1
   },
   "risk_management": {
     "risk_per_trade": 0.01,
@@ -22,66 +30,25 @@
     "min_rr": 1.0
   },
   "symbols": [
-    {"name": "EURUSD", "timeframes": ["M15", "H1"]},
-    {
-    "name": "GBPUSD",
-    "timeframes": ["M15", "H1"]
-  },
-  {
-    "name": "USDJPY",
-    "timeframes": ["M15", "H1"]
-  },
-  {
-    "name": "NZDUSD",
-    "timeframes": ["M15", "H1"]
-  },
-  {
-    "name": "USDCHF",
-    "timeframes": ["M15", "H1"]
-  },
-  {
-    "name": "AUDUSD",
-    "timeframes": ["M15", "H1"]
-  },
-  {
-    "name": "USDCAD",
-    "timeframes": ["M15", "H1"]
-  },
-  {
-    "name": "EURJPY",
-    "timeframes": ["M15", "H1"]
-  },
-  {
-    "name": "AUDJPY",
-    "timeframes": ["M15", "H1"]
-  },
-  {
-    "name": "NZDJPY",
-    "timeframes": ["M15", "H1"]
-  },
-  {
-    "name": "GBPCHF",
-    "timeframes": ["M15", "H1"]
-  },
-  {
-    "name": "EURAUD",
-    "timeframes": ["M15", "H1"]
-  },
-  {
-    "name": "EURCAD",
-    "timeframes": ["M15", "H1"]
-  },
-  {
-    "name": "GBPAUD",
-    "timeframes": ["M15", "H1"]
-  },
-  {
-    "name": "GBPCAD",
-    "timeframes": ["M15", "H1"]
-  },
+    {"name": "EURUSD", "entry_timeframe": "M15", "trend_timeframe": "H1"},
+    {"name": "GBPUSD", "entry_timeframe": "M15", "trend_timeframe": "H1"},
+    {"name": "USDJPY", "entry_timeframe": "M15", "trend_timeframe": "H1"},
+    {"name": "NZDUSD", "entry_timeframe": "M15", "trend_timeframe": "H1"},
+    {"name": "USDCHF", "entry_timeframe": "M15", "trend_timeframe": "H1"},
+    {"name": "AUDUSD", "entry_timeframe": "M15", "trend_timeframe": "H1"},
+    {"name": "USDCAD", "entry_timeframe": "M15", "trend_timeframe": "H1"},
+    {"name": "EURJPY", "entry_timeframe": "M15", "trend_timeframe": "H1"},
+    {"name": "AUDJPY", "entry_timeframe": "M15", "trend_timeframe": "H1"},
+    {"name": "NZDJPY", "entry_timeframe": "M15", "trend_timeframe": "H1"},
+    {"name": "GBPCHF", "entry_timeframe": "M15", "trend_timeframe": "H1"},
+    {"name": "EURAUD", "entry_timeframe": "M15", "trend_timeframe": "H1"},
+    {"name": "EURCAD", "entry_timeframe": "M15", "trend_timeframe": "H1"},
+    {"name": "GBPAUD", "entry_timeframe": "M15", "trend_timeframe": "H1"},
+    {"name": "GBPCAD", "entry_timeframe": "M15", "trend_timeframe": "H1"},
     {
       "name": "XAUUSD",
-      "timeframes": ["M15"],
+      "entry_timeframe": "M15",
+      "trend_timeframe": "H1",
       "pip_unit": 0.01,
       "min_stop_loss_pips": 1500,
       "stop_loss_buffer_pips": 300,

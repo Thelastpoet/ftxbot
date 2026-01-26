@@ -51,10 +51,15 @@ class PurePriceActionStrategy:
         self.lookback_period = getattr(config, 'lookback_period', 20)
         self.swing_window = getattr(config, 'swing_window', 5)
         self.breakout_threshold_pips = getattr(config, 'breakout_threshold', 7)
+        self.breakout_window_bars = int(getattr(config, 'breakout_window_bars', 1) or 1)
         self.min_stop_loss_pips = getattr(config, 'min_stop_loss_pips', 20)
         self.stop_loss_buffer_pips = getattr(config, 'stop_loss_buffer_pips', 15)
         self.risk_reward_ratio = getattr(config, 'risk_reward_ratio', 2.0)
         self.min_rr = getattr(config, 'min_rr', 1.0)
+        self.max_extension_pips = getattr(config, 'max_extension_pips', None)
+        self.max_extension_atr_mult = getattr(config, 'max_extension_atr_mult', None)
+        self.sr_lookback_period = int(getattr(config, 'sr_lookback_period', 80))
+        self.sr_proximity_pips = float(getattr(config, 'sr_proximity_pips', 10.0))
 
         # ATR for dynamic SL buffer and breakout threshold
         self.atr_period = int(getattr(config, 'atr_period', 14))
@@ -68,6 +73,11 @@ class PurePriceActionStrategy:
         # Trend filter (200 EMA alignment)
         self.use_trend_filter = getattr(config, 'use_trend_filter', True)
         self.trend_ema_period = int(getattr(config, 'trend_ema_period', 200))
+
+        # EMA slope filter (reject trades when EMA is flat/ranging)
+        self.use_ema_slope_filter = getattr(config, 'use_ema_slope_filter', True)
+        self.ema_slope_period = int(getattr(config, 'ema_slope_period', 20))
+        self.min_ema_slope_pips_per_bar = float(getattr(config, 'min_ema_slope_pips_per_bar', 0.1))
 
         # Spread guard
         self.spread_guard_pips_default = getattr(config, 'spread_guard_pips_default', None)
@@ -108,9 +118,10 @@ class PurePriceActionStrategy:
         return highs, lows
 
     def calculate_support_resistance(self, data: pd.DataFrame, swing_highs: List[int],
-                                     swing_lows: List[int], symbol: str, pip: float) -> Tuple[List[float], List[float]]:
+                                     swing_lows: List[int], symbol: str, pip: float,
+                                     proximity_pips: float = 10.0) -> Tuple[List[float], List[float]]:
         """Extract recent distinct swing highs/lows as resistance/support."""
-        proximity = 10.0 * pip  # 10 pip proximity filter
+        proximity = float(proximity_pips) * pip  # proximity filter in pips
 
         res: List[float] = []
         sup: List[float] = []
@@ -151,6 +162,27 @@ class PurePriceActionStrategy:
 
         return None
 
+    def _find_breakout_age(self, closes: pd.Series, level: float, threshold: float,
+                            breakout_type: str, window_bars: int) -> Optional[int]:
+        """Find how many bars ago the breakout first occurred within a window."""
+        if closes is None or len(closes) < 2:
+            return None
+        max_age = max(0, int(window_bars))
+        # Ensure we don't index beyond available data
+        max_age = min(max_age, len(closes) - 2)
+        for age in range(0, max_age + 1):
+            idx = -1 - age
+            prev_idx = idx - 1
+            close_now = float(closes.iloc[idx])
+            close_prev = float(closes.iloc[prev_idx])
+            if breakout_type == 'bullish':
+                if close_now > level + threshold and close_prev <= level + threshold:
+                    return age
+            else:
+                if close_now < level - threshold and close_prev >= level - threshold:
+                    return age
+        return None
+
     # ----- ATR Calculation -----
     def _compute_atr(self, highs: pd.Series, lows: pd.Series, closes: pd.Series, period: int) -> Optional[pd.Series]:
         """Compute ATR using True Range with SMA."""
@@ -177,7 +209,8 @@ class PurePriceActionStrategy:
             return None
 
     def _check_trend_alignment(self, data: pd.DataFrame, breakout_type: str,
-                                trend_data: Optional[pd.DataFrame] = None) -> Tuple[bool, str]:
+                                trend_data: Optional[pd.DataFrame] = None,
+                                pip: float = 0.0001) -> Tuple[bool, str]:
         """
         Check if breakout aligns with 200 EMA trend on higher timeframe.
         Returns (is_aligned, trend_direction).
@@ -185,9 +218,10 @@ class PurePriceActionStrategy:
         Rules:
         - BUY signals: price must be above 200 EMA (uptrend)
         - SELL signals: price must be below 200 EMA (downtrend)
+        - EMA slope must be above minimum threshold (not ranging)
 
-        Uses H1 data (trend_data) if provided for more stable trend anchor.
-        Falls back to trading timeframe data if H1 not available.
+        Uses higher timeframe data (trend_data) if provided for more stable trend anchor.
+        Falls back to trading timeframe data if higher timeframe not available.
         """
         if not self.use_trend_filter:
             return True, "DISABLED"
@@ -197,13 +231,23 @@ class PurePriceActionStrategy:
 
         ema = self._compute_ema(trend_df['close'], self.trend_ema_period)
         if ema is None or len(ema) < 1:
-            return True, "NO_DATA"  # Allow trade if not enough data
+            return False, "NO_DATA"
 
         last_close = float(trend_df.iloc[-1]['close'])
         last_ema = float(ema.iloc[-1])
 
         # Determine trend direction suffix for logging
         tf_label = "H1" if trend_data is not None and len(trend_data) > 0 else "TF"
+
+        # EMA slope filter - reject trades when EMA is flat (ranging market)
+        if self.use_ema_slope_filter and len(ema) >= self.ema_slope_period:
+            ema_now = float(ema.iloc[-1])
+            ema_past = float(ema.iloc[-self.ema_slope_period])
+            slope_pips_per_bar = (ema_now - ema_past) / (self.ema_slope_period * pip)
+
+            if abs(slope_pips_per_bar) < self.min_ema_slope_pips_per_bar:
+                logger.debug(f"EMA slope filter: slope={slope_pips_per_bar:.3f} pips/bar < min {self.min_ema_slope_pips_per_bar}")
+                return False, f"FLAT_{tf_label}"
 
         if last_close > last_ema:
             trend = f"BULLISH_{tf_label}"
@@ -311,29 +355,17 @@ class PurePriceActionStrategy:
                 logger.debug(f"{symbol}: Spread {current_spread_pips:.1f}p > guard {spread_guard}p")
                 return None
 
-            # Use completed candles only (exclude current forming bar)
-            completed = data.iloc[:-1].tail(self.lookback_period)
-            if len(completed) < max(20, self.lookback_period):
-                return None
-
-            # Find swing points and calculate S/R
-            highs, lows = self.find_swing_points(completed)
-            if not highs and not lows:
-                return None
-
-            resistance, support = self.calculate_support_resistance(completed, highs, lows, symbol, pip)
-
-            # Compute ATR early (needed for both breakout threshold and SL buffer)
-            atr_series = self._compute_atr(completed['high'], completed['low'],
-                                           completed['close'], self.atr_period)
-            atr_last = float(atr_series.iloc[-1]) if atr_series is not None and not pd.isna(atr_series.iloc[-1]) else None
-
-            # Get per-symbol overrides
+            # Defaults (can be overridden per-symbol)
             thr_pips = float(self.breakout_threshold_pips)
             thr_atr_mult = self.breakout_threshold_atr_mult
             rr = float(self.risk_reward_ratio)
             min_rr = float(self.min_rr)
             max_sl_pips = self.max_sl_pips
+            breakout_window_bars = int(self.breakout_window_bars)
+            max_ext_pips = self.max_extension_pips
+            max_ext_atr = self.max_extension_atr_mult
+            sr_lookback = int(self.sr_lookback_period)
+            sr_proximity_pips = float(self.sr_proximity_pips)
 
             for sc in getattr(self.config, 'symbols', []) or []:
                 if sc.get('name') == symbol:
@@ -341,7 +373,36 @@ class PurePriceActionStrategy:
                     thr_atr_mult = sc.get('breakout_threshold_atr_mult', thr_atr_mult)
                     rr = float(sc.get('risk_reward_ratio', rr))
                     max_sl_pips = sc.get('max_sl_pips', max_sl_pips)
+                    breakout_window_bars = int(sc.get('breakout_window_bars', breakout_window_bars) or breakout_window_bars)
+                    max_ext_pips = sc.get('max_extension_pips', max_ext_pips)
+                    max_ext_atr = sc.get('max_extension_atr_mult', max_ext_atr)
+                    sr_lookback = int(sc.get('sr_lookback_period', sr_lookback) or sr_lookback)
+                    sr_proximity_pips = float(sc.get('sr_proximity_pips', sr_proximity_pips) or sr_proximity_pips)
                     break
+
+            # Use completed candles only (exclude current forming bar)
+            completed = data.iloc[:-1].tail(self.lookback_period)
+            if len(completed) < max(20, self.lookback_period):
+                return None
+
+            # Longer lookback for structure (S/R)
+            sr_df = data.iloc[:-1].tail(sr_lookback)
+            if len(sr_df) < self.swing_window * 2 + 1:
+                return None
+
+            # Find swing points and calculate S/R on structure window
+            highs, lows = self.find_swing_points(sr_df)
+            if not highs and not lows:
+                return None
+
+            resistance, support = self.calculate_support_resistance(
+                sr_df, highs, lows, symbol, pip, proximity_pips=sr_proximity_pips
+            )
+
+            # Compute ATR early (needed for both breakout threshold and SL buffer)
+            atr_series = self._compute_atr(completed['high'], completed['low'],
+                                           completed['close'], self.atr_period)
+            atr_last = float(atr_series.iloc[-1]) if atr_series is not None and not pd.isna(atr_series.iloc[-1]) else None
 
             # Detect breakout - use ATR-based threshold if configured, else fixed pips
             last_close = float(completed.iloc[-1]['close'])
@@ -357,8 +418,25 @@ class PurePriceActionStrategy:
 
             logger.debug(f"{symbol}: Breakout {breakout.type} @ level {breakout.level:.5f}")
 
-            # Trend filter: only take trades aligned with 200 EMA on H1
-            trend_aligned, trend_dir = self._check_trend_alignment(completed, breakout.type, trend_data)
+            # Breakout window: only allow recent breakouts (current or recent bar)
+            breakout_age = self._find_breakout_age(
+                completed['close'],
+                breakout.level,
+                threshold,
+                breakout.type,
+                breakout_window_bars,
+            )
+            if breakout_age is None:
+                logger.debug(f"{symbol}: Breakout too old (window={breakout_window_bars} bars)")
+                return None
+
+            # Trend filter: only take trades aligned with 200 EMA on higher timeframe
+            trend_completed = None
+            if trend_data is not None and len(trend_data) > 1:
+                # Use completed higher-timeframe bars only
+                trend_completed = trend_data.iloc[:-1]
+
+            trend_aligned, trend_dir = self._check_trend_alignment(completed, breakout.type, trend_completed, pip)
             if not trend_aligned:
                 logger.debug(f"{symbol}: Breakout {breakout.type} rejected - trend is {trend_dir}")
                 return None
@@ -373,20 +451,33 @@ class PurePriceActionStrategy:
             except Exception:
                 pass
 
+            # Use actual execution price
+            entry_eff = float(tick.ask) if breakout.type == 'bullish' else float(tick.bid)
+
+            # Anti-chase: reject if price already too far from breakout level
+            ext_limit = None
+            if max_ext_pips is not None:
+                try:
+                    ext_limit = float(max_ext_pips)
+                except Exception:
+                    ext_limit = None
+            if max_ext_atr is not None and atr_last is not None and atr_last > 0:
+                try:
+                    atr_limit = float(max_ext_atr) * (atr_last / pip)
+                    ext_limit = atr_limit if ext_limit is None else min(ext_limit, atr_limit)
+                except Exception:
+                    pass
+            if ext_limit is not None and ext_limit > 0:
+                ext_pips = abs(entry_eff - breakout.level) / pip
+                if ext_pips > ext_limit:
+                    logger.info(f"{symbol}: Extension {ext_pips:.1f}p > limit {ext_limit:.1f}p")
+                    return None
+
             # Calculate SL (ATR already computed above)
             sl = self._calculate_stop_loss(breakout, pip, symbol, atr_last, support, resistance)
             if sl is None:
                 logger.info(f"{symbol}: No valid structure for SL - trade rejected")
                 return None
-            sl_pips = abs(breakout.entry_price - sl) / pip
-
-            # Max SL check
-            if max_sl_pips and sl_pips > float(max_sl_pips):
-                logger.info(f"{symbol}: SL {sl_pips:.1f}p > max {max_sl_pips}p")
-                return None
-
-            # Use actual execution price
-            entry_eff = float(tick.ask) if breakout.type == 'bullish' else float(tick.bid)
 
             # Calculate TP
             tp = self._calculate_take_profit(entry_eff, sl, rr, breakout.type)
@@ -403,6 +494,11 @@ class PurePriceActionStrategy:
             tp_pips = abs(tp - entry_eff) / pip
 
             if sl_pips <= 0:
+                return None
+
+            # Max SL check (use actual entry and rounded SL)
+            if max_sl_pips and sl_pips > float(max_sl_pips):
+                logger.info(f"{symbol}: SL {sl_pips:.1f}p > max {max_sl_pips}p")
                 return None
 
             actual_rr = tp_pips / sl_pips

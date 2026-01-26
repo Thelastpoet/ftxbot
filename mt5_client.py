@@ -351,7 +351,7 @@ class MetaTrader5Client:
         """Get all open positions"""
         return self.get_positions()
     
-    def close_position(self, ticket: int, volume: Optional[float] = None) -> Optional[Any]:
+    def close_position(self, ticket: int, volume: Optional[float] = None, comment: Optional[str] = None) -> Optional[Any]:
         """Close an open position"""
         if not self._ensure_connected():
             return None
@@ -412,7 +412,7 @@ class MetaTrader5Client:
                 "price": price,
                 "deviation": 20,
                 "magic": 234000,
-                "comment": f"Close position {ticket}",
+                "comment": comment if comment is not None else f"Close position {ticket}",
                 "type_time": mt5.ORDER_TIME_GTC,
                 "type_filling": int(type_filling),
             }
@@ -471,18 +471,6 @@ class MetaTrader5Client:
         
         logger.info(f"Position {ticket} modified successfully")
         return result
-    
-    def get_history_orders(self, from_date: datetime, to_date: datetime) -> List[Any]:
-        """Get historical orders"""
-        if not self._ensure_connected():
-            return []
-        
-        orders = mt5.history_orders_get(from_date, to_date)
-        
-        if orders is None:
-            return []
-        
-        return list(orders)
     
     def get_history_deals_by_position(self, position_id: int) -> List[Any]:
         """Get historical deals by position ID"""
