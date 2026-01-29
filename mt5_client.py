@@ -478,22 +478,32 @@ class MetaTrader5Client:
             return []
 
         try:
-            # Query deals within a wide enough date window directly
-            # Some MT5 Python builds do not provide `history_select`,
-            # so pass the range to `history_deals_get` and filter by position.
-            now = datetime.now(timezone.utc)
-            from_date = datetime(now.year - 2, 1, 1, tzinfo=timezone.utc)
+            # First try documented position filter (no date range).
             deals = None
             try:
-                deals = mt5.history_deals_get(from_date, now, position=position_id)
+                deals = mt5.history_deals_get(position=position_id)
             except TypeError:
-                # Older builds may not support the `position` kwarg; fetch all and filter client-side
-                deals = mt5.history_deals_get(from_date, now)
+                deals = None
 
-            if not deals:
+            if deals is None:
+                err = mt5.last_error()
+                if err and err[0] != 0:
+                    logger.warning(f"history_deals_get(position={position_id}) failed: {err}")
+
+            if deals:
+                filtered = sorted(list(deals), key=lambda d: d.time)
+                return filtered
+
+            # Fallback: query a wide date window and filter client-side.
+            now = datetime.now(timezone.utc)
+            from_date = datetime(now.year - 2, 1, 1, tzinfo=timezone.utc)
+            deals = mt5.history_deals_get(from_date, now)
+            if deals is None:
+                err = mt5.last_error()
+                if err and err[0] != 0:
+                    logger.warning(f"history_deals_get(range) failed: {err}")
                 return []
 
-            # Some MT5 builds silently ignore the `position` kwarg; always filter client-side.
             filtered = []
             for d in deals:
                 pid = getattr(d, 'position_id', None)
@@ -515,6 +525,16 @@ class MetaTrader5Client:
             return []
         
         deals = mt5.history_deals_get(from_date, to_date)
+        if deals is None:
+            err = mt5.last_error()
+            if err and err[0] != 0:
+                logger.warning(f"history_deals_get(range) failed: {err}")
+            if self.auto_reconnect and self.reconnect():
+                deals = mt5.history_deals_get(from_date, to_date)
+                if deals is None:
+                    err = mt5.last_error()
+                    if err and err[0] != 0:
+                        logger.warning(f"history_deals_get(range) failed after reconnect: {err}")
         
         if deals is None:
             return []
