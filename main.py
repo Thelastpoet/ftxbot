@@ -8,6 +8,7 @@ import logging
 import json
 import argparse
 import sys
+import time
 from datetime import datetime, timezone, timedelta
 
 from pathlib import Path
@@ -622,7 +623,7 @@ class TradingBot:
             logger.error(f"Error executing trade for {symbol}: {e}", exc_info=True)
             return None
 
-    async def process_symbol(self, symbol_config: Dict):
+    async def process_symbol(self, symbol_config: Dict) -> bool:
         symbol = symbol_config['name']
         entry_tf = symbol_config.get('entry_timeframe', 'M15')
         structure_tf = symbol_config.get('structure_timeframe', 'H1')
@@ -630,7 +631,7 @@ class TradingBot:
 
         # Skip trading during daily rollover (21:55 - 23:05 UTC)
         if self._is_rollover_period():
-            return
+            return False
 
         try:
             logger.debug(f"{symbol}: TFs entry={entry_tf} structure={structure_tf} trend={trend_tf}")
@@ -642,7 +643,7 @@ class TradingBot:
 
             candles = await self.market_data.fetch_data(symbol, entry_tf, bars_needed)
             if candles is None:
-                return
+                return False
 
             # Fetch higher timeframe data for structure (S/R)
             structure_data = None
@@ -695,9 +696,11 @@ class TradingBot:
                             return  # Already have position in this direction
                 except Exception:
                     pass
-                await self.execute_trade(signal, symbol)
+                    await self.execute_trade(signal, symbol)
+                    return True
         except Exception as e:
             logger.error(f"Error processing {symbol}: {e}")
+        return False
 
     async def monitor_open_trades(self):
         try:
@@ -942,8 +945,11 @@ class TradingBot:
         self.running = True
         logger.info("Starting trading loop")
         loop_count = 0
+        interval = max(1, int(getattr(self.config, 'main_loop_interval', 5)))
+        heartbeat_every = max(1, int(60 / interval))
 
         while self.running:
+            loop_start = time.monotonic()
             try:
                 # Ensure MT5 connectivity
                 if not self.mt5_client.is_connected():
@@ -953,9 +959,27 @@ class TradingBot:
                         await asyncio.sleep(self.config.main_loop_interval)
                         continue
 
+                if not self.config.symbols:
+                    loop_count += 1
+                    if loop_count % heartbeat_every == 0:
+                        logger.warning("No symbols configured; nothing to process")
+                    await asyncio.sleep(self.config.main_loop_interval)
+                    continue
+
+                if self._is_rollover_period():
+                    loop_count += 1
+                    if loop_count % heartbeat_every == 0:
+                        logger.info("Rollover window active; skipping symbol processing")
+                    await asyncio.sleep(self.config.main_loop_interval)
+                    continue
+
                 await self.monitor_open_trades()
+                processed = 0
+                signals = 0
                 for sym in self.config.symbols:
-                    await self.process_symbol(sym)
+                    processed += 1
+                    if await self.process_symbol(sym):
+                        signals += 1
 
                 # Periodic state persistence
                 loop_count += 1
@@ -965,6 +989,18 @@ class TradingBot:
                             save_strategy_state(self.state_manager, self.strategy)
                     except Exception as e:
                         logger.debug(f"State save error: {e}")
+
+                if loop_count % heartbeat_every == 0:
+                    open_count = 0
+                    try:
+                        if self.trade_logger:
+                            open_count = len([t for t in self.trade_logger.trades if t.get('status') == 'OPEN'])
+                    except Exception:
+                        open_count = 0
+                    loop_ms = int((time.monotonic() - loop_start) * 1000)
+                    logger.info(
+                        f"Heartbeat: processed={processed} signals={signals} open={open_count} loop_ms={loop_ms}"
+                    )
 
                 await asyncio.sleep(self.config.main_loop_interval)
             except KeyboardInterrupt:
