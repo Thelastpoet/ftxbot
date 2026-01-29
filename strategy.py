@@ -573,6 +573,8 @@ class PurePriceActionStrategy:
             logger.debug(f"{symbol}: Breakout {breakout.type} @ level {breakout.level:.5f}")
 
             # Structure confirmation: last completed structure bar must close beyond level by threshold
+            struct_close = None
+            struct_threshold = None
             if require_structure_conf:
                 if structure_completed is None or len(structure_completed) < 1:
                     logger.debug(f"{symbol}: No completed structure data for confirmation")
@@ -658,7 +660,7 @@ class PurePriceActionStrategy:
             # Use actual execution price
             entry_eff = float(tick.ask) if breakout.type == 'bullish' else float(tick.bid)
 
-            # Anti-chase: reject if price already too far from breakout level
+            # Anti-chase: reject if price already too far from breakout level (or confirmation close)
             ext_limit = None
             if max_ext_pips is not None:
                 try:
@@ -693,7 +695,10 @@ class PurePriceActionStrategy:
                 except Exception:
                     pass
             if ext_limit is not None and ext_limit > 0:
-                ext_pips = abs(entry_eff - breakout.level) / pip
+                # When using structure confirmation, anchor extension to the confirming close
+                # to avoid double-penalizing late entries caused by higher-TF confirmation.
+                ext_ref = struct_close if (require_structure_conf and struct_close is not None) else breakout.level
+                ext_pips = abs(entry_eff - ext_ref) / pip
                 if ext_pips > ext_limit:
                     logger.debug(f"{symbol}: Extension {ext_pips:.1f}p > limit {ext_limit:.1f}p")
                     return None
