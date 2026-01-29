@@ -602,13 +602,14 @@ class PurePriceActionStrategy:
                         logger.debug(f"{symbol}: Structure close {struct_close:.5f} not beyond {breakout.level - struct_threshold:.5f}")
                         return None
 
-                # Freshness aligned to structure confirmation: allow only the first entry bar after structure close
+                # Freshness aligned to structure confirmation: allow entry only in the first structure window after close
                 entry_delta = self._infer_bar_delta(completed.index)
                 struct_delta = self._infer_bar_delta(structure_completed.index)
                 if entry_delta is not None and struct_delta is not None:
                     if struct_delta > (entry_delta * 1.5):
                         struct_close_time = structure_completed.index[-1] + struct_delta
-                        last_entry_time = completed.index[-1]
+                        # Use entry bar close time (open + delta) to avoid a full-bar lag
+                        last_entry_time = completed.index[-1] + entry_delta
                         if not (struct_close_time <= last_entry_time < struct_close_time + struct_delta):
                             logger.debug(f"{symbol}: Waiting for entry window after structure close")
                             return None
