@@ -63,6 +63,11 @@ class PurePriceActionStrategy:
         self.tp_buffer_pips = float(getattr(config, 'tp_buffer_pips', 2.0))
         self.structure_min_touches = int(getattr(config, 'structure_min_touches', 2))
         self.structure_atr_band_mult = float(getattr(config, 'structure_atr_band_mult', 0.25))
+        # Extension cap (market-adaptive)
+        self.extension_atr_ratio_period = int(getattr(config, 'extension_atr_ratio_period', 200))
+        self.extension_atr_min_mult = float(getattr(config, 'extension_atr_min_mult', 1.0))
+        self.extension_atr_max_mult = float(getattr(config, 'extension_atr_max_mult', 3.0))
+        self.extension_atr_sensitivity = float(getattr(config, 'extension_atr_sensitivity', 1.5))
 
         # ATR for dynamic SL buffer and breakout threshold
         self.atr_period = int(getattr(config, 'atr_period', 14))
@@ -229,6 +234,26 @@ class PurePriceActionStrategy:
             if diffs.empty:
                 return None
             return diffs.median()
+        except Exception:
+            return None
+
+    def _compute_atr_ratio(self, highs: pd.Series, lows: pd.Series, closes: pd.Series,
+                           period: int, ratio_period: int) -> Optional[float]:
+        """Compute ATR ratio versus rolling median ATR (dimensionless)."""
+        try:
+            atr_series = self._compute_atr(highs, lows, closes, period)
+            if atr_series is None or atr_series.empty:
+                return None
+            if len(atr_series) < max(period + 1, ratio_period):
+                return None
+            atr_med = atr_series.rolling(window=ratio_period, min_periods=ratio_period).median()
+            if atr_med is None or atr_med.empty:
+                return None
+            atr_last = float(atr_series.iloc[-1])
+            med_last = float(atr_med.iloc[-1])
+            if med_last <= 0:
+                return None
+            return atr_last / med_last
         except Exception:
             return None
 
@@ -440,6 +465,10 @@ class PurePriceActionStrategy:
             tp_buffer_pips = float(self.tp_buffer_pips)
             structure_min_touches = int(self.structure_min_touches)
             structure_atr_band_mult = float(self.structure_atr_band_mult)
+            ext_ratio_period = int(self.extension_atr_ratio_period)
+            ext_min_mult = float(self.extension_atr_min_mult)
+            ext_max_mult = float(self.extension_atr_max_mult)
+            ext_sensitivity = float(self.extension_atr_sensitivity)
             require_structure_conf = bool(self.require_structure_confirmation)
             require_two_bar_conf = bool(self.require_two_bar_confirmation)
 
@@ -458,6 +487,10 @@ class PurePriceActionStrategy:
                     tp_buffer_pips = float(sc.get('tp_buffer_pips', tp_buffer_pips) or tp_buffer_pips)
                     structure_min_touches = int(sc.get('structure_min_touches', structure_min_touches) or structure_min_touches)
                     structure_atr_band_mult = float(sc.get('structure_atr_band_mult', structure_atr_band_mult) or structure_atr_band_mult)
+                    ext_ratio_period = int(sc.get('extension_atr_ratio_period', ext_ratio_period) or ext_ratio_period)
+                    ext_min_mult = float(sc.get('extension_atr_min_mult', ext_min_mult) or ext_min_mult)
+                    ext_max_mult = float(sc.get('extension_atr_max_mult', ext_max_mult) or ext_max_mult)
+                    ext_sensitivity = float(sc.get('extension_atr_sensitivity', ext_sensitivity) or ext_sensitivity)
                     require_structure_conf = bool(sc.get('require_structure_confirmation', require_structure_conf))
                     require_two_bar_conf = bool(sc.get('require_two_bar_confirmation', require_two_bar_conf))
                     break
@@ -635,10 +668,27 @@ class PurePriceActionStrategy:
             if max_ext_atr is not None:
                 try:
                     atr_for_extension = atr_last
+                    ratio_source = completed
                     if require_structure_conf and struct_atr_last is not None and struct_atr_last > 0:
                         atr_for_extension = struct_atr_last
+                        ratio_source = structure_completed
                     if atr_for_extension is not None and atr_for_extension > 0:
-                        atr_limit = float(max_ext_atr) * (atr_for_extension / pip)
+                        # Market-adaptive multiplier based on ATR ratio
+                        ratio = self._compute_atr_ratio(
+                            ratio_source['high'],
+                            ratio_source['low'],
+                            ratio_source['close'],
+                            self.atr_period,
+                            ext_ratio_period,
+                        )
+                        mult = float(max_ext_atr)
+                        if ratio is not None:
+                            try:
+                                raw = float(max_ext_atr) + float(ext_sensitivity) * (float(ratio) - 1.0)
+                                mult = max(ext_min_mult, min(ext_max_mult, raw))
+                            except Exception:
+                                pass
+                        atr_limit = float(mult) * (atr_for_extension / pip)
                         ext_limit = atr_limit if ext_limit is None else min(ext_limit, atr_limit)
                 except Exception:
                     pass
@@ -685,7 +735,7 @@ class PurePriceActionStrategy:
                     logger.debug(f"{symbol}: TP {tp:.5f} not below entry {entry_eff:.5f}")
                     return None
 
-            # Calculate actual RR
+            # Calculate RR (entry-based and structure-based)
             sl_pips = abs(entry_eff - sl) / pip
             tp_pips = abs(tp - entry_eff) / pip
 
@@ -698,11 +748,21 @@ class PurePriceActionStrategy:
                 return None
 
             actual_rr = tp_pips / sl_pips
+            # Structure-based RR: use breakout level as reference (structure breakout logic)
+            if breakout.type == 'bullish':
+                struct_risk = (breakout.level - sl) / pip
+                struct_reward = (tp - breakout.level) / pip
+            else:
+                struct_risk = (sl - breakout.level) / pip
+                struct_reward = (breakout.level - tp) / pip
+            if struct_risk <= 0 or struct_reward <= 0:
+                return None
+            structure_rr = struct_reward / struct_risk
             required_rr = max(min_rr, rr)
 
             # Minimum RR check
-            if actual_rr < required_rr:
-                logger.debug(f"{symbol}: RR {actual_rr:.2f} < min {required_rr:.2f}")
+            if structure_rr < required_rr:
+                logger.debug(f"{symbol}: RR_struct {structure_rr:.2f} < min {required_rr:.2f}")
                 return None
 
             # Duplicate prevention: one signal per bar per direction
@@ -728,7 +788,7 @@ class PurePriceActionStrategy:
 
             logger.info(
                 f"SIGNAL {symbol} {'BUY' if signal.type==0 else 'SELL'} @ {entry_eff:.5f} "
-                f"SL {sl:.5f} TP {tp:.5f} ({sl_pips:.1f}p, RR={actual_rr:.2f}) [Trend: {trend_dir}]"
+                f"SL {sl:.5f} TP {tp:.5f} ({sl_pips:.1f}p, RR_struct={structure_rr:.2f}, RR_entry={actual_rr:.2f}) [Trend: {trend_dir}]"
             )
             return signal
 

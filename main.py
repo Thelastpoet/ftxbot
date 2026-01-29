@@ -53,6 +53,10 @@ class Config:
             self.tp_buffer_pips = trading.get('tp_buffer_pips', 2)
             self.structure_min_touches = trading.get('structure_min_touches', 2)
             self.structure_atr_band_mult = trading.get('structure_atr_band_mult', 0.25)
+            self.extension_atr_ratio_period = trading.get('extension_atr_ratio_period', 200)
+            self.extension_atr_min_mult = trading.get('extension_atr_min_mult', 1.0)
+            self.extension_atr_max_mult = trading.get('extension_atr_max_mult', 3.0)
+            self.extension_atr_sensitivity = trading.get('extension_atr_sensitivity', 1.5)
             # Trend filter settings
             self.use_trend_filter = trading.get('use_trend_filter', True)
             self.trend_ema_period = trading.get('trend_ema_period', 50)
@@ -117,6 +121,10 @@ class Config:
                     'tp_buffer_pips': s.get('tp_buffer_pips'),
                     'structure_min_touches': s.get('structure_min_touches'),
                     'structure_atr_band_mult': s.get('structure_atr_band_mult'),
+                    'extension_atr_ratio_period': s.get('extension_atr_ratio_period'),
+                    'extension_atr_min_mult': s.get('extension_atr_min_mult'),
+                    'extension_atr_max_mult': s.get('extension_atr_max_mult'),
+                    'extension_atr_sensitivity': s.get('extension_atr_sensitivity'),
                     'require_structure_confirmation': s.get('require_structure_confirmation'),
                     'require_two_bar_confirmation': s.get('require_two_bar_confirmation'),
                 }
@@ -170,6 +178,10 @@ class Config:
         self.tp_buffer_pips = 2
         self.structure_min_touches = 2
         self.structure_atr_band_mult = 0.25
+        self.extension_atr_ratio_period = 200
+        self.extension_atr_min_mult = 1.0
+        self.extension_atr_max_mult = 3.0
+        self.extension_atr_sensitivity = 1.5
         self.use_trend_filter = True
         self.trend_ema_period = 50
         self.use_ema_slope_filter = True
