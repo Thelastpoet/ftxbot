@@ -574,8 +574,8 @@ class PurePriceActionStrategy:
                     if struct_delta > (entry_delta * 1.5):
                         struct_close_time = structure_completed.index[-1] + struct_delta
                         last_entry_time = completed.index[-1]
-                        if not (struct_close_time <= last_entry_time < struct_close_time + entry_delta):
-                            logger.debug(f"{symbol}: Waiting for first entry bar after structure close")
+                        if not (struct_close_time <= last_entry_time < struct_close_time + struct_delta):
+                            logger.debug(f"{symbol}: Waiting for entry window after structure close")
                             return None
 
             # Two-bar confirmation on entry timeframe
