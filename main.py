@@ -706,10 +706,11 @@ class TradingBot:
                     for p in open_positions or []:
                         if int(getattr(p, 'type', -1)) == int(signal.type):
                             return  # Already have position in this direction
-                except Exception:
-                    pass
-                    await self.execute_trade(signal, symbol)
-                    return True
+                except Exception as e:
+                    logger.warning(f"{symbol}: Failed to check existing positions: {e}")
+
+                await self.execute_trade(signal, symbol)
+                return True
         except Exception as e:
             logger.error(f"Error processing {symbol}: {e}")
         return False
