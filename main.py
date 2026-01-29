@@ -33,9 +33,9 @@ class Config:
             self.main_loop_interval = trading.get('main_loop_interval_seconds', 5)
             self.lookback_period = trading.get('lookback_period', 20)
             self.swing_window = trading.get('swing_window', 5)
-            self.breakout_threshold = trading.get('breakout_threshold_pips', 7)
-            self.breakout_threshold_atr_mult = trading.get('breakout_threshold_atr_mult', None)
-            self.breakout_window_bars = trading.get('breakout_window_bars', 1)
+            self.breakout_threshold = trading.get('breakout_threshold_pips', 3)
+            self.breakout_threshold_atr_mult = trading.get('breakout_threshold_atr_mult', 0.5)
+            self.breakout_window_bars = trading.get('breakout_window_bars', 4)
             self.max_extension_pips = trading.get('max_extension_pips', None)
             self.max_extension_atr_mult = trading.get('max_extension_atr_mult', None)
             self.min_stop_loss_pips = trading.get('min_stop_loss_pips', 20)
@@ -46,15 +46,17 @@ class Config:
             self.min_sl_buffer_pips = trading.get('min_sl_buffer_pips', 10)
             self.max_sl_pips = trading.get('max_sl_pips', None)
             self.spread_guard_pips_default = trading.get('spread_guard_pips', None)
-            self.sr_lookback_period = trading.get('sr_lookback_period', 80)
+            self.sr_lookback_period = trading.get('sr_lookback_period', 72)
             self.sr_proximity_pips = trading.get('sr_proximity_pips', 10)
             self.tp_buffer_pips = trading.get('tp_buffer_pips', 2)
             # Trend filter settings
             self.use_trend_filter = trading.get('use_trend_filter', True)
-            self.trend_ema_period = trading.get('trend_ema_period', 200)
+            self.trend_ema_period = trading.get('trend_ema_period', 50)
             self.use_ema_slope_filter = trading.get('use_ema_slope_filter', True)
-            self.ema_slope_period = trading.get('ema_slope_period', 20)
-            self.min_ema_slope_pips_per_bar = trading.get('min_ema_slope_pips_per_bar', 0.1)
+            self.ema_slope_period = trading.get('ema_slope_period', 5)
+            self.min_ema_slope_pips_per_bar = trading.get('min_ema_slope_pips_per_bar', 0.4)
+            self.require_structure_confirmation = trading.get('require_structure_confirmation', True)
+            self.require_two_bar_confirmation = trading.get('require_two_bar_confirmation', True)
 
             risk = data.get('risk_management', {})
             self.risk_per_trade = risk.get('risk_per_trade', 0.01)
@@ -67,13 +69,30 @@ class Config:
             # Symbols
             self.symbols = []
             for s in data.get('symbols', []) or []:
-                # Prefer explicit entry/trend timeframes; fall back to legacy timeframes list
+                # Prefer explicit entry/structure/trend timeframes; fall back to legacy timeframes list
                 legacy_tfs = s.get('timeframes') or []
                 entry_tf = s.get('entry_timeframe') or (legacy_tfs[0] if legacy_tfs else 'M15')
-                trend_tf = s.get('trend_timeframe') or (legacy_tfs[1] if len(legacy_tfs) > 1 else 'H1')
+                if s.get('structure_timeframe') is not None:
+                    structure_tf = s.get('structure_timeframe')
+                elif len(legacy_tfs) > 2:
+                    structure_tf = legacy_tfs[1]
+                elif len(legacy_tfs) > 1:
+                    structure_tf = legacy_tfs[1]
+                else:
+                    structure_tf = 'H1'
+
+                if s.get('trend_timeframe') is not None:
+                    trend_tf = s.get('trend_timeframe')
+                elif len(legacy_tfs) > 2:
+                    trend_tf = legacy_tfs[2]
+                elif len(legacy_tfs) > 1:
+                    trend_tf = legacy_tfs[1]
+                else:
+                    trend_tf = 'H4'
                 entry = {
                     'name': s.get('name'),
                     'entry_timeframe': entry_tf,
+                    'structure_timeframe': structure_tf,
                     'trend_timeframe': trend_tf,
                     # Per-symbol overrides (only essential ones)
                     'pip_unit': s.get('pip_unit'),
@@ -90,12 +109,15 @@ class Config:
                     'sr_lookback_period': s.get('sr_lookback_period'),
                     'sr_proximity_pips': s.get('sr_proximity_pips'),
                     'tp_buffer_pips': s.get('tp_buffer_pips'),
+                    'require_structure_confirmation': s.get('require_structure_confirmation'),
+                    'require_two_bar_confirmation': s.get('require_two_bar_confirmation'),
                 }
                 # Remove None values
                 entry = {k: v for k, v in entry.items() if v is not None}
                 entry.setdefault('name', s.get('name'))
                 entry.setdefault('entry_timeframe', 'M15')
-                entry.setdefault('trend_timeframe', 'H1')
+                entry.setdefault('structure_timeframe', 'H1')
+                entry.setdefault('trend_timeframe', 'H4')
                 self.symbols.append(entry)
 
             # CLI overrides
@@ -103,7 +125,12 @@ class Config:
                 if self.args.risk_per_trade is not None:
                     self.risk_per_trade = float(self.args.risk_per_trade)
                 if self.args.symbol:
-                    self.symbols = [{'name': self.args.symbol, 'entry_timeframe': 'M15', 'trend_timeframe': 'H1'}]
+                    self.symbols = [{
+                        'name': self.args.symbol,
+                        'entry_timeframe': 'M15',
+                        'structure_timeframe': 'H1',
+                        'trend_timeframe': 'H4',
+                    }]
                 if self.args.timeframe:
                     for sym in self.symbols:
                         sym['entry_timeframe'] = self.args.timeframe
@@ -117,9 +144,9 @@ class Config:
         self.main_loop_interval = 5
         self.lookback_period = 20
         self.swing_window = 5
-        self.breakout_threshold = 7
-        self.breakout_threshold_atr_mult = None
-        self.breakout_window_bars = 1
+        self.breakout_threshold = 3
+        self.breakout_threshold_atr_mult = 0.5
+        self.breakout_window_bars = 4
         self.max_extension_pips = None
         self.max_extension_atr_mult = None
         self.min_stop_loss_pips = 20
@@ -129,20 +156,27 @@ class Config:
         self.min_sl_buffer_pips = 10
         self.max_sl_pips = None
         self.spread_guard_pips_default = None
-        self.sr_lookback_period = 80
+        self.sr_lookback_period = 72
         self.sr_proximity_pips = 10
         self.tp_buffer_pips = 2
         self.use_trend_filter = True
-        self.trend_ema_period = 200
+        self.trend_ema_period = 50
         self.use_ema_slope_filter = True
-        self.ema_slope_period = 20
-        self.min_ema_slope_pips_per_bar = 0.1
+        self.ema_slope_period = 5
+        self.min_ema_slope_pips_per_bar = 0.4
+        self.require_structure_confirmation = True
+        self.require_two_bar_confirmation = True
         self.risk_per_trade = 0.01
         self.fixed_lot_size = None
         self.max_drawdown = 0.05
         self.risk_reward_ratio = 2.0
         self.min_rr = 1.0
-        self.symbols = [{'name': 'EURUSD', 'entry_timeframe': 'M15', 'trend_timeframe': 'H1'}]
+        self.symbols = [{
+            'name': 'EURUSD',
+            'entry_timeframe': 'M15',
+            'structure_timeframe': 'H1',
+            'trend_timeframe': 'H4',
+        }]
 
 class TradingBot:
     def __init__(self, config: Config):
@@ -585,13 +619,15 @@ class TradingBot:
     async def process_symbol(self, symbol_config: Dict):
         symbol = symbol_config['name']
         entry_tf = symbol_config.get('entry_timeframe', 'M15')
-        trend_tf = symbol_config.get('trend_timeframe', 'H1')
+        structure_tf = symbol_config.get('structure_timeframe', 'H1')
+        trend_tf = symbol_config.get('trend_timeframe', 'H4')
 
         # Skip trading during daily rollover (21:55 - 23:05 UTC)
         if self._is_rollover_period():
             return
 
         try:
+            logger.debug(f"{symbol}: TFs entry={entry_tf} structure={structure_tf} trend={trend_tf}")
             # Determine how many bars needed for analysis (250 ensures 200 EMA can calculate)
             bars_needed = {
                 'M1': 250, 'M5': 250, 'M15': 250, 'M30': 250,
@@ -602,16 +638,48 @@ class TradingBot:
             if candles is None:
                 return
 
-            # Fetch higher timeframe data for trend filter
-            trend_data = None
-            if trend_tf and str(trend_tf).upper() != str(entry_tf).upper():
-                trend_bars_needed = {
+            # Fetch higher timeframe data for structure (S/R)
+            structure_data = None
+            if structure_tf and str(structure_tf).upper() != str(entry_tf).upper():
+                structure_bars_needed = {
                     'M1': 250, 'M5': 250, 'M15': 250, 'M30': 250,
                     'H1': 250, 'H4': 250, 'D1': 250
-                }.get(str(trend_tf).upper(), 250)
-                trend_data = await self.market_data.fetch_data(symbol, trend_tf, trend_bars_needed)
+                }.get(str(structure_tf).upper(), 250)
+                structure_data = await self.market_data.fetch_data(symbol, structure_tf, structure_bars_needed)
+                if structure_data is None:
+                    return
+            else:
+                structure_data = candles
 
-            signal = self.strategy.generate_signal(candles, symbol, trend_data=trend_data)
+            # Fetch higher timeframe data for trend filter
+            trend_data = None
+            trend_label = None
+            if trend_tf:
+                trend_tf_norm = str(trend_tf).upper()
+                entry_tf_norm = str(entry_tf).upper()
+                structure_tf_norm = str(structure_tf).upper() if structure_tf else entry_tf_norm
+                if trend_tf_norm == entry_tf_norm:
+                    trend_data = candles
+                elif trend_tf_norm == structure_tf_norm:
+                    trend_data = structure_data
+                else:
+                    trend_bars_needed = {
+                        'M1': 250, 'M5': 250, 'M15': 250, 'M30': 250,
+                        'H1': 250, 'H4': 250, 'D1': 250
+                    }.get(trend_tf_norm, 250)
+                    trend_data = await self.market_data.fetch_data(symbol, trend_tf, trend_bars_needed)
+                    if trend_data is None:
+                        return
+                if trend_data is not None and len(trend_data) > 0:
+                    trend_label = trend_tf_norm
+
+            signal = self.strategy.generate_signal(
+                candles,
+                symbol,
+                trend_data=trend_data,
+                structure_data=structure_data,
+                trend_timeframe=trend_label,
+            )
             if signal:
                 # Skip if same-direction position already exists
                 try:

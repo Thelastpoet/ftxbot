@@ -83,6 +83,10 @@ class PurePriceActionStrategy:
         # Spread guard
         self.spread_guard_pips_default = getattr(config, 'spread_guard_pips_default', None)
 
+        # Breakout confirmations
+        self.require_structure_confirmation = bool(getattr(config, 'require_structure_confirmation', True))
+        self.require_two_bar_confirmation = bool(getattr(config, 'require_two_bar_confirmation', True))
+
         # Duplicate signal prevention (one per bar per direction)
         self._last_breakout_bar = {}
 
@@ -211,7 +215,8 @@ class PurePriceActionStrategy:
 
     def _check_trend_alignment(self, data: pd.DataFrame, breakout_type: str,
                                 trend_data: Optional[pd.DataFrame] = None,
-                                pip: float = 0.0001) -> Tuple[bool, str]:
+                                pip: float = 0.0001,
+                                trend_label: Optional[str] = None) -> Tuple[bool, str]:
         """
         Check if breakout aligns with 200 EMA trend on higher timeframe.
         Returns (is_aligned, trend_direction).
@@ -227,8 +232,9 @@ class PurePriceActionStrategy:
         if not self.use_trend_filter:
             return True, "DISABLED"
 
-        # Use H1 data for trend if available, otherwise fall back to trading TF
-        trend_df = trend_data if trend_data is not None and len(trend_data) > 0 else data
+        # Use higher timeframe data for trend if available, otherwise fall back to trading TF
+        has_trend_data = trend_data is not None and len(trend_data) > 0
+        trend_df = trend_data if has_trend_data else data
 
         ema = self._compute_ema(trend_df['close'], self.trend_ema_period)
         if ema is None or len(ema) < 1:
@@ -238,7 +244,7 @@ class PurePriceActionStrategy:
         last_ema = float(ema.iloc[-1])
 
         # Determine trend direction suffix for logging
-        tf_label = "H1" if trend_data is not None and len(trend_data) > 0 else "TF"
+        tf_label = trend_label if has_trend_data and trend_label else "TF"
 
         # EMA slope filter - reject trades when EMA is flat (ranging market)
         if self.use_ema_slope_filter and len(ema) >= (self.ema_slope_period + 1):
@@ -334,14 +340,18 @@ class PurePriceActionStrategy:
 
     # ----- Main Signal Generation -----
     def generate_signal(self, data: pd.DataFrame, symbol: str,
-                        trend_data: Optional[pd.DataFrame] = None) -> Optional[TradingSignal]:
+                        trend_data: Optional[pd.DataFrame] = None,
+                        structure_data: Optional[pd.DataFrame] = None,
+                        trend_timeframe: Optional[str] = None) -> Optional[TradingSignal]:
         """
         Generate trading signal based on breakout of S/R levels.
 
         Args:
             data: Trading timeframe candles (e.g., M15)
             symbol: Symbol name
-            trend_data: Higher timeframe candles for trend filter (e.g., H1)
+            trend_data: Higher timeframe candles for trend filter (e.g., H4)
+            structure_data: Higher timeframe candles for S/R structure (e.g., H1)
+            trend_timeframe: Label for trend timeframe (used in logs)
 
         Returns TradingSignal if valid breakout detected, None otherwise.
         """
@@ -382,6 +392,8 @@ class PurePriceActionStrategy:
             sr_lookback = int(self.sr_lookback_period)
             sr_proximity_pips = float(self.sr_proximity_pips)
             tp_buffer_pips = float(self.tp_buffer_pips)
+            require_structure_conf = bool(self.require_structure_confirmation)
+            require_two_bar_conf = bool(self.require_two_bar_confirmation)
 
             for sc in getattr(self.config, 'symbols', []) or []:
                 if sc.get('name') == symbol:
@@ -395,6 +407,8 @@ class PurePriceActionStrategy:
                     sr_lookback = int(sc.get('sr_lookback_period', sr_lookback) or sr_lookback)
                     sr_proximity_pips = float(sc.get('sr_proximity_pips', sr_proximity_pips) or sr_proximity_pips)
                     tp_buffer_pips = float(sc.get('tp_buffer_pips', tp_buffer_pips) or tp_buffer_pips)
+                    require_structure_conf = bool(sc.get('require_structure_confirmation', require_structure_conf))
+                    require_two_bar_conf = bool(sc.get('require_two_bar_confirmation', require_two_bar_conf))
                     break
 
             # Use completed candles only (exclude current forming bar)
@@ -402,8 +416,13 @@ class PurePriceActionStrategy:
             if len(completed) < max(20, self.lookback_period):
                 return None
 
-            # Longer lookback for structure (S/R)
-            sr_df = data.iloc[:-1].tail(sr_lookback)
+            # Longer lookback for structure (S/R) using structure timeframe data
+            if structure_data is None or len(structure_data) == 0:
+                logger.debug(f"{symbol}: No structure data available")
+                return None
+
+            structure_completed = structure_data.iloc[:-1]
+            sr_df = structure_completed.tail(sr_lookback)
             if len(sr_df) < self.swing_window * 2 + 1:
                 return None
 
@@ -438,6 +457,35 @@ class PurePriceActionStrategy:
 
             logger.debug(f"{symbol}: Breakout {breakout.type} @ level {breakout.level:.5f}")
 
+            # Structure confirmation: last completed structure bar must close beyond level by threshold
+            if require_structure_conf:
+                if structure_completed is None or len(structure_completed) < 1:
+                    logger.debug(f"{symbol}: No completed structure data for confirmation")
+                    return None
+                struct_close = float(structure_completed.iloc[-1]['close'])
+                if breakout.type == 'bullish':
+                    if struct_close <= breakout.level + threshold:
+                        logger.debug(f"{symbol}: Structure close {struct_close:.5f} not beyond {breakout.level + threshold:.5f}")
+                        return None
+                else:
+                    if struct_close >= breakout.level - threshold:
+                        logger.debug(f"{symbol}: Structure close {struct_close:.5f} not beyond {breakout.level - threshold:.5f}")
+                        return None
+
+            # Two-bar confirmation on entry timeframe
+            if require_two_bar_conf:
+                if len(completed) < 2:
+                    return None
+                prev_close = float(completed.iloc[-2]['close'])
+                if breakout.type == 'bullish':
+                    if not (last_close > breakout.level + threshold and prev_close > breakout.level + threshold):
+                        logger.debug(f"{symbol}: Two-bar confirmation failed for bullish breakout")
+                        return None
+                else:
+                    if not (last_close < breakout.level - threshold and prev_close < breakout.level - threshold):
+                        logger.debug(f"{symbol}: Two-bar confirmation failed for bearish breakout")
+                        return None
+
             # Breakout window: only allow recent breakouts (current or recent bar)
             breakout_age = self._find_breakout_age(
                 completed['close'],
@@ -456,7 +504,13 @@ class PurePriceActionStrategy:
                 # Use completed higher-timeframe bars only
                 trend_completed = trend_data.iloc[:-1]
 
-            trend_aligned, trend_dir = self._check_trend_alignment(completed, breakout.type, trend_completed, pip)
+            trend_aligned, trend_dir = self._check_trend_alignment(
+                completed,
+                breakout.type,
+                trend_completed,
+                pip,
+                trend_timeframe,
+            )
             if not trend_aligned:
                 logger.debug(f"{symbol}: Breakout {breakout.type} rejected - trend is {trend_dir}")
                 return None
