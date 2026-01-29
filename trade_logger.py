@@ -7,7 +7,7 @@ from datetime import datetime
 
 
 class _DateTimeEncoder(json.JSONEncoder):
-    """JSON encoder that renders datetime objects as ISO strings."""
+    """JSON encoder that renders datetime objects as ISO strings"""
     def default(self, o: Any) -> Any:
         if isinstance(o, datetime):
             return o.isoformat()
