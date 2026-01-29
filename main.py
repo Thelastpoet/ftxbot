@@ -1032,7 +1032,7 @@ def parse_arguments():
     parser.add_argument('--risk-per-trade', type=float)
     parser.add_argument('--symbol', type=str)
     parser.add_argument('--timeframe', type=str)
-    parser.add_argument('--log-level', type=str, default='INFO', choices=['DEBUG','INFO','WARNING','ERROR'])
+    parser.add_argument('--log-level', type=str, default='DEBUG', choices=['DEBUG','INFO','WARNING','ERROR'])
     return parser.parse_args()
 
 
