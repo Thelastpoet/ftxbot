@@ -39,7 +39,7 @@ class Config:
             self.breakout_threshold_spread_mult = trading.get('breakout_threshold_spread_mult', 2.0)
             self.breakout_window_bars = trading.get('breakout_window_bars', 4)
             self.max_extension_pips = trading.get('max_extension_pips', None)
-            self.max_extension_atr_mult = trading.get('max_extension_atr_mult', None)
+            self.max_extension_atr_mult = trading.get('max_extension_atr_mult', 1.0)
             self.min_stop_loss_pips = trading.get('min_stop_loss_pips', 20)
             self.stop_loss_buffer_pips = trading.get('stop_loss_buffer_pips', 15)
             # ATR for dynamic SL buffer
@@ -157,7 +157,7 @@ class Config:
         self.breakout_threshold_spread_mult = 2.0
         self.breakout_window_bars = 4
         self.max_extension_pips = None
-        self.max_extension_atr_mult = None
+        self.max_extension_atr_mult = 1.0
         self.min_stop_loss_pips = 20
         self.stop_loss_buffer_pips = 15
         self.atr_period = 14

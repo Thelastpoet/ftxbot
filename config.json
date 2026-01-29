@@ -8,7 +8,7 @@
     "breakout_threshold_spread_mult": 2.0,
     "breakout_window_bars": 4,
     "max_extension_pips": null,
-    "max_extension_atr_mult": 0.5,
+    "max_extension_atr_mult": 1.0,
     "min_stop_loss_pips": 20,
     "stop_loss_buffer_pips": 15,
     "atr_period": 14,

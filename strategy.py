@@ -220,6 +220,18 @@ class PurePriceActionStrategy:
         except Exception:
             return None
 
+    def _infer_bar_delta(self, index: pd.Index) -> Optional[pd.Timedelta]:
+        """Infer typical bar duration from index deltas."""
+        try:
+            if index is None or len(index) < 3:
+                return None
+            diffs = index.to_series().diff().dropna()
+            if diffs.empty:
+                return None
+            return diffs.median()
+        except Exception:
+            return None
+
     # ----- EMA Calculation for Trend Filter -----
     def _compute_ema(self, closes: pd.Series, period: int) -> Optional[pd.Series]:
         """Compute Exponential Moving Average for trend filter."""
@@ -450,6 +462,10 @@ class PurePriceActionStrategy:
                     require_two_bar_conf = bool(sc.get('require_two_bar_confirmation', require_two_bar_conf))
                     break
 
+            # If structure confirmation is enabled, drop the extra two-bar confirmation
+            if require_structure_conf:
+                require_two_bar_conf = False
+
             # Use completed candles only (exclude current forming bar)
             completed = data.iloc[:-1].tail(self.lookback_period)
             if len(completed) < max(20, self.lookback_period):
@@ -551,6 +567,17 @@ class PurePriceActionStrategy:
                         logger.debug(f"{symbol}: Structure close {struct_close:.5f} not beyond {breakout.level - struct_threshold:.5f}")
                         return None
 
+                # Freshness aligned to structure confirmation: allow only the first entry bar after structure close
+                entry_delta = self._infer_bar_delta(completed.index)
+                struct_delta = self._infer_bar_delta(structure_completed.index)
+                if entry_delta is not None and struct_delta is not None:
+                    if struct_delta > (entry_delta * 1.5):
+                        struct_close_time = structure_completed.index[-1] + struct_delta
+                        last_entry_time = completed.index[-1]
+                        if not (struct_close_time <= last_entry_time < struct_close_time + entry_delta):
+                            logger.debug(f"{symbol}: Waiting for first entry bar after structure close")
+                            return None
+
             # Two-bar confirmation on entry timeframe
             if require_two_bar_conf:
                 if len(completed) < 2:
@@ -565,17 +592,18 @@ class PurePriceActionStrategy:
                         logger.debug(f"{symbol}: Two-bar confirmation failed for bearish breakout")
                         return None
 
-            # Breakout window: only allow recent breakouts (current or recent bar)
-            breakout_age = self._find_breakout_age(
-                completed['close'],
-                breakout.level,
-                threshold,
-                breakout.type,
-                breakout_window_bars,
-            )
-            if breakout_age is None:
-                logger.debug(f"{symbol}: Breakout too old (window={breakout_window_bars} bars)")
-                return None
+            # Breakout window: only allow recent breakouts when structure confirmation is disabled
+            if not require_structure_conf:
+                breakout_age = self._find_breakout_age(
+                    completed['close'],
+                    breakout.level,
+                    threshold,
+                    breakout.type,
+                    breakout_window_bars,
+                )
+                if breakout_age is None:
+                    logger.debug(f"{symbol}: Breakout too old (window={breakout_window_bars} bars)")
+                    return None
 
             # Trend filter: only take trades aligned with EMA on higher timeframe
             trend_completed = None
