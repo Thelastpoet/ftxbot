@@ -182,12 +182,7 @@ class Config:
         self.max_drawdown = 0.05
         self.risk_reward_ratio = 2.0
         self.min_rr = 1.0
-        self.symbols = [{
-            'name': 'EURUSD',
-            'entry_timeframe': 'M15',
-            'structure_timeframe': 'H1',
-            'trend_timeframe': 'H4',
-        }]
+        self.symbols = []
 
 class TradingBot:
     def __init__(self, config: Config):

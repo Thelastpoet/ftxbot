@@ -506,6 +506,9 @@ class PurePriceActionStrategy:
                 threshold_candidates.append(float(thr_spread_mult) * current_spread_pips * pip)
 
             threshold = max(threshold_candidates) if threshold_candidates else 0.0
+            if threshold <= 0:
+                logger.debug(f"{symbol}: Invalid breakout threshold (ATR/spread unavailable)")
+                return None
             if threshold > 0:
                 atr_pips = (atr_last / pip) if atr_last else 0.0
                 logger.debug(
@@ -525,14 +528,27 @@ class PurePriceActionStrategy:
                 if structure_completed is None or len(structure_completed) < 1:
                     logger.debug(f"{symbol}: No completed structure data for confirmation")
                     return None
+                struct_threshold_candidates: List[float] = []
+                if thr_pips is not None and thr_pips > 0:
+                    struct_threshold_candidates.append(float(thr_pips) * pip)
+                if thr_atr_mult is not None and struct_atr_last is not None and struct_atr_last > 0:
+                    struct_threshold_candidates.append(float(thr_atr_mult) * struct_atr_last)
+                if thr_spread_mult is not None and current_spread_pips > 0:
+                    struct_threshold_candidates.append(float(thr_spread_mult) * current_spread_pips * pip)
+
+                struct_threshold = max(struct_threshold_candidates) if struct_threshold_candidates else 0.0
+                if struct_threshold <= 0:
+                    logger.debug(f"{symbol}: Invalid structure threshold (structure ATR unavailable)")
+                    return None
+
                 struct_close = float(structure_completed.iloc[-1]['close'])
                 if breakout.type == 'bullish':
-                    if struct_close <= breakout.level + threshold:
-                        logger.debug(f"{symbol}: Structure close {struct_close:.5f} not beyond {breakout.level + threshold:.5f}")
+                    if struct_close <= breakout.level + struct_threshold:
+                        logger.debug(f"{symbol}: Structure close {struct_close:.5f} not beyond {breakout.level + struct_threshold:.5f}")
                         return None
                 else:
-                    if struct_close >= breakout.level - threshold:
-                        logger.debug(f"{symbol}: Structure close {struct_close:.5f} not beyond {breakout.level - threshold:.5f}")
+                    if struct_close >= breakout.level - struct_threshold:
+                        logger.debug(f"{symbol}: Structure close {struct_close:.5f} not beyond {breakout.level - struct_threshold:.5f}")
                         return None
 
             # Two-bar confirmation on entry timeframe
