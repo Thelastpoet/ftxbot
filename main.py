@@ -998,7 +998,7 @@ class TradingBot:
                     except Exception:
                         open_count = 0
                     loop_ms = int((time.monotonic() - loop_start) * 1000)
-                    logger.info(
+                    logger.debug(
                         f"Heartbeat: processed={processed} signals={signals} open={open_count} loop_ms={loop_ms}"
                     )
 
@@ -1020,7 +1020,7 @@ def parse_arguments():
     parser.add_argument('--risk-per-trade', type=float)
     parser.add_argument('--symbol', type=str)
     parser.add_argument('--timeframe', type=str)
-    parser.add_argument('--log-level', type=str, default='INFO', choices=['DEBUG','INFO','WARNING','ERROR'])
+    parser.add_argument('--log-level', type=str, default='DEBUG', choices=['DEBUG','INFO','WARNING','ERROR'])
     return parser.parse_args()
 
 
