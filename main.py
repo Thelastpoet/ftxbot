@@ -33,8 +33,9 @@ class Config:
             self.main_loop_interval = trading.get('main_loop_interval_seconds', 5)
             self.lookback_period = trading.get('lookback_period', 20)
             self.swing_window = trading.get('swing_window', 5)
-            self.breakout_threshold = trading.get('breakout_threshold_pips', 3)
+            self.breakout_threshold = trading.get('breakout_threshold_pips', 0)
             self.breakout_threshold_atr_mult = trading.get('breakout_threshold_atr_mult', 0.5)
+            self.breakout_threshold_spread_mult = trading.get('breakout_threshold_spread_mult', 2.0)
             self.breakout_window_bars = trading.get('breakout_window_bars', 4)
             self.max_extension_pips = trading.get('max_extension_pips', None)
             self.max_extension_atr_mult = trading.get('max_extension_atr_mult', None)
@@ -49,11 +50,14 @@ class Config:
             self.sr_lookback_period = trading.get('sr_lookback_period', 72)
             self.sr_proximity_pips = trading.get('sr_proximity_pips', 10)
             self.tp_buffer_pips = trading.get('tp_buffer_pips', 2)
+            self.structure_min_touches = trading.get('structure_min_touches', 2)
+            self.structure_atr_band_mult = trading.get('structure_atr_band_mult', 0.25)
             # Trend filter settings
             self.use_trend_filter = trading.get('use_trend_filter', True)
             self.trend_ema_period = trading.get('trend_ema_period', 50)
             self.use_ema_slope_filter = trading.get('use_ema_slope_filter', True)
             self.ema_slope_period = trading.get('ema_slope_period', 5)
+            self.min_ema_slope_atr_per_bar = trading.get('min_ema_slope_atr_per_bar', 0.01)
             self.min_ema_slope_pips_per_bar = trading.get('min_ema_slope_pips_per_bar', 0.4)
             self.require_structure_confirmation = trading.get('require_structure_confirmation', True)
             self.require_two_bar_confirmation = trading.get('require_two_bar_confirmation', True)
@@ -100,6 +104,7 @@ class Config:
                     'stop_loss_buffer_pips': s.get('stop_loss_buffer_pips'),
                     'breakout_threshold_pips': s.get('breakout_threshold_pips'),
                     'breakout_threshold_atr_mult': s.get('breakout_threshold_atr_mult'),
+                    'breakout_threshold_spread_mult': s.get('breakout_threshold_spread_mult'),
                     'risk_reward_ratio': s.get('risk_reward_ratio'),
                     'spread_guard_pips': s.get('spread_guard_pips'),
                     'max_sl_pips': s.get('max_sl_pips'),
@@ -109,6 +114,8 @@ class Config:
                     'sr_lookback_period': s.get('sr_lookback_period'),
                     'sr_proximity_pips': s.get('sr_proximity_pips'),
                     'tp_buffer_pips': s.get('tp_buffer_pips'),
+                    'structure_min_touches': s.get('structure_min_touches'),
+                    'structure_atr_band_mult': s.get('structure_atr_band_mult'),
                     'require_structure_confirmation': s.get('require_structure_confirmation'),
                     'require_two_bar_confirmation': s.get('require_two_bar_confirmation'),
                 }
@@ -144,8 +151,9 @@ class Config:
         self.main_loop_interval = 5
         self.lookback_period = 20
         self.swing_window = 5
-        self.breakout_threshold = 3
+        self.breakout_threshold = 0
         self.breakout_threshold_atr_mult = 0.5
+        self.breakout_threshold_spread_mult = 2.0
         self.breakout_window_bars = 4
         self.max_extension_pips = None
         self.max_extension_atr_mult = None
@@ -159,10 +167,13 @@ class Config:
         self.sr_lookback_period = 72
         self.sr_proximity_pips = 10
         self.tp_buffer_pips = 2
+        self.structure_min_touches = 2
+        self.structure_atr_band_mult = 0.25
         self.use_trend_filter = True
         self.trend_ema_period = 50
         self.use_ema_slope_filter = True
         self.ema_slope_period = 5
+        self.min_ema_slope_atr_per_bar = 0.01
         self.min_ema_slope_pips_per_bar = 0.4
         self.require_structure_confirmation = True
         self.require_two_bar_confirmation = True
@@ -628,7 +639,7 @@ class TradingBot:
 
         try:
             logger.debug(f"{symbol}: TFs entry={entry_tf} structure={structure_tf} trend={trend_tf}")
-            # Determine how many bars needed for analysis (250 ensures 200 EMA can calculate)
+            # Determine how many bars needed for analysis (250 ensures EMA can calculate)
             bars_needed = {
                 'M1': 250, 'M5': 250, 'M15': 250, 'M30': 250,
                 'H1': 250, 'H4': 250, 'D1': 250

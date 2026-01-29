@@ -50,7 +50,7 @@ class PurePriceActionStrategy:
         # Core parameters
         self.lookback_period = getattr(config, 'lookback_period', 20)
         self.swing_window = getattr(config, 'swing_window', 5)
-        self.breakout_threshold_pips = getattr(config, 'breakout_threshold', 7)
+        self.breakout_threshold_pips = getattr(config, 'breakout_threshold', 0)
         self.breakout_window_bars = int(getattr(config, 'breakout_window_bars', 1) or 1)
         self.min_stop_loss_pips = getattr(config, 'min_stop_loss_pips', 20)
         self.stop_loss_buffer_pips = getattr(config, 'stop_loss_buffer_pips', 15)
@@ -61,6 +61,8 @@ class PurePriceActionStrategy:
         self.sr_lookback_period = int(getattr(config, 'sr_lookback_period', 80))
         self.sr_proximity_pips = float(getattr(config, 'sr_proximity_pips', 10.0))
         self.tp_buffer_pips = float(getattr(config, 'tp_buffer_pips', 2.0))
+        self.structure_min_touches = int(getattr(config, 'structure_min_touches', 2))
+        self.structure_atr_band_mult = float(getattr(config, 'structure_atr_band_mult', 0.25))
 
         # ATR for dynamic SL buffer and breakout threshold
         self.atr_period = int(getattr(config, 'atr_period', 14))
@@ -70,15 +72,18 @@ class PurePriceActionStrategy:
 
         # ATR-based breakout threshold (if set, overrides fixed pips)
         self.breakout_threshold_atr_mult = getattr(config, 'breakout_threshold_atr_mult', None)
+        # Spread-anchored breakout threshold (if set)
+        self.breakout_threshold_spread_mult = getattr(config, 'breakout_threshold_spread_mult', 2.0)
 
-        # Trend filter (200 EMA alignment)
+        # Trend filter (EMA alignment)
         self.use_trend_filter = getattr(config, 'use_trend_filter', True)
-        self.trend_ema_period = int(getattr(config, 'trend_ema_period', 200))
+        self.trend_ema_period = int(getattr(config, 'trend_ema_period', 50))
 
         # EMA slope filter (reject trades when EMA is flat/ranging)
         self.use_ema_slope_filter = getattr(config, 'use_ema_slope_filter', True)
         self.ema_slope_period = int(getattr(config, 'ema_slope_period', 20))
         self.min_ema_slope_pips_per_bar = float(getattr(config, 'min_ema_slope_pips_per_bar', 0.1))
+        self.min_ema_slope_atr_per_bar = getattr(config, 'min_ema_slope_atr_per_bar', None)
 
         # Spread guard
         self.spread_guard_pips_default = getattr(config, 'spread_guard_pips_default', None)
@@ -124,9 +129,13 @@ class PurePriceActionStrategy:
 
     def calculate_support_resistance(self, data: pd.DataFrame, swing_highs: List[int],
                                      swing_lows: List[int], symbol: str, pip: float,
-                                     proximity_pips: float = 10.0) -> Tuple[List[float], List[float]]:
+                                     proximity_pips: float = 10.0,
+                                     atr_last: Optional[float] = None,
+                                     min_touches: int = 2,
+                                     atr_band_mult: float = 0.25) -> Tuple[List[float], List[float]]:
         """Extract recent distinct swing highs/lows as resistance/support."""
         proximity = float(proximity_pips) * pip  # proximity filter in pips
+        atr_band = float(atr_last) * float(atr_band_mult) if atr_last and atr_last > 0 else None
 
         res: List[float] = []
         sup: List[float] = []
@@ -135,6 +144,10 @@ class PurePriceActionStrategy:
         # Take recent swings
         for i in reversed(swing_highs[-50:]):
             level = float(data.iloc[i]['high'])
+            if atr_band is not None and min_touches > 1:
+                touches = int(((data['high'] - level).abs() <= atr_band).sum())
+                if touches < min_touches:
+                    continue
             if not any(abs(level - x) <= proximity for x in res):
                 res.append(level)
             if len(res) >= max_levels:
@@ -142,6 +155,10 @@ class PurePriceActionStrategy:
 
         for i in reversed(swing_lows[-50:]):
             level = float(data.iloc[i]['low'])
+            if atr_band is not None and min_touches > 1:
+                touches = int(((data['low'] - level).abs() <= atr_band).sum())
+                if touches < min_touches:
+                    continue
             if not any(abs(level - x) <= proximity for x in sup):
                 sup.append(level)
             if len(sup) >= max_levels:
@@ -218,12 +235,12 @@ class PurePriceActionStrategy:
                                 pip: float = 0.0001,
                                 trend_label: Optional[str] = None) -> Tuple[bool, str]:
         """
-        Check if breakout aligns with 200 EMA trend on higher timeframe.
+        Check if breakout aligns with EMA trend on higher timeframe.
         Returns (is_aligned, trend_direction).
 
         Rules:
-        - BUY signals: price must be above 200 EMA (uptrend)
-        - SELL signals: price must be below 200 EMA (downtrend)
+        - BUY signals: price must be above EMA (uptrend)
+        - SELL signals: price must be below EMA (downtrend)
         - EMA slope must be above minimum threshold (not ranging)
 
         Uses higher timeframe data (trend_data) if provided for more stable trend anchor.
@@ -250,11 +267,27 @@ class PurePriceActionStrategy:
         if self.use_ema_slope_filter and len(ema) >= (self.ema_slope_period + 1):
             ema_now = float(ema.iloc[-1])
             ema_past = float(ema.iloc[-(self.ema_slope_period + 1)])
-            slope_pips_per_bar = (ema_now - ema_past) / (self.ema_slope_period * pip)
+            slope_per_bar = (ema_now - ema_past) / float(self.ema_slope_period)
 
-            if abs(slope_pips_per_bar) < self.min_ema_slope_pips_per_bar:
-                logger.debug(f"EMA slope filter: slope={slope_pips_per_bar:.3f} pips/bar < min {self.min_ema_slope_pips_per_bar}")
-                return False, f"FLAT_{tf_label}"
+            # Prefer ATR-normalized slope (dimensionless)
+            atr_series = self._compute_atr(trend_df['high'], trend_df['low'], trend_df['close'], self.atr_period)
+            atr_last = float(atr_series.iloc[-1]) if atr_series is not None and not pd.isna(atr_series.iloc[-1]) else None
+
+            if atr_last and atr_last > 0 and self.min_ema_slope_atr_per_bar is not None:
+                slope_atr_per_bar = slope_per_bar / atr_last
+                if abs(slope_atr_per_bar) < float(self.min_ema_slope_atr_per_bar):
+                    logger.debug(
+                        f"EMA slope filter: slope={slope_atr_per_bar:.4f} ATR/bar < min {float(self.min_ema_slope_atr_per_bar):.4f}"
+                    )
+                    return False, f"FLAT_{tf_label}"
+            else:
+                # Fallback to pip-based slope if ATR not available
+                slope_pips_per_bar = slope_per_bar / pip
+                if abs(slope_pips_per_bar) < self.min_ema_slope_pips_per_bar:
+                    logger.debug(
+                        f"EMA slope filter: slope={slope_pips_per_bar:.3f} pips/bar < min {self.min_ema_slope_pips_per_bar}"
+                    )
+                    return False, f"FLAT_{tf_label}"
 
         if last_close > last_ema:
             trend = f"BULLISH_{tf_label}"
@@ -383,6 +416,7 @@ class PurePriceActionStrategy:
             # Defaults (can be overridden per-symbol)
             thr_pips = float(self.breakout_threshold_pips)
             thr_atr_mult = self.breakout_threshold_atr_mult
+            thr_spread_mult = self.breakout_threshold_spread_mult
             rr = float(self.risk_reward_ratio)
             min_rr = float(self.min_rr)
             max_sl_pips = self.max_sl_pips
@@ -392,6 +426,8 @@ class PurePriceActionStrategy:
             sr_lookback = int(self.sr_lookback_period)
             sr_proximity_pips = float(self.sr_proximity_pips)
             tp_buffer_pips = float(self.tp_buffer_pips)
+            structure_min_touches = int(self.structure_min_touches)
+            structure_atr_band_mult = float(self.structure_atr_band_mult)
             require_structure_conf = bool(self.require_structure_confirmation)
             require_two_bar_conf = bool(self.require_two_bar_confirmation)
 
@@ -399,6 +435,7 @@ class PurePriceActionStrategy:
                 if sc.get('name') == symbol:
                     thr_pips = float(sc.get('breakout_threshold_pips', thr_pips))
                     thr_atr_mult = sc.get('breakout_threshold_atr_mult', thr_atr_mult)
+                    thr_spread_mult = sc.get('breakout_threshold_spread_mult', thr_spread_mult)
                     rr = float(sc.get('risk_reward_ratio', rr))
                     max_sl_pips = sc.get('max_sl_pips', max_sl_pips)
                     breakout_window_bars = int(sc.get('breakout_window_bars', breakout_window_bars) or breakout_window_bars)
@@ -407,6 +444,8 @@ class PurePriceActionStrategy:
                     sr_lookback = int(sc.get('sr_lookback_period', sr_lookback) or sr_lookback)
                     sr_proximity_pips = float(sc.get('sr_proximity_pips', sr_proximity_pips) or sr_proximity_pips)
                     tp_buffer_pips = float(sc.get('tp_buffer_pips', tp_buffer_pips) or tp_buffer_pips)
+                    structure_min_touches = int(sc.get('structure_min_touches', structure_min_touches) or structure_min_touches)
+                    structure_atr_band_mult = float(sc.get('structure_atr_band_mult', structure_atr_band_mult) or structure_atr_band_mult)
                     require_structure_conf = bool(sc.get('require_structure_confirmation', require_structure_conf))
                     require_two_bar_conf = bool(sc.get('require_two_bar_confirmation', require_two_bar_conf))
                     break
@@ -431,8 +470,24 @@ class PurePriceActionStrategy:
             if not highs and not lows:
                 return None
 
+            struct_atr_series = self._compute_atr(
+                structure_completed['high'],
+                structure_completed['low'],
+                structure_completed['close'],
+                self.atr_period,
+            )
+            struct_atr_last = float(struct_atr_series.iloc[-1]) if struct_atr_series is not None and not pd.isna(struct_atr_series.iloc[-1]) else None
+
             resistance, support = self.calculate_support_resistance(
-                sr_df, highs, lows, symbol, pip, proximity_pips=sr_proximity_pips
+                sr_df,
+                highs,
+                lows,
+                symbol,
+                pip,
+                proximity_pips=sr_proximity_pips,
+                atr_last=struct_atr_last,
+                min_touches=structure_min_touches,
+                atr_band_mult=structure_atr_band_mult,
             )
 
             # Compute ATR early (needed for both breakout threshold and SL buffer)
@@ -440,15 +495,23 @@ class PurePriceActionStrategy:
                                            completed['close'], self.atr_period)
             atr_last = float(atr_series.iloc[-1]) if atr_series is not None and not pd.isna(atr_series.iloc[-1]) else None
 
-            # Detect breakout - combine fixed and ATR thresholds when both are set
+            # Detect breakout - use max of fixed, ATR, and spread-anchored thresholds
             last_close = float(completed.iloc[-1]['close'])
-            threshold = thr_pips * pip
+            threshold_candidates: List[float] = []
+            if thr_pips is not None and thr_pips > 0:
+                threshold_candidates.append(float(thr_pips) * pip)
             if thr_atr_mult is not None and atr_last is not None and atr_last > 0:
-                atr_threshold = float(thr_atr_mult) * atr_last
-                threshold = max(threshold, atr_threshold)
+                threshold_candidates.append(float(thr_atr_mult) * atr_last)
+            if thr_spread_mult is not None and current_spread_pips > 0:
+                threshold_candidates.append(float(thr_spread_mult) * current_spread_pips * pip)
+
+            threshold = max(threshold_candidates) if threshold_candidates else 0.0
+            if threshold > 0:
+                atr_pips = (atr_last / pip) if atr_last else 0.0
                 logger.debug(
-                    f"{symbol}: Using breakout threshold: {threshold/pip:.1f} pips "
-                    f"(fixed={thr_pips:.1f}p, ATR={atr_last/pip:.1f}p * {thr_atr_mult})"
+                    f"{symbol}: Using breakout threshold: {threshold/pip:.2f} pips "
+                    f"(fixed={float(thr_pips):.2f}p, ATR={atr_pips:.2f}p * {thr_atr_mult}, "
+                    f"spread={current_spread_pips:.2f}p * {thr_spread_mult})"
                 )
 
             breakout = self._detect_breakout(last_close, resistance, support, threshold)
@@ -498,7 +561,7 @@ class PurePriceActionStrategy:
                 logger.debug(f"{symbol}: Breakout too old (window={breakout_window_bars} bars)")
                 return None
 
-            # Trend filter: only take trades aligned with 200 EMA on higher timeframe
+            # Trend filter: only take trades aligned with EMA on higher timeframe
             trend_completed = None
             if trend_data is not None and len(trend_data) > 1:
                 # Use completed higher-timeframe bars only
