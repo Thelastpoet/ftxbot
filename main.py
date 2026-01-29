@@ -500,9 +500,9 @@ class TradingBot:
                 trade['close_reason'] = reason_label
                 trade['close_time'] = close_time
             else:
-                trade['status'] = 'CLOSED_UNKNOWN'
-                trade['close_reason'] = 'MISSING_ON_RESTART'
-                trade['close_time'] = datetime.now(timezone.utc)
+                # Do not force-close without a confirmed closing deal; leave OPEN and retry later.
+                trade['reconcile_note'] = 'MISSING_ON_RESTART'
+                logger.warning(f"{symbol}: No closing deal found for position {pid}; leaving trade OPEN")
             updated = True
 
         if updated:

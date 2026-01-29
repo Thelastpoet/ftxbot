@@ -748,12 +748,27 @@ class PurePriceActionStrategy:
             if sl_pips <= 0:
                 return None
 
+            required_rr = max(min_rr, rr)
+
             # Max SL check (use actual entry and rounded SL)
             if max_sl_pips and sl_pips > float(max_sl_pips):
                 logger.debug(f"{symbol}: SL {sl_pips:.1f}p > max {max_sl_pips}p")
                 return None
 
+            # Minimum TP distance: must clear the market-driven breakout threshold
+            try:
+                min_tp_pips = float(threshold) / pip if threshold and pip > 0 else 0.0
+            except Exception:
+                min_tp_pips = 0.0
+            if min_tp_pips > 0 and tp_pips < min_tp_pips:
+                logger.debug(f"{symbol}: TP {tp_pips:.1f}p < min {min_tp_pips:.1f}p (threshold)")
+                return None
+
             actual_rr = tp_pips / sl_pips
+            # Minimum entry-based RR check (market-driven via existing required_rr)
+            if actual_rr < required_rr:
+                logger.debug(f"{symbol}: RR_entry {actual_rr:.2f} < min {required_rr:.2f}")
+                return None
             # Structure-based RR: use breakout level as reference (structure breakout logic)
             if breakout.type == 'bullish':
                 struct_risk = (breakout.level - sl) / pip
@@ -764,7 +779,6 @@ class PurePriceActionStrategy:
             if struct_risk <= 0 or struct_reward <= 0:
                 return None
             structure_rr = struct_reward / struct_risk
-            required_rr = max(min_rr, rr)
 
             # Minimum RR check
             if structure_rr < required_rr:
