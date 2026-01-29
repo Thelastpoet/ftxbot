@@ -632,10 +632,14 @@ class PurePriceActionStrategy:
                     ext_limit = float(max_ext_pips)
                 except Exception:
                     ext_limit = None
-            if max_ext_atr is not None and atr_last is not None and atr_last > 0:
+            if max_ext_atr is not None:
                 try:
-                    atr_limit = float(max_ext_atr) * (atr_last / pip)
-                    ext_limit = atr_limit if ext_limit is None else min(ext_limit, atr_limit)
+                    atr_for_extension = atr_last
+                    if require_structure_conf and struct_atr_last is not None and struct_atr_last > 0:
+                        atr_for_extension = struct_atr_last
+                    if atr_for_extension is not None and atr_for_extension > 0:
+                        atr_limit = float(max_ext_atr) * (atr_for_extension / pip)
+                        ext_limit = atr_limit if ext_limit is None else min(ext_limit, atr_limit)
                 except Exception:
                     pass
             if ext_limit is not None and ext_limit > 0:
