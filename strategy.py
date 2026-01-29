@@ -241,9 +241,9 @@ class PurePriceActionStrategy:
         tf_label = "H1" if trend_data is not None and len(trend_data) > 0 else "TF"
 
         # EMA slope filter - reject trades when EMA is flat (ranging market)
-        if self.use_ema_slope_filter and len(ema) >= self.ema_slope_period:
+        if self.use_ema_slope_filter and len(ema) >= (self.ema_slope_period + 1):
             ema_now = float(ema.iloc[-1])
-            ema_past = float(ema.iloc[-self.ema_slope_period])
+            ema_past = float(ema.iloc[-(self.ema_slope_period + 1)])
             slope_pips_per_bar = (ema_now - ema_past) / (self.ema_slope_period * pip)
 
             if abs(slope_pips_per_bar) < self.min_ema_slope_pips_per_bar:
@@ -262,7 +262,8 @@ class PurePriceActionStrategy:
     # ----- Stop Loss Calculation -----
     def _calculate_stop_loss(self, breakout: BreakoutInfo, pip: float, symbol: str,
                              atr_last: Optional[float], support: List[float],
-                             resistance: List[float]) -> Optional[float]:
+                             resistance: List[float],
+                             entry_price: Optional[float] = None) -> Optional[float]:
         """
         Place SL beyond nearest opposing S/R level.
         For bullish: SL below nearest support
@@ -289,7 +290,7 @@ class PurePriceActionStrategy:
         dyn_extra = max(buf_price, min_buf_price, atr_k * atr_price)
 
         min_sl = min_sl_pips * pip
-        entry = breakout.entry_price
+        entry = breakout.entry_price if entry_price is None else float(entry_price)
         level = breakout.level
 
         if breakout.type == 'bullish':
@@ -420,13 +421,16 @@ class PurePriceActionStrategy:
                                            completed['close'], self.atr_period)
             atr_last = float(atr_series.iloc[-1]) if atr_series is not None and not pd.isna(atr_series.iloc[-1]) else None
 
-            # Detect breakout - use ATR-based threshold if configured, else fixed pips
+            # Detect breakout - combine fixed and ATR thresholds when both are set
             last_close = float(completed.iloc[-1]['close'])
+            threshold = thr_pips * pip
             if thr_atr_mult is not None and atr_last is not None and atr_last > 0:
-                threshold = float(thr_atr_mult) * atr_last
-                logger.debug(f"{symbol}: Using ATR-based threshold: {threshold/pip:.1f} pips (ATR={atr_last/pip:.1f}p * {thr_atr_mult})")
-            else:
-                threshold = thr_pips * pip
+                atr_threshold = float(thr_atr_mult) * atr_last
+                threshold = max(threshold, atr_threshold)
+                logger.debug(
+                    f"{symbol}: Using breakout threshold: {threshold/pip:.1f} pips "
+                    f"(fixed={thr_pips:.1f}p, ATR={atr_last/pip:.1f}p * {thr_atr_mult})"
+                )
 
             breakout = self._detect_breakout(last_close, resistance, support, threshold)
             if not breakout:
@@ -457,16 +461,6 @@ class PurePriceActionStrategy:
                 logger.debug(f"{symbol}: Breakout {breakout.type} rejected - trend is {trend_dir}")
                 return None
 
-            # Duplicate prevention: one signal per bar per direction
-            try:
-                bar_time = completed.index[-1]
-                key = (symbol, breakout.type)
-                if self._last_breakout_bar.get(key) == bar_time:
-                    return None
-                self._last_breakout_bar[key] = bar_time
-            except Exception:
-                pass
-
             # Use actual execution price
             entry_eff = float(tick.ask) if breakout.type == 'bullish' else float(tick.bid)
 
@@ -486,19 +480,27 @@ class PurePriceActionStrategy:
             if ext_limit is not None and ext_limit > 0:
                 ext_pips = abs(entry_eff - breakout.level) / pip
                 if ext_pips > ext_limit:
-                    logger.info(f"{symbol}: Extension {ext_pips:.1f}p > limit {ext_limit:.1f}p")
+                    logger.debug(f"{symbol}: Extension {ext_pips:.1f}p > limit {ext_limit:.1f}p")
                     return None
 
             # Calculate SL (ATR already computed above)
-            sl = self._calculate_stop_loss(breakout, pip, symbol, atr_last, support, resistance)
+            sl = self._calculate_stop_loss(
+                breakout,
+                pip,
+                symbol,
+                atr_last,
+                support,
+                resistance,
+                entry_price=entry_eff,
+            )
             if sl is None:
-                logger.info(f"{symbol}: No valid structure for SL - trade rejected")
+                logger.debug(f"{symbol}: No valid structure for SL - trade rejected")
                 return None
 
             # Calculate TP from next structure level
             tp = self._calculate_structure_take_profit(breakout, support, resistance, pip, tp_buffer_pips)
             if tp is None:
-                logger.info(f"{symbol}: No valid structure for TP - trade rejected")
+                logger.debug(f"{symbol}: No valid structure for TP - trade rejected")
                 return None
 
             # Round to broker precision
@@ -511,11 +513,11 @@ class PurePriceActionStrategy:
             # Ensure TP is on correct side of entry after rounding
             if breakout.type == 'bullish':
                 if tp <= entry_eff:
-                    logger.info(f"{symbol}: TP {tp:.5f} not above entry {entry_eff:.5f}")
+                    logger.debug(f"{symbol}: TP {tp:.5f} not above entry {entry_eff:.5f}")
                     return None
             else:
                 if tp >= entry_eff:
-                    logger.info(f"{symbol}: TP {tp:.5f} not below entry {entry_eff:.5f}")
+                    logger.debug(f"{symbol}: TP {tp:.5f} not below entry {entry_eff:.5f}")
                     return None
 
             # Calculate actual RR
@@ -527,7 +529,7 @@ class PurePriceActionStrategy:
 
             # Max SL check (use actual entry and rounded SL)
             if max_sl_pips and sl_pips > float(max_sl_pips):
-                logger.info(f"{symbol}: SL {sl_pips:.1f}p > max {max_sl_pips}p")
+                logger.debug(f"{symbol}: SL {sl_pips:.1f}p > max {max_sl_pips}p")
                 return None
 
             actual_rr = tp_pips / sl_pips
@@ -535,8 +537,18 @@ class PurePriceActionStrategy:
 
             # Minimum RR check
             if actual_rr < required_rr:
-                logger.info(f"{symbol}: RR {actual_rr:.2f} < min {required_rr:.2f}")
+                logger.debug(f"{symbol}: RR {actual_rr:.2f} < min {required_rr:.2f}")
                 return None
+
+            # Duplicate prevention: one signal per bar per direction
+            try:
+                bar_time = completed.index[-1]
+                key = (symbol, breakout.type)
+                if self._last_breakout_bar.get(key) == bar_time:
+                    return None
+                self._last_breakout_bar[key] = bar_time
+            except Exception:
+                pass
 
             signal = TradingSignal(
                 type=0 if breakout.type == 'bullish' else 1,
