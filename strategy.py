@@ -313,17 +313,11 @@ class PurePriceActionStrategy:
             if atr_last and atr_last > 0 and self.min_ema_slope_atr_per_bar is not None:
                 slope_atr_per_bar = slope_per_bar / atr_last
                 if abs(slope_atr_per_bar) < float(self.min_ema_slope_atr_per_bar):
-                    logger.debug(
-                        f"EMA slope filter: slope={slope_atr_per_bar:.4f} ATR/bar < min {float(self.min_ema_slope_atr_per_bar):.4f}"
-                    )
                     return False, f"FLAT_{tf_label}"
             else:
                 # Fallback to pip-based slope if ATR not available
                 slope_pips_per_bar = slope_per_bar / pip
                 if abs(slope_pips_per_bar) < self.min_ema_slope_pips_per_bar:
-                    logger.debug(
-                        f"EMA slope filter: slope={slope_pips_per_bar:.3f} pips/bar < min {self.min_ema_slope_pips_per_bar}"
-                    )
                     return False, f"FLAT_{tf_label}"
 
         if last_close > last_ema:
@@ -447,7 +441,7 @@ class PurePriceActionStrategy:
                     break
 
             if spread_guard and current_spread_pips > float(spread_guard):
-                logger.debug(f"{symbol}: Spread {current_spread_pips:.1f}p > guard {spread_guard}p")
+                logger.debug(f"{symbol}: Spread {current_spread_pips:.1f}p > guard {spread_guard}p - skipping")
                 return None
 
             # Defaults (can be overridden per-symbol)
@@ -539,13 +533,14 @@ class PurePriceActionStrategy:
                 atr_band_mult=structure_atr_band_mult,
             )
 
+            last_close = float(completed.iloc[-1]['close'])
+
             # Compute ATR early (needed for both breakout threshold and SL buffer)
             atr_series = self._compute_atr(completed['high'], completed['low'],
                                            completed['close'], self.atr_period)
             atr_last = float(atr_series.iloc[-1]) if atr_series is not None and not pd.isna(atr_series.iloc[-1]) else None
 
             # Detect breakout - use max of fixed, ATR, and spread-anchored thresholds
-            last_close = float(completed.iloc[-1]['close'])
             threshold_candidates: List[float] = []
             if thr_pips is not None and thr_pips > 0:
                 threshold_candidates.append(float(thr_pips) * pip)
@@ -556,21 +551,25 @@ class PurePriceActionStrategy:
 
             threshold = max(threshold_candidates) if threshold_candidates else 0.0
             if threshold <= 0:
-                logger.debug(f"{symbol}: Invalid breakout threshold (ATR/spread unavailable)")
+                logger.debug(f"{symbol}: No valid threshold (ATR/spread unavailable)")
                 return None
-            if threshold > 0:
-                atr_pips = (atr_last / pip) if atr_last else 0.0
-                logger.debug(
-                    f"{symbol}: Using breakout threshold: {threshold/pip:.2f} pips "
-                    f"(fixed={float(thr_pips):.2f}p, ATR={atr_pips:.2f}p * {thr_atr_mult}, "
-                    f"spread={current_spread_pips:.2f}p * {thr_spread_mult})"
-                )
+
+            atr_pips = (atr_last / pip) if atr_last else 0.0
 
             breakout = self._detect_breakout(last_close, resistance, support, threshold)
             if not breakout:
+                # Only log at debug level when no breakout (most common case)
+                dist_to_r = min((r - last_close)/pip for r in resistance) if resistance else float('inf')
+                dist_to_s = min((last_close - s)/pip for s in support) if support else float('inf')
+                logger.debug(f"{symbol}: price={last_close:.5f} | R dist={dist_to_r:.1f}p, S dist={dist_to_s:.1f}p, need={threshold/pip:.1f}p")
                 return None
 
-            logger.debug(f"{symbol}: Breakout {breakout.type} @ level {breakout.level:.5f}")
+            # BREAKOUT DETECTED - now log detailed analysis
+            logger.debug(
+                f"{symbol}: === BREAKOUT {breakout.type.upper()} === level={breakout.level:.5f} price={last_close:.5f} "
+                f"spread={current_spread_pips:.1f}p ATR={atr_pips:.1f}p thr={threshold/pip:.1f}p"
+            )
+            logger.debug(f"{symbol}: S/R levels R={[round(r,5) for r in resistance[:3]]} S={[round(s,5) for s in support[:3]]}")
 
             # Structure confirmation: last completed structure bar must close beyond level by threshold
             struct_close = None
@@ -595,12 +594,13 @@ class PurePriceActionStrategy:
                 struct_close = float(structure_completed.iloc[-1]['close'])
                 if breakout.type == 'bullish':
                     if struct_close <= breakout.level + struct_threshold:
-                        logger.debug(f"{symbol}: Structure close {struct_close:.5f} not beyond {breakout.level + struct_threshold:.5f}")
+                        logger.debug(f"{symbol}: H1 close {struct_close:.5f} not beyond {breakout.level + struct_threshold:.5f} - awaiting confirmation")
                         return None
                 else:
                     if struct_close >= breakout.level - struct_threshold:
-                        logger.debug(f"{symbol}: Structure close {struct_close:.5f} not beyond {breakout.level - struct_threshold:.5f}")
+                        logger.debug(f"{symbol}: H1 close {struct_close:.5f} not beyond {breakout.level - struct_threshold:.5f} - awaiting confirmation")
                         return None
+                logger.debug(f"{symbol}: Structure CONFIRMED (H1 close={struct_close:.5f})")
 
                 # Freshness aligned to structure confirmation: allow entry only in the first structure window after close
                 entry_delta = self._infer_bar_delta(completed.index)
@@ -611,8 +611,9 @@ class PurePriceActionStrategy:
                         # Use entry bar close time (open + delta) to avoid a full-bar lag
                         last_entry_time = completed.index[-1] + entry_delta
                         if not (struct_close_time <= last_entry_time < struct_close_time + struct_delta):
-                            logger.debug(f"{symbol}: Waiting for entry window after structure close")
+                            logger.debug(f"{symbol}: Outside entry window (struct_close={struct_close_time}, entry={last_entry_time})")
                             return None
+                        logger.debug(f"{symbol}: Entry window OK")
 
             # Two-bar confirmation on entry timeframe
             if require_two_bar_conf:
@@ -655,8 +656,9 @@ class PurePriceActionStrategy:
                 trend_timeframe,
             )
             if not trend_aligned:
-                logger.debug(f"{symbol}: Breakout {breakout.type} rejected - trend is {trend_dir}")
+                logger.debug(f"{symbol}: Trend filter REJECT - {breakout.type} vs trend={trend_dir}")
                 return None
+            logger.debug(f"{symbol}: Trend OK ({trend_dir})")
 
             # Use actual execution price
             entry_eff = float(tick.ask) if breakout.type == 'bullish' else float(tick.bid)
@@ -701,8 +703,9 @@ class PurePriceActionStrategy:
                 ext_ref = struct_close if (require_structure_conf and struct_close is not None) else breakout.level
                 ext_pips = abs(entry_eff - ext_ref) / pip
                 if ext_pips > ext_limit:
-                    logger.debug(f"{symbol}: Extension {ext_pips:.1f}p > limit {ext_limit:.1f}p")
+                    logger.debug(f"{symbol}: Extension REJECT {ext_pips:.1f}p > limit {ext_limit:.1f}p")
                     return None
+                logger.debug(f"{symbol}: Extension OK ({ext_pips:.1f}p <= {ext_limit:.1f}p)")
 
             # Calculate SL (ATR already computed above)
             sl = self._calculate_stop_loss(
@@ -715,14 +718,16 @@ class PurePriceActionStrategy:
                 entry_price=entry_eff,
             )
             if sl is None:
-                logger.debug(f"{symbol}: No valid structure for SL - trade rejected")
+                logger.debug(f"{symbol}: No opposing structure for SL - REJECT")
                 return None
 
             # Calculate TP from next structure level
             tp = self._calculate_structure_take_profit(breakout, support, resistance, pip, tp_buffer_pips)
             if tp is None:
-                logger.debug(f"{symbol}: No valid structure for TP - trade rejected")
+                logger.debug(f"{symbol}: No target structure for TP - REJECT")
                 return None
+
+            logger.debug(f"{symbol}: SL={sl:.5f} TP={tp:.5f} entry={entry_eff:.5f}")
 
             # Round to broker precision
             point = getattr(info, 'point', None)
@@ -752,7 +757,7 @@ class PurePriceActionStrategy:
 
             # Max SL check (use actual entry and rounded SL)
             if max_sl_pips and sl_pips > float(max_sl_pips):
-                logger.debug(f"{symbol}: SL {sl_pips:.1f}p > max {max_sl_pips}p")
+                logger.debug(f"{symbol}: SL {sl_pips:.1f}p > max {max_sl_pips}p - REJECT")
                 return None
 
             # Minimum TP distance: must clear the market-driven breakout threshold
@@ -761,13 +766,13 @@ class PurePriceActionStrategy:
             except Exception:
                 min_tp_pips = 0.0
             if min_tp_pips > 0 and tp_pips < min_tp_pips:
-                logger.debug(f"{symbol}: TP {tp_pips:.1f}p < min {min_tp_pips:.1f}p (threshold)")
+                logger.debug(f"{symbol}: TP {tp_pips:.1f}p < min {min_tp_pips:.1f}p - REJECT")
                 return None
 
             actual_rr = tp_pips / sl_pips
             # Minimum entry-based RR check (market-driven via existing required_rr)
             if actual_rr < required_rr:
-                logger.debug(f"{symbol}: RR_entry {actual_rr:.2f} < min {required_rr:.2f}")
+                logger.debug(f"{symbol}: RR_entry {actual_rr:.2f} < min {required_rr:.2f} - REJECT")
                 return None
             # Structure-based RR: use breakout level as reference (structure breakout logic)
             if breakout.type == 'bullish':
@@ -777,13 +782,16 @@ class PurePriceActionStrategy:
                 struct_risk = (sl - breakout.level) / pip
                 struct_reward = (breakout.level - tp) / pip
             if struct_risk <= 0 or struct_reward <= 0:
+                logger.debug(f"{symbol}: Invalid struct risk/reward - REJECT")
                 return None
             structure_rr = struct_reward / struct_risk
 
             # Minimum RR check
             if structure_rr < required_rr:
-                logger.debug(f"{symbol}: RR_struct {structure_rr:.2f} < min {required_rr:.2f}")
+                logger.debug(f"{symbol}: RR_struct {structure_rr:.2f} < min {required_rr:.2f} - REJECT")
                 return None
+
+            logger.debug(f"{symbol}: RR OK (entry={actual_rr:.2f}, struct={structure_rr:.2f}, min={required_rr:.2f})")
 
             # Duplicate prevention: one signal per bar per direction
             try:

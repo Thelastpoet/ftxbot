@@ -532,17 +532,20 @@ class TradingBot:
                     min_sl_pips = float(sc.get('min_stop_loss_pips', min_sl_pips))
                     break
             if actual_sl_pips < min_sl_pips * 0.95:  # 5% tolerance
-                logger.info(f"{symbol}: SL too tight ({actual_sl_pips:.1f}p < {min_sl_pips:.1f}p)")
+                logger.debug(f"{symbol}: EXEC REJECT - SL too tight ({actual_sl_pips:.1f}p < {min_sl_pips:.1f}p)")
                 return None
 
             if not self.risk_manager.check_risk_limits():
+                logger.debug(f"{symbol}: EXEC REJECT - Risk limits exceeded")
                 return None
 
             volume = self.risk_manager.calculate_position_size(symbol, actual_sl_pips)
             if volume <= 0:
+                logger.debug(f"{symbol}: EXEC REJECT - Invalid position size")
                 return None
 
             if not self.risk_manager.validate_trade_parameters(symbol, volume, signal.stop_loss, signal.take_profit, signal.type):
+                logger.debug(f"{symbol}: EXEC REJECT - Trade params validation failed")
                 return None
 
             # Final spread check before execution (spreads can spike in milliseconds)
@@ -666,7 +669,8 @@ class TradingBot:
                 }.get(str(structure_tf).upper(), 250)
                 structure_data = await self.market_data.fetch_data(symbol, structure_tf, structure_bars_needed)
                 if structure_data is None:
-                    return
+                    logger.warning(f"{symbol}: Failed to fetch structure data ({structure_tf})")
+                    return False
             else:
                 structure_data = candles
 
@@ -688,7 +692,8 @@ class TradingBot:
                     }.get(trend_tf_norm, 250)
                     trend_data = await self.market_data.fetch_data(symbol, trend_tf, trend_bars_needed)
                     if trend_data is None:
-                        return
+                        logger.warning(f"{symbol}: Failed to fetch trend data ({trend_tf})")
+                        return False
                 if trend_data is not None and len(trend_data) > 0:
                     trend_label = trend_tf_norm
 
@@ -705,7 +710,8 @@ class TradingBot:
                     open_positions = self.mt5_client.get_positions(symbol)
                     for p in open_positions or []:
                         if int(getattr(p, 'type', -1)) == int(signal.type):
-                            return  # Already have position in this direction
+                            logger.debug(f"{symbol}: SKIP - Already have {'BUY' if signal.type == 0 else 'SELL'} position open")
+                            return False  # Already have position in this direction
                 except Exception as e:
                     logger.warning(f"{symbol}: Failed to check existing positions: {e}")
 
@@ -1005,14 +1011,16 @@ class TradingBot:
 
                 if loop_count % heartbeat_every == 0:
                     open_count = 0
+                    total_trades = 0
                     try:
                         if self.trade_logger:
                             open_count = len([t for t in self.trade_logger.trades if t.get('status') == 'OPEN'])
+                            total_trades = len(self.trade_logger.trades)
                     except Exception:
                         open_count = 0
                     loop_ms = int((time.monotonic() - loop_start) * 1000)
-                    logger.debug(
-                        f"Heartbeat: processed={processed} signals={signals} open={open_count} loop_ms={loop_ms}"
+                    logger.info(
+                        f"[HEARTBEAT] symbols={processed} open_pos={open_count} total_trades={total_trades} loop={loop_ms}ms"
                     )
 
                 await asyncio.sleep(self.config.main_loop_interval)

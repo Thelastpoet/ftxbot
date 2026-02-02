@@ -14,7 +14,7 @@ def configure_logging(
     """Configure production-friendly logging for console and file.
 
     - Console: concise format at requested level (default INFO).
-    - File: essential logs at file_level (default INFO).
+    - File: logs at file_level (default INFO). Use --log-level DEBUG for diagnostics.
     - Suppress noisy third-party debug (e.g., asyncio proactor message).
     """
     level_map = {
