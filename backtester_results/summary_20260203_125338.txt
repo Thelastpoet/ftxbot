@@ -1,0 +1,61 @@
+============================================================
+BACKTEST RESULTS SUMMARY
+============================================================
+
+Period: 2024-01-01 to 2024-12-31
+Initial Balance: $10,000.00
+Final Balance: $8,908.67
+Return: -10.91%
+Max Drawdown: 16.35%
+
+----------------------------------------
+TRADE STATISTICS
+----------------------------------------
+Total Trades: 115
+Winners: 45 (39.1%)
+Losers: 70
+
+Total Profit: $-1,091.33
+Total Pips: -2222.6
+Avg Profit/Trade: $-9.49
+Avg Pips/Trade: -19.3
+
+Gross Profit: $4,566.18
+Gross Loss: $5,657.51
+Profit Factor: 0.81
+
+Avg Winner: $101.47 (158.8 pips)
+Avg Loser: $80.82 (133.8 pips)
+Largest Winner: $221.57
+Largest Loser: $-112.58
+
+Avg MFE: 126.7 pips
+Avg MAE: 135.8 pips
+Avg Duration: 20:19:18.260870
+
+----------------------------------------
+EXIT REASONS
+----------------------------------------
+Take Profit: 15
+Stop Loss: 52
+Trailing Stop: 22
+Time Exit: 25
+
+----------------------------------------
+BY SYMBOL
+----------------------------------------
+AUDJPY: 13 trades, 69.2% win, $203.46, 59.3 pips
+AUDUSD: 2 trades, 0.0% win, $-109.28, -42.2 pips
+EURAUD: 15 trades, 26.7% win, $-511.42, -159.1 pips
+EURCAD: 5 trades, 40.0% win, $23.15, 1.3 pips
+EURJPY: 11 trades, 45.5% win, $-72.37, -67.0 pips
+EURUSD: 2 trades, 100.0% win, $196.93, 42.9 pips
+GBPAUD: 11 trades, 18.2% win, $-304.83, -211.3 pips
+GBPCAD: 6 trades, 33.3% win, $-25.73, -48.8 pips
+GBPCHF: 4 trades, 50.0% win, $51.81, 0.0 pips
+GBPUSD: 7 trades, 28.6% win, $18.62, -61.0 pips
+NZDJPY: 11 trades, 45.5% win, $-136.03, -38.0 pips
+NZDUSD: 3 trades, 66.7% win, $148.16, 31.6 pips
+USDCAD: 5 trades, 0.0% win, $-426.06, -127.3 pips
+USDJPY: 13 trades, 38.5% win, $-133.51, 9.0 pips
+XAUUSD: 7 trades, 42.9% win, $-14.25, -1612.1 pips
