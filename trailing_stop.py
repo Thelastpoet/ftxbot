@@ -54,22 +54,23 @@ class TrailingStopConfig:
 
 
 # Standard "Trend Following" Configuration (Robust for all pairs)
-# - Validates trend by waiting for 1R profit.
-# - Gives room to breathe with 0.5R trail.
+# - Protects profits early at 0.4R (analysis showed losers peak at 0.3R avg)
+# - Starts trailing at 0.7R to lock in gains before reversals
+# - Tighter trail to capture more profit
 STANDARD_R_CONFIG = TrailingStopConfig(
     use_dynamic_risk=True,
-    break_even_trigger_r=1.0,  # Earn the right to be risk-free
-    trail_trigger_r=1.2,       # Start trailing shortly after BE
-    trail_distance_r=0.5,      # Wide trail to ride trends
+    break_even_trigger_r=0.4,  # Protect early - losers rarely reach 0.5R
+    trail_trigger_r=0.7,       # Start trailing before the typical reversal point
+    trail_distance_r=0.4,      # Tighter trail to lock in gains
     max_trade_hours=8.0
 )
 
 # Tighter config for mean-reverting or lower volatility expectations
 TIGHT_R_CONFIG = TrailingStopConfig(
     use_dynamic_risk=True,
-    break_even_trigger_r=0.8,
-    trail_trigger_r=1.0,
-    trail_distance_r=0.4,
+    break_even_trigger_r=0.3,  # Very early protection for ranging pairs
+    trail_trigger_r=0.5,       # Quick trail activation
+    trail_distance_r=0.3,      # Tight trail for smaller moves
     max_trade_hours=6.0
 )
 

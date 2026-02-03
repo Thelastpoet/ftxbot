@@ -770,22 +770,21 @@ class TradingBot:
                 if position_id is None:
                     if deal_ticket or order_ticket:
                         try:
-                            # First check current positions
+                            # Check current positions by ticket/identifier only (safe matching)
                             positions = self.mt5_client.get_positions(symbol) if symbol else self.mt5_client.get_all_positions()
                             for pos in (positions or []):
                                 pos_ticket = getattr(pos, 'ticket', None)
-                                if pos_ticket == deal_ticket or pos_ticket == order_ticket:
+                                if deal_ticket and (pos_ticket == deal_ticket or getattr(pos, 'identifier', None) == deal_ticket):
                                     position_id = pos_ticket
                                     trade['position_id'] = position_id
                                     self.trade_logger.persist_all()
                                     logger.debug(f"Found position_id {position_id} for trade {order_ticket}")
                                     break
-                                # Check identifier field
-                                if getattr(pos, 'identifier', None) == deal_ticket:
-                                    position_id = getattr(pos, 'ticket', None)
+                                if order_ticket and pos_ticket == order_ticket:
+                                    position_id = pos_ticket
                                     trade['position_id'] = position_id
                                     self.trade_logger.persist_all()
-                                    logger.debug(f"Found position_id {position_id} via identifier for trade {order_ticket}")
+                                    logger.debug(f"Found position_id {position_id} for trade {order_ticket}")
                                     break
                         except Exception as e:
                             logger.warning(f"Error finding position_id for {order_ticket}: {e}")

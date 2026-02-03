@@ -3,7 +3,7 @@ Core Price Action Breakout Strategy
 """
 
 from dataclasses import dataclass
-from datetime import datetime, timezone, time
+from datetime import datetime, timezone, time, timedelta
 from typing import List, Optional, Tuple, NamedTuple
 
 import MetaTrader5 as mt5
@@ -133,6 +133,40 @@ class PurePriceActionStrategy:
         self._last_breakout_bar = {}
         self._last_signal_time = {}
         self._pending_retest = {}
+        self._last_cleanup_time = None
+
+    def _cleanup_stale_entries(self, current_time: datetime) -> None:
+        """Clean up stale entries from tracking dicts to prevent memory leaks."""
+        try:
+            # Only cleanup once per hour
+            if self._last_cleanup_time is not None:
+                if (current_time - self._last_cleanup_time).total_seconds() < 3600:
+                    return
+            self._last_cleanup_time = current_time
+
+            # Remove entries older than 24 hours
+            cutoff = current_time - timedelta(hours=24)
+
+            # Clean _last_breakout_bar
+            stale_keys = [k for k, v in self._last_breakout_bar.items() if v < cutoff]
+            for k in stale_keys:
+                del self._last_breakout_bar[k]
+
+            # Clean _last_signal_time
+            stale_keys = [k for k, v in self._last_signal_time.items() if v < cutoff]
+            for k in stale_keys:
+                del self._last_signal_time[k]
+
+            # Clean _pending_retest
+            stale_keys = [k for k, v in self._pending_retest.items()
+                          if v.get('created_time') and v['created_time'] < cutoff]
+            for k in stale_keys:
+                del self._pending_retest[k]
+
+            if stale_keys:
+                logger.debug(f"Cleaned up {len(stale_keys)} stale signal tracking entries")
+        except Exception:
+            pass
 
     def _record_reject(self, symbol: str, reason: str) -> None:
         """Record rejection reason if diagnostics are enabled."""
@@ -633,6 +667,9 @@ class PurePriceActionStrategy:
                 return None
             bar_time = completed.index[-1]
             entry_delta = self._infer_bar_delta(completed.index)
+
+            # Periodically clean up stale tracking entries to prevent memory leaks
+            self._cleanup_stale_entries(bar_time)
 
             if self.use_session_filter and not self._in_session(bar_time):
                 self._record_reject(symbol, "REJECT_SESSION")

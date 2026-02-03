@@ -896,16 +896,20 @@ class BacktestEngine:
                     self._close_position(trade, current_time, exit_price, "SL" if current_sl == trade.stop_loss else "TRAILING")
                     continue
 
-            # Check TP hit
+            # Check TP hit (apply slippage for realistic exit)
             if trade.direction == "BUY":
                 bid_high = high - half_spread
                 if bid_high >= trade.take_profit:
-                    self._close_position(trade, current_time, trade.take_profit, "TP")
+                    # For BUY, TP exit is at bid - slippage could work against us
+                    exit_price = trade.take_profit - (self.config.slippage_pips * pip_size * 0.5)
+                    self._close_position(trade, current_time, max(exit_price, trade.take_profit - half_spread), "TP")
                     continue
             else:
                 ask_low = low + half_spread
                 if ask_low <= trade.take_profit:
-                    self._close_position(trade, current_time, trade.take_profit, "TP")
+                    # For SELL, TP exit is at ask - slippage could work against us
+                    exit_price = trade.take_profit + (self.config.slippage_pips * pip_size * 0.5)
+                    self._close_position(trade, current_time, min(exit_price, trade.take_profit + half_spread), "TP")
                     continue
 
             if allow_trailing:

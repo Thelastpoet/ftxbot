@@ -87,7 +87,9 @@ class RiskManager:
             balance = float(info.balance)
             equity = float(info.equity)
             if balance > 0:
-                dd = (balance - equity) / balance
+                # Only calculate drawdown when equity is below balance
+                # (equity > balance means unrealized profit, dd = 0)
+                dd = max(0.0, (balance - equity) / balance)
                 if dd >= float(self.max_drawdown):
                     logger.warning(f"Max drawdown exceeded: {dd:.2%}")
                     return False
