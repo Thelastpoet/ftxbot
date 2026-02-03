@@ -3,7 +3,7 @@ Core Price Action Breakout Strategy
 """
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timezone, time
 from typing import List, Optional, Tuple, NamedTuple
 
 import MetaTrader5 as mt5
@@ -97,8 +97,28 @@ class PurePriceActionStrategy:
         self.require_structure_confirmation = bool(getattr(config, 'require_structure_confirmation', True))
         self.require_two_bar_confirmation = bool(getattr(config, 'require_two_bar_confirmation', True))
 
+        # Entry pacing
+        self.entry_cooldown_bars = int(getattr(config, 'entry_cooldown_bars', 0))
+        self.entry_window_bars = int(getattr(config, 'entry_window_bars', 0))
+
+        # Take-profit mode
+        self.tp_mode = str(getattr(config, 'tp_mode', 'structure')).lower()
+        self.tp_r_multiple = float(getattr(config, 'tp_r_multiple', 1.5))
+        self.tp_use_structure_cap = bool(getattr(config, 'tp_use_structure_cap', False))
+
+        # Max SL by ATR (adaptive cap)
+        self.max_sl_atr_mult = getattr(config, 'max_sl_atr_mult', None)
+
+        # Session filter (UTC)
+        self.use_session_filter = bool(getattr(config, 'use_session_filter', False))
+        self.session_start_utc = getattr(config, 'session_start_utc', "07:00")
+        self.session_end_utc = getattr(config, 'session_end_utc', "20:00")
+        self._session_start = self._parse_time(self.session_start_utc)
+        self._session_end = self._parse_time(self.session_end_utc)
+
         # Duplicate signal prevention (one per bar per direction)
         self._last_breakout_bar = {}
+        self._last_signal_time = {}
 
     def _record_reject(self, symbol: str, reason: str) -> None:
         """Record rejection reason if diagnostics are enabled."""
@@ -108,6 +128,24 @@ class PurePriceActionStrategy:
                 diag.record_reject(reason, symbol)
         except Exception:
             pass
+
+    def _parse_time(self, value: str) -> Optional[time]:
+        try:
+            parts = value.split(":")
+            if len(parts) != 2:
+                return None
+            return time(int(parts[0]), int(parts[1]))
+        except Exception:
+            return None
+
+    def _in_session(self, ts: datetime) -> bool:
+        if not self._session_start or not self._session_end:
+            return True
+        t = ts.time()
+        if self._session_start <= self._session_end:
+            return self._session_start <= t <= self._session_end
+        # Session wraps midnight
+        return t >= self._session_start or t <= self._session_end
 
     # ----- MT5 helpers -----
     def _get_tick(self, symbol: str):
@@ -475,6 +513,12 @@ class PurePriceActionStrategy:
             ext_sensitivity = float(self.extension_atr_sensitivity)
             require_structure_conf = bool(self.require_structure_confirmation)
             require_two_bar_conf = bool(self.require_two_bar_confirmation)
+            entry_cooldown_bars = int(self.entry_cooldown_bars)
+            entry_window_bars = int(self.entry_window_bars)
+            tp_mode = str(self.tp_mode).lower()
+            tp_r_multiple = float(self.tp_r_multiple)
+            tp_use_structure_cap = bool(self.tp_use_structure_cap)
+            max_sl_atr_mult = self.max_sl_atr_mult
 
             for sc in getattr(self.config, 'symbols', []) or []:
                 if sc.get('name') == symbol:
@@ -497,6 +541,12 @@ class PurePriceActionStrategy:
                     ext_sensitivity = float(sc.get('extension_atr_sensitivity', ext_sensitivity) or ext_sensitivity)
                     require_structure_conf = bool(sc.get('require_structure_confirmation', require_structure_conf))
                     require_two_bar_conf = bool(sc.get('require_two_bar_confirmation', require_two_bar_conf))
+                    entry_cooldown_bars = int(sc.get('entry_cooldown_bars', entry_cooldown_bars) or entry_cooldown_bars)
+                    entry_window_bars = int(sc.get('entry_window_bars', entry_window_bars) or entry_window_bars)
+                    tp_mode = str(sc.get('tp_mode', tp_mode)).lower()
+                    tp_r_multiple = float(sc.get('tp_r_multiple', tp_r_multiple) or tp_r_multiple)
+                    tp_use_structure_cap = bool(sc.get('tp_use_structure_cap', tp_use_structure_cap))
+                    max_sl_atr_mult = sc.get('max_sl_atr_mult', max_sl_atr_mult)
                     break
 
             # If structure confirmation is enabled, drop the extra two-bar confirmation
@@ -506,6 +556,12 @@ class PurePriceActionStrategy:
             # Use completed candles only (exclude current forming bar)
             completed = data.iloc[:-1].tail(self.lookback_period)
             if len(completed) < max(20, self.lookback_period):
+                return None
+            bar_time = completed.index[-1]
+            entry_delta = self._infer_bar_delta(completed.index)
+
+            if self.use_session_filter and not self._in_session(bar_time):
+                self._record_reject(symbol, "REJECT_SESSION")
                 return None
 
             # Longer lookback for structure (S/R) using structure timeframe data
@@ -619,16 +675,15 @@ class PurePriceActionStrategy:
                         return None
                 logger.debug(f"{symbol}: Structure CONFIRMED (H1 close={struct_close:.5f})")
 
-                # Freshness aligned to structure confirmation: allow entry only in the first structure window after close
-                entry_delta = self._infer_bar_delta(completed.index)
-                struct_delta = self._infer_bar_delta(structure_completed.index)
-                if entry_delta is not None and struct_delta is not None:
-                    if struct_delta > (entry_delta * 1.5):
+                # Freshness aligned to structure confirmation: allow entry within N entry bars after close
+                if entry_window_bars and entry_window_bars > 0 and entry_delta is not None:
+                    struct_delta = self._infer_bar_delta(structure_completed.index)
+                    if struct_delta is not None:
                         struct_close_time = structure_completed.index[-1] + struct_delta
-                        # Use entry bar close time (open + delta) to avoid a full-bar lag
                         last_entry_time = completed.index[-1] + entry_delta
-                        if not (struct_close_time <= last_entry_time < struct_close_time + struct_delta):
-                            logger.debug(f"{symbol}: Outside entry window (struct_close={struct_close_time}, entry={last_entry_time})")
+                        window_end = struct_close_time + (entry_delta * entry_window_bars)
+                        if not (struct_close_time <= last_entry_time <= window_end):
+                            logger.debug(f"{symbol}: Outside entry window (struct_close={struct_close_time}, entry={last_entry_time}, window_end={window_end})")
                             self._record_reject(symbol, "REJECT_ENTRY_WINDOW")
                             return None
                         logger.debug(f"{symbol}: Entry window OK")
@@ -745,12 +800,47 @@ class PurePriceActionStrategy:
                 self._record_reject(symbol, "REJECT_NO_SL")
                 return None
 
-            # Calculate TP from next structure level
-            tp = self._calculate_structure_take_profit(breakout, support, resistance, pip, tp_buffer_pips)
-            if tp is None:
-                logger.debug(f"{symbol}: No target structure for TP - REJECT")
-                self._record_reject(symbol, "REJECT_NO_TP")
+            sl_pips = abs(entry_eff - sl) / pip
+            if sl_pips <= 0:
                 return None
+
+            # Max SL check (use actual entry and raw SL)
+            if max_sl_pips and sl_pips > float(max_sl_pips):
+                logger.debug(f"{symbol}: SL {sl_pips:.1f}p > max {max_sl_pips}p - REJECT")
+                self._record_reject(symbol, "REJECT_MAX_SL")
+                return None
+            if max_sl_atr_mult is not None and atr_last is not None and atr_last > 0:
+                max_sl_atr_pips = float(max_sl_atr_mult) * (atr_last / pip)
+                if sl_pips > max_sl_atr_pips:
+                    logger.debug(f"{symbol}: SL {sl_pips:.1f}p > ATR cap {max_sl_atr_pips:.1f}p - REJECT")
+                    self._record_reject(symbol, "REJECT_MAX_SL_ATR")
+                    return None
+
+            # Calculate TP (mode: r_multiple or structure)
+            tp = None
+            tp_from_structure = False
+            if tp_mode == "r_multiple":
+                target_pips = sl_pips * tp_r_multiple
+                if breakout.type == 'bullish':
+                    tp = entry_eff + (target_pips * pip)
+                else:
+                    tp = entry_eff - (target_pips * pip)
+                if tp_use_structure_cap:
+                    struct_tp = self._calculate_structure_take_profit(breakout, support, resistance, pip, tp_buffer_pips)
+                    if struct_tp is not None:
+                        if breakout.type == 'bullish' and struct_tp < tp:
+                            tp = struct_tp
+                            tp_from_structure = True
+                        elif breakout.type == 'bearish' and struct_tp > tp:
+                            tp = struct_tp
+                            tp_from_structure = True
+            else:
+                tp = self._calculate_structure_take_profit(breakout, support, resistance, pip, tp_buffer_pips)
+                tp_from_structure = True
+                if tp is None:
+                    logger.debug(f"{symbol}: No target structure for TP - REJECT")
+                    self._record_reject(symbol, "REJECT_NO_TP")
+                    return None
 
             logger.debug(f"{symbol}: SL={sl:.5f} TP={tp:.5f} entry={entry_eff:.5f}")
 
@@ -773,20 +863,13 @@ class PurePriceActionStrategy:
                     self._record_reject(symbol, "REJECT_TP_SIDE")
                     return None
 
-            # Calculate RR (entry-based and structure-based)
+            # Recalculate pips after rounding
             sl_pips = abs(entry_eff - sl) / pip
             tp_pips = abs(tp - entry_eff) / pip
-
-            if sl_pips <= 0:
+            if sl_pips <= 0 or tp_pips <= 0:
                 return None
 
             required_rr = max(min_rr, rr)
-
-            # Max SL check (use actual entry and rounded SL)
-            if max_sl_pips and sl_pips > float(max_sl_pips):
-                logger.debug(f"{symbol}: SL {sl_pips:.1f}p > max {max_sl_pips}p - REJECT")
-                self._record_reject(symbol, "REJECT_MAX_SL")
-                return None
 
             # Minimum TP distance: must clear the market-driven breakout threshold
             try:
@@ -804,30 +887,37 @@ class PurePriceActionStrategy:
                 logger.debug(f"{symbol}: RR_entry {actual_rr:.2f} < min {required_rr:.2f} - REJECT")
                 self._record_reject(symbol, "REJECT_RR_ENTRY")
                 return None
-            # Structure-based RR: use breakout level as reference (structure breakout logic)
-            if breakout.type == 'bullish':
-                struct_risk = (breakout.level - sl) / pip
-                struct_reward = (tp - breakout.level) / pip
-            else:
-                struct_risk = (sl - breakout.level) / pip
-                struct_reward = (breakout.level - tp) / pip
-            if struct_risk <= 0 or struct_reward <= 0:
-                logger.debug(f"{symbol}: Invalid struct risk/reward - REJECT")
-                self._record_reject(symbol, "REJECT_RR_STRUCT")
-                return None
-            structure_rr = struct_reward / struct_risk
+            # Structure-based RR check only when TP is structure-derived
+            structure_rr = None
+            if tp_from_structure:
+                if breakout.type == 'bullish':
+                    struct_risk = (breakout.level - sl) / pip
+                    struct_reward = (tp - breakout.level) / pip
+                else:
+                    struct_risk = (sl - breakout.level) / pip
+                    struct_reward = (breakout.level - tp) / pip
+                if struct_risk <= 0 or struct_reward <= 0:
+                    logger.debug(f"{symbol}: Invalid struct risk/reward - REJECT")
+                    self._record_reject(symbol, "REJECT_RR_STRUCT")
+                    return None
+                structure_rr = struct_reward / struct_risk
+                if structure_rr < required_rr:
+                    logger.debug(f"{symbol}: RR_struct {structure_rr:.2f} < min {required_rr:.2f} - REJECT")
+                    self._record_reject(symbol, "REJECT_RR_STRUCT")
+                    return None
 
-            # Minimum RR check
-            if structure_rr < required_rr:
-                logger.debug(f"{symbol}: RR_struct {structure_rr:.2f} < min {required_rr:.2f} - REJECT")
-                self._record_reject(symbol, "REJECT_RR_STRUCT")
-                return None
+            logger.debug(f"{symbol}: RR OK (entry={actual_rr:.2f}, struct={structure_rr if structure_rr is not None else 'n/a'}, min={required_rr:.2f})")
 
-            logger.debug(f"{symbol}: RR OK (entry={actual_rr:.2f}, struct={structure_rr:.2f}, min={required_rr:.2f})")
+            # Cooldown: avoid rapid re-entry on the same symbol
+            if entry_cooldown_bars and entry_cooldown_bars > 0 and entry_delta is not None:
+                last_time = self._last_signal_time.get(symbol)
+                if last_time is not None:
+                    if bar_time < last_time + (entry_delta * entry_cooldown_bars):
+                        self._record_reject(symbol, "REJECT_COOLDOWN")
+                        return None
 
             # Duplicate prevention: one signal per bar per direction
             try:
-                bar_time = completed.index[-1]
                 key = (symbol, breakout.type)
                 if self._last_breakout_bar.get(key) == bar_time:
                     return None
@@ -845,6 +935,10 @@ class PurePriceActionStrategy:
                 timestamp=datetime.now(timezone.utc),
                 breakout_level=breakout.level,
             )
+            try:
+                self._last_signal_time[symbol] = bar_time
+            except Exception:
+                pass
 
             logger.info(
                 f"SIGNAL {symbol} {'BUY' if signal.type==0 else 'SELL'} @ {entry_eff:.5f} "

@@ -1183,7 +1183,7 @@ def main():
     parser.add_argument('--start', type=str, help='Start date (YYYY-MM-DD)', default='2024-01-01')
     parser.add_argument('--end', type=str, help='End date (YYYY-MM-DD)', default=None)
     parser.add_argument('--balance', type=float, help='Initial balance', default=10000)
-    parser.add_argument('--symbols', type=str, nargs='+', help='Ignored. Backtester runs all symbols from config.')
+    parser.add_argument('--symbols', type=str, nargs='+', help='Symbols to backtest (space or comma separated). Defaults to all in config.')
     parser.add_argument('--spread', type=float, help='Simulated spread in pips', default=1.5)
     parser.add_argument('--slippage', type=float, help='Slippage in pips', default=0.5)
     parser.add_argument('--output', type=str, help='Output directory', default='backtester_results')
@@ -1212,10 +1212,25 @@ def main():
         slippage_pips=args.slippage
     )
 
-    # Determine symbols (always use config)
-    if args.symbols:
-        logger.warning("Ignoring --symbols; backtester runs all symbols from config.")
+    # Determine symbols
     symbols = [s['name'] for s in config.symbols]
+    if args.symbols:
+        # Support space or comma-separated symbols
+        requested: List[str] = []
+        for token in args.symbols:
+            requested.extend([t.strip() for t in str(token).split(',') if t.strip()])
+        requested = [s for s in requested if s]
+        if requested:
+            name_map = {s['name']: s for s in config.symbols}
+            missing = [s for s in requested if s not in name_map]
+            selected = [s for s in requested if s in name_map]
+            if missing:
+                logger.warning(f"Requested symbols not in config: {', '.join(missing)}")
+            if not selected:
+                raise SystemExit("No valid symbols specified. Check --symbols and config.")
+            # Restrict config to selected symbols so per-symbol overrides stay aligned
+            config.symbols = [name_map[s] for s in selected]
+            symbols = selected
 
     print("\n" + "=" * 60)
     print("PURE PRICE ACTION BACKTESTER")

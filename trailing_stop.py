@@ -61,7 +61,7 @@ STANDARD_R_CONFIG = TrailingStopConfig(
     break_even_trigger_r=1.0,  # Earn the right to be risk-free
     trail_trigger_r=1.2,       # Start trailing shortly after BE
     trail_distance_r=0.5,      # Wide trail to ride trends
-    max_trade_hours=48.0
+    max_trade_hours=8.0
 )
 
 # Tighter config for mean-reverting or lower volatility expectations
@@ -70,7 +70,7 @@ TIGHT_R_CONFIG = TrailingStopConfig(
     break_even_trigger_r=0.8,
     trail_trigger_r=1.0,
     trail_distance_r=0.4,
-    max_trade_hours=24.0
+    max_trade_hours=6.0
 )
 
 # Per-symbol settings 

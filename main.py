@@ -66,6 +66,15 @@ class Config:
             self.min_ema_slope_pips_per_bar = trading.get('min_ema_slope_pips_per_bar', 0.4)
             self.require_structure_confirmation = trading.get('require_structure_confirmation', True)
             self.require_two_bar_confirmation = trading.get('require_two_bar_confirmation', True)
+            self.entry_cooldown_bars = trading.get('entry_cooldown_bars', 0)
+            self.entry_window_bars = trading.get('entry_window_bars', 0)
+            self.tp_mode = trading.get('tp_mode', 'structure')
+            self.tp_r_multiple = trading.get('tp_r_multiple', 1.5)
+            self.tp_use_structure_cap = trading.get('tp_use_structure_cap', False)
+            self.max_sl_atr_mult = trading.get('max_sl_atr_mult', None)
+            self.use_session_filter = trading.get('use_session_filter', False)
+            self.session_start_utc = trading.get('session_start_utc', "07:00")
+            self.session_end_utc = trading.get('session_end_utc', "20:00")
 
             risk = data.get('risk_management', {})
             self.risk_per_trade = risk.get('risk_per_trade', 0.01)
@@ -127,6 +136,12 @@ class Config:
                     'extension_atr_sensitivity': s.get('extension_atr_sensitivity'),
                     'require_structure_confirmation': s.get('require_structure_confirmation'),
                     'require_two_bar_confirmation': s.get('require_two_bar_confirmation'),
+                    'entry_cooldown_bars': s.get('entry_cooldown_bars'),
+                    'entry_window_bars': s.get('entry_window_bars'),
+                    'tp_mode': s.get('tp_mode'),
+                    'tp_r_multiple': s.get('tp_r_multiple'),
+                    'tp_use_structure_cap': s.get('tp_use_structure_cap'),
+                    'max_sl_atr_mult': s.get('max_sl_atr_mult'),
                 }
                 # Remove None values
                 entry = {k: v for k, v in entry.items() if v is not None}
