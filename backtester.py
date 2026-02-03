@@ -305,6 +305,18 @@ else:
     MT5_TIMEFRAMES = {}
 
 
+def _normalize_mt5_datetime(dt: datetime) -> datetime:
+    """Normalize datetime for MT5 API (UTC, naive)."""
+    if dt is None:
+        return dt
+    try:
+        if dt.tzinfo is not None:
+            return dt.astimezone(timezone.utc).replace(tzinfo=None)
+        return dt
+    except Exception:
+        return dt
+
+
 def load_mt5_data(symbol: str, timeframe: str, start: datetime, end: datetime) -> Optional[pd.DataFrame]:
     """Load historical data from MT5."""
     if not MT5_AVAILABLE:
@@ -319,12 +331,72 @@ def load_mt5_data(symbol: str, timeframe: str, start: datetime, end: datetime) -
         logger.error(f"Unknown timeframe: {timeframe}")
         return None
 
-    # Request extra bars for lookback
-    rates = mt5.copy_rates_range(symbol, tf, start, end)
+    # Ensure symbol is selected (some terminals require this)
+    try:
+        if not mt5.symbol_select(symbol, True):
+            logger.error(f"Failed to select symbol {symbol} in MT5")
+    except Exception:
+        pass
 
-    if rates is None or len(rates) == 0:
-        logger.warning(f"No data for {symbol} {timeframe}")
-        return None
+    # Normalize datetimes for MT5 API (UTC naive)
+    start = _normalize_mt5_datetime(start)
+    end = _normalize_mt5_datetime(end)
+
+    # Some brokers/terminals reject large ranges on lower TFs; use chunking when needed
+    max_span_days = {
+        'M1': 7,
+        'M5': 60,
+        'M15': 180,
+        'M30': 365,
+        'H1': 730,
+        'H4': 2000,
+        'D1': 5000
+    }.get(timeframe, 180)
+
+    span_days = (end - start).days if isinstance(end, datetime) and isinstance(start, datetime) else None
+    use_chunking = span_days is not None and span_days > max_span_days
+
+    # Request bars (chunked if needed)
+    if not use_chunking:
+        rates = mt5.copy_rates_range(symbol, tf, start, end)
+        if rates is None or len(rates) == 0:
+            try:
+                logger.warning(f"No data for {symbol} {timeframe} (mt5.last_error={mt5.last_error()})")
+            except Exception:
+                logger.warning(f"No data for {symbol} {timeframe}")
+            return None
+    else:
+        rates_list = []
+        cur_start = start
+        while cur_start < end:
+            cur_end = min(cur_start + timedelta(days=max_span_days), end)
+            chunk = mt5.copy_rates_range(symbol, tf, cur_start, cur_end)
+            if chunk is None or len(chunk) == 0:
+                try:
+                    logger.warning(
+                        f"No data chunk for {symbol} {timeframe} "
+                        f"{cur_start}..{cur_end} (mt5.last_error={mt5.last_error()})"
+                    )
+                except Exception:
+                    logger.warning(f"No data chunk for {symbol} {timeframe} {cur_start}..{cur_end}")
+            else:
+                rates_list.append(chunk)
+            cur_start = cur_end
+        if not rates_list:
+            return None
+        rates = pd.DataFrame(rates_list[0])
+        for chunk in rates_list[1:]:
+            rates = pd.concat([rates, pd.DataFrame(chunk)], ignore_index=True)
+        # Convert back to numpy-like structure by using DataFrame downstream
+        df = rates
+        df['time'] = pd.to_datetime(df['time'], unit='s', utc=True)
+        df.set_index('time', inplace=True)
+        df.rename(columns={'tick_volume': 'volume'}, inplace=True)
+        if 'volume' in df.columns:
+            df = df[df['volume'] > 0]
+        df.sort_index(inplace=True)
+        df = df[~df.index.duplicated(keep='first')]
+        return df
 
     df = pd.DataFrame(rates)
     df['time'] = pd.to_datetime(df['time'], unit='s', utc=True)
