@@ -67,6 +67,7 @@ class Config:
             self.require_structure_confirmation = trading.get('require_structure_confirmation', True)
             self.require_two_bar_confirmation = trading.get('require_two_bar_confirmation', True)
             self.require_fresh_breakout = trading.get('require_fresh_breakout', True)
+            self.fresh_breakout_grace_bars = trading.get('fresh_breakout_grace_bars', 0)
             self.entry_mode = trading.get('entry_mode', 'momentum')
             self.retest_window_bars = trading.get('retest_window_bars', 6)
             self.retest_tolerance_pips = trading.get('retest_tolerance_pips', 2.0)
@@ -145,6 +146,7 @@ class Config:
                     'require_structure_confirmation': s.get('require_structure_confirmation'),
                     'require_two_bar_confirmation': s.get('require_two_bar_confirmation'),
                     'require_fresh_breakout': s.get('require_fresh_breakout'),
+                    'fresh_breakout_grace_bars': s.get('fresh_breakout_grace_bars'),
                     'entry_mode': s.get('entry_mode'),
                     'retest_window_bars': s.get('retest_window_bars'),
                     'retest_tolerance_pips': s.get('retest_tolerance_pips'),

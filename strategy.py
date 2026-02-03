@@ -97,6 +97,7 @@ class PurePriceActionStrategy:
         self.require_structure_confirmation = bool(getattr(config, 'require_structure_confirmation', True))
         self.require_two_bar_confirmation = bool(getattr(config, 'require_two_bar_confirmation', True))
         self.require_fresh_breakout = bool(getattr(config, 'require_fresh_breakout', True))
+        self.fresh_breakout_grace_bars = int(getattr(config, 'fresh_breakout_grace_bars', 0))
 
         # Entry mode: "momentum" (enter on breakout) or "retest" (enter on retest)
         self.entry_mode = str(getattr(config, 'entry_mode', 'momentum')).lower()
@@ -569,6 +570,7 @@ class PurePriceActionStrategy:
             require_structure_conf = bool(self.require_structure_confirmation)
             require_two_bar_conf = bool(self.require_two_bar_confirmation)
             require_fresh_breakout = bool(self.require_fresh_breakout)
+            fresh_breakout_grace_bars = int(self.fresh_breakout_grace_bars)
             entry_mode = str(self.entry_mode).lower()
             retest_window_bars = int(self.retest_window_bars)
             retest_tolerance_pips = float(self.retest_tolerance_pips)
@@ -605,6 +607,7 @@ class PurePriceActionStrategy:
                     require_structure_conf = bool(sc.get('require_structure_confirmation', require_structure_conf))
                     require_two_bar_conf = bool(sc.get('require_two_bar_confirmation', require_two_bar_conf))
                     require_fresh_breakout = bool(sc.get('require_fresh_breakout', require_fresh_breakout))
+                    fresh_breakout_grace_bars = int(sc.get('fresh_breakout_grace_bars', fresh_breakout_grace_bars) or fresh_breakout_grace_bars)
                     entry_mode = str(sc.get('entry_mode', entry_mode)).lower()
                     retest_window_bars = int(sc.get('retest_window_bars', retest_window_bars) or retest_window_bars)
                     retest_tolerance_pips = float(sc.get('retest_tolerance_pips', retest_tolerance_pips) or retest_tolerance_pips)
@@ -736,12 +739,31 @@ class PurePriceActionStrategy:
 
                 # Fresh breakout check (avoid late entries)
                 if require_fresh_breakout and prev_close is not None:
-                    if breakout.type == 'bullish' and prev_close > breakout.level + threshold:
-                        self._record_reject(symbol, "REJECT_BREAKOUT_OLD")
-                        return None
-                    if breakout.type == 'bearish' and prev_close < breakout.level - threshold:
-                        self._record_reject(symbol, "REJECT_BREAKOUT_OLD")
-                        return None
+                    # Allow a grace window of N bars for freshness
+                    if fresh_breakout_grace_bars <= 0:
+                        if breakout.type == 'bullish' and prev_close > breakout.level + threshold:
+                            self._record_reject(symbol, "REJECT_BREAKOUT_OLD")
+                            return None
+                        if breakout.type == 'bearish' and prev_close < breakout.level - threshold:
+                            self._record_reject(symbol, "REJECT_BREAKOUT_OLD")
+                            return None
+                    else:
+                        # Check if breakout occurred within the last N bars
+                        lookback = min(int(fresh_breakout_grace_bars), len(completed) - 1)
+                        if lookback <= 0:
+                            pass
+                        else:
+                            closes = completed['close'].iloc[-(lookback + 1):]
+                            age = self._find_breakout_age(
+                                closes,
+                                breakout.level,
+                                threshold,
+                                breakout.type,
+                                lookback,
+                            )
+                            if age is None:
+                                self._record_reject(symbol, "REJECT_BREAKOUT_OLD")
+                                return None
 
                 # In retest mode, store pending setup and wait
                 if entry_mode == "retest":
