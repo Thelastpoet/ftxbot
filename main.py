@@ -67,6 +67,10 @@ class Config:
             self.require_structure_confirmation = trading.get('require_structure_confirmation', True)
             self.require_two_bar_confirmation = trading.get('require_two_bar_confirmation', True)
             self.require_fresh_breakout = trading.get('require_fresh_breakout', True)
+            self.entry_mode = trading.get('entry_mode', 'momentum')
+            self.retest_window_bars = trading.get('retest_window_bars', 6)
+            self.retest_tolerance_pips = trading.get('retest_tolerance_pips', 2.0)
+            self.retest_confirm_pips = trading.get('retest_confirm_pips', 1.0)
             self.use_momentum_filter = trading.get('use_momentum_filter', False)
             self.momentum_atr_mult = trading.get('momentum_atr_mult', 1.0)
             self.momentum_close_percent = trading.get('momentum_close_percent', 0.7)
@@ -141,6 +145,10 @@ class Config:
                     'require_structure_confirmation': s.get('require_structure_confirmation'),
                     'require_two_bar_confirmation': s.get('require_two_bar_confirmation'),
                     'require_fresh_breakout': s.get('require_fresh_breakout'),
+                    'entry_mode': s.get('entry_mode'),
+                    'retest_window_bars': s.get('retest_window_bars'),
+                    'retest_tolerance_pips': s.get('retest_tolerance_pips'),
+                    'retest_confirm_pips': s.get('retest_confirm_pips'),
                     'use_momentum_filter': s.get('use_momentum_filter'),
                     'momentum_atr_mult': s.get('momentum_atr_mult'),
                     'momentum_close_percent': s.get('momentum_close_percent'),

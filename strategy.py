@@ -98,6 +98,12 @@ class PurePriceActionStrategy:
         self.require_two_bar_confirmation = bool(getattr(config, 'require_two_bar_confirmation', True))
         self.require_fresh_breakout = bool(getattr(config, 'require_fresh_breakout', True))
 
+        # Entry mode: "momentum" (enter on breakout) or "retest" (enter on retest)
+        self.entry_mode = str(getattr(config, 'entry_mode', 'momentum')).lower()
+        self.retest_window_bars = int(getattr(config, 'retest_window_bars', 6))
+        self.retest_tolerance_pips = float(getattr(config, 'retest_tolerance_pips', 2.0))
+        self.retest_confirm_pips = float(getattr(config, 'retest_confirm_pips', 1.0))
+
         # Momentum filter (breakout strength)
         self.use_momentum_filter = bool(getattr(config, 'use_momentum_filter', False))
         self.momentum_atr_mult = float(getattr(config, 'momentum_atr_mult', 1.0))
@@ -125,6 +131,7 @@ class PurePriceActionStrategy:
         # Duplicate signal prevention (one per bar per direction)
         self._last_breakout_bar = {}
         self._last_signal_time = {}
+        self._pending_retest = {}
 
     def _record_reject(self, symbol: str, reason: str) -> None:
         """Record rejection reason if diagnostics are enabled."""
@@ -282,6 +289,26 @@ class PurePriceActionStrategy:
             if breakout_type == 'bullish':
                 return pos >= cp
             return pos <= (1.0 - cp)
+        except Exception:
+            return False
+
+    def _retest_triggered(self, breakout_type: str, bar: pd.Series, level: float,
+                          pip: float, tolerance_pips: float, confirm_pips: float) -> bool:
+        """Check if price retested the breakout level and rejected in the breakout direction."""
+        try:
+            high = float(bar['high'])
+            low = float(bar['low'])
+            close = float(bar['close'])
+            tol = float(tolerance_pips) * pip
+            conf = float(confirm_pips) * pip
+            if breakout_type == 'bullish':
+                touched = low <= level + tol
+                confirmed = close >= level + conf
+                return touched and confirmed
+            # bearish
+            touched = high >= level - tol
+            confirmed = close <= level - conf
+            return touched and confirmed
         except Exception:
             return False
 
@@ -542,6 +569,10 @@ class PurePriceActionStrategy:
             require_structure_conf = bool(self.require_structure_confirmation)
             require_two_bar_conf = bool(self.require_two_bar_confirmation)
             require_fresh_breakout = bool(self.require_fresh_breakout)
+            entry_mode = str(self.entry_mode).lower()
+            retest_window_bars = int(self.retest_window_bars)
+            retest_tolerance_pips = float(self.retest_tolerance_pips)
+            retest_confirm_pips = float(self.retest_confirm_pips)
             use_momentum_filter = bool(self.use_momentum_filter)
             momentum_atr_mult = float(self.momentum_atr_mult)
             momentum_close_percent = float(self.momentum_close_percent)
@@ -574,6 +605,10 @@ class PurePriceActionStrategy:
                     require_structure_conf = bool(sc.get('require_structure_confirmation', require_structure_conf))
                     require_two_bar_conf = bool(sc.get('require_two_bar_confirmation', require_two_bar_conf))
                     require_fresh_breakout = bool(sc.get('require_fresh_breakout', require_fresh_breakout))
+                    entry_mode = str(sc.get('entry_mode', entry_mode)).lower()
+                    retest_window_bars = int(sc.get('retest_window_bars', retest_window_bars) or retest_window_bars)
+                    retest_tolerance_pips = float(sc.get('retest_tolerance_pips', retest_tolerance_pips) or retest_tolerance_pips)
+                    retest_confirm_pips = float(sc.get('retest_confirm_pips', retest_confirm_pips) or retest_confirm_pips)
                     use_momentum_filter = bool(sc.get('use_momentum_filter', use_momentum_filter))
                     momentum_atr_mult = float(sc.get('momentum_atr_mult', momentum_atr_mult) or momentum_atr_mult)
                     momentum_close_percent = float(sc.get('momentum_close_percent', momentum_close_percent) or momentum_close_percent)
@@ -662,21 +697,60 @@ class PurePriceActionStrategy:
 
             atr_pips = (atr_last / pip) if atr_last else 0.0
 
-            breakout = self._detect_breakout(last_close, resistance, support, threshold)
-            if not breakout:
-                # Only log at debug level when no breakout (most common case)
-                dist_to_r = min((r - last_close)/pip for r in resistance) if resistance else float('inf')
-                dist_to_s = min((last_close - s)/pip for s in support) if support else float('inf')
-                logger.debug(f"{symbol}: price={last_close:.5f} | R dist={dist_to_r:.1f}p, S dist={dist_to_s:.1f}p, need={threshold/pip:.1f}p")
-                return None
+            breakout = None
+            breakout_from_retest = False
 
-            # Fresh breakout check (avoid late entries)
-            if require_fresh_breakout and prev_close is not None:
-                if breakout.type == 'bullish' and prev_close > breakout.level + threshold:
-                    self._record_reject(symbol, "REJECT_BREAKOUT_OLD")
+            # If in retest mode, check pending setups first
+            if entry_mode == "retest":
+                pending = self._pending_retest.get(symbol)
+                if pending and entry_delta is not None:
+                    bars_since = int((bar_time - pending['created_time']) / entry_delta) if pending.get('created_time') else 0
+                    if bars_since > retest_window_bars:
+                        self._pending_retest.pop(symbol, None)
+                        self._record_reject(symbol, "REJECT_RETEST_EXPIRED")
+                    else:
+                        if self._retest_triggered(
+                            pending['type'],
+                            completed.iloc[-1],
+                            pending['level'],
+                            pip,
+                            retest_tolerance_pips,
+                            retest_confirm_pips,
+                        ):
+                            breakout = BreakoutInfo(pending['type'], pending['level'], last_close)
+                            breakout_from_retest = True
+                            # Use original breakout threshold if stored
+                            if pending.get('threshold') is not None:
+                                threshold = float(pending['threshold'])
+                            # Clear pending on trigger
+                            self._pending_retest.pop(symbol, None)
+
+            if breakout is None:
+                breakout = self._detect_breakout(last_close, resistance, support, threshold)
+                if not breakout:
+                    # Only log at debug level when no breakout (most common case)
+                    dist_to_r = min((r - last_close)/pip for r in resistance) if resistance else float('inf')
+                    dist_to_s = min((last_close - s)/pip for s in support) if support else float('inf')
+                    logger.debug(f"{symbol}: price={last_close:.5f} | R dist={dist_to_r:.1f}p, S dist={dist_to_s:.1f}p, need={threshold/pip:.1f}p")
                     return None
-                if breakout.type == 'bearish' and prev_close < breakout.level - threshold:
-                    self._record_reject(symbol, "REJECT_BREAKOUT_OLD")
+
+                # Fresh breakout check (avoid late entries)
+                if require_fresh_breakout and prev_close is not None:
+                    if breakout.type == 'bullish' and prev_close > breakout.level + threshold:
+                        self._record_reject(symbol, "REJECT_BREAKOUT_OLD")
+                        return None
+                    if breakout.type == 'bearish' and prev_close < breakout.level - threshold:
+                        self._record_reject(symbol, "REJECT_BREAKOUT_OLD")
+                        return None
+
+                # In retest mode, store pending setup and wait
+                if entry_mode == "retest":
+                    self._pending_retest[symbol] = {
+                        'type': breakout.type,
+                        'level': breakout.level,
+                        'threshold': threshold,
+                        'created_time': bar_time,
+                    }
                     return None
 
             # BREAKOUT DETECTED - now log detailed analysis
@@ -687,7 +761,7 @@ class PurePriceActionStrategy:
             logger.debug(f"{symbol}: S/R levels R={[round(r,5) for r in resistance[:3]]} S={[round(s,5) for s in support[:3]]}")
 
             # Momentum filter: require strong impulse on breakout bar
-            if use_momentum_filter:
+            if use_momentum_filter and not breakout_from_retest:
                 if not self._passes_momentum_filter(
                     breakout.type,
                     completed.iloc[-1],
