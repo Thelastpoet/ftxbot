@@ -96,6 +96,12 @@ class PurePriceActionStrategy:
         # Breakout confirmations
         self.require_structure_confirmation = bool(getattr(config, 'require_structure_confirmation', True))
         self.require_two_bar_confirmation = bool(getattr(config, 'require_two_bar_confirmation', True))
+        self.require_fresh_breakout = bool(getattr(config, 'require_fresh_breakout', True))
+
+        # Momentum filter (breakout strength)
+        self.use_momentum_filter = bool(getattr(config, 'use_momentum_filter', False))
+        self.momentum_atr_mult = float(getattr(config, 'momentum_atr_mult', 1.0))
+        self.momentum_close_percent = float(getattr(config, 'momentum_close_percent', 0.7))
 
         # Entry pacing
         self.entry_cooldown_bars = int(getattr(config, 'entry_cooldown_bars', 0))
@@ -256,6 +262,28 @@ class PurePriceActionStrategy:
                 if close_now < level - threshold and close_prev >= level - threshold:
                     return age
         return None
+
+    def _passes_momentum_filter(self, breakout_type: str, bar: pd.Series, atr_last: Optional[float],
+                                pip: float, atr_mult: float, close_percent: float) -> bool:
+        """Require a strong impulse candle for breakout confirmation."""
+        try:
+            if atr_last is None or atr_last <= 0 or pip <= 0:
+                return True  # Skip if ATR unavailable
+            high = float(bar['high'])
+            low = float(bar['low'])
+            close = float(bar['close'])
+            rng = high - low
+            if rng <= 0:
+                return False
+            if rng < (atr_last * float(atr_mult)):
+                return False
+            pos = (close - low) / rng  # 0..1
+            cp = max(0.5, min(0.95, float(close_percent)))
+            if breakout_type == 'bullish':
+                return pos >= cp
+            return pos <= (1.0 - cp)
+        except Exception:
+            return False
 
     # ----- ATR Calculation -----
     def _compute_atr(self, highs: pd.Series, lows: pd.Series, closes: pd.Series, period: int) -> Optional[pd.Series]:
@@ -513,6 +541,10 @@ class PurePriceActionStrategy:
             ext_sensitivity = float(self.extension_atr_sensitivity)
             require_structure_conf = bool(self.require_structure_confirmation)
             require_two_bar_conf = bool(self.require_two_bar_confirmation)
+            require_fresh_breakout = bool(self.require_fresh_breakout)
+            use_momentum_filter = bool(self.use_momentum_filter)
+            momentum_atr_mult = float(self.momentum_atr_mult)
+            momentum_close_percent = float(self.momentum_close_percent)
             entry_cooldown_bars = int(self.entry_cooldown_bars)
             entry_window_bars = int(self.entry_window_bars)
             tp_mode = str(self.tp_mode).lower()
@@ -541,6 +573,10 @@ class PurePriceActionStrategy:
                     ext_sensitivity = float(sc.get('extension_atr_sensitivity', ext_sensitivity) or ext_sensitivity)
                     require_structure_conf = bool(sc.get('require_structure_confirmation', require_structure_conf))
                     require_two_bar_conf = bool(sc.get('require_two_bar_confirmation', require_two_bar_conf))
+                    require_fresh_breakout = bool(sc.get('require_fresh_breakout', require_fresh_breakout))
+                    use_momentum_filter = bool(sc.get('use_momentum_filter', use_momentum_filter))
+                    momentum_atr_mult = float(sc.get('momentum_atr_mult', momentum_atr_mult) or momentum_atr_mult)
+                    momentum_close_percent = float(sc.get('momentum_close_percent', momentum_close_percent) or momentum_close_percent)
                     entry_cooldown_bars = int(sc.get('entry_cooldown_bars', entry_cooldown_bars) or entry_cooldown_bars)
                     entry_window_bars = int(sc.get('entry_window_bars', entry_window_bars) or entry_window_bars)
                     tp_mode = str(sc.get('tp_mode', tp_mode)).lower()
@@ -602,6 +638,7 @@ class PurePriceActionStrategy:
             )
 
             last_close = float(completed.iloc[-1]['close'])
+            prev_close = float(completed.iloc[-2]['close']) if len(completed) > 1 else None
 
             # Compute ATR early (needed for both breakout threshold and SL buffer)
             atr_series = self._compute_atr(completed['high'], completed['low'],
@@ -633,12 +670,34 @@ class PurePriceActionStrategy:
                 logger.debug(f"{symbol}: price={last_close:.5f} | R dist={dist_to_r:.1f}p, S dist={dist_to_s:.1f}p, need={threshold/pip:.1f}p")
                 return None
 
+            # Fresh breakout check (avoid late entries)
+            if require_fresh_breakout and prev_close is not None:
+                if breakout.type == 'bullish' and prev_close > breakout.level + threshold:
+                    self._record_reject(symbol, "REJECT_BREAKOUT_OLD")
+                    return None
+                if breakout.type == 'bearish' and prev_close < breakout.level - threshold:
+                    self._record_reject(symbol, "REJECT_BREAKOUT_OLD")
+                    return None
+
             # BREAKOUT DETECTED - now log detailed analysis
             logger.debug(
                 f"{symbol}: === BREAKOUT {breakout.type.upper()} === level={breakout.level:.5f} price={last_close:.5f} "
                 f"spread={current_spread_pips:.1f}p ATR={atr_pips:.1f}p thr={threshold/pip:.1f}p"
             )
             logger.debug(f"{symbol}: S/R levels R={[round(r,5) for r in resistance[:3]]} S={[round(s,5) for s in support[:3]]}")
+
+            # Momentum filter: require strong impulse on breakout bar
+            if use_momentum_filter:
+                if not self._passes_momentum_filter(
+                    breakout.type,
+                    completed.iloc[-1],
+                    atr_last,
+                    pip,
+                    momentum_atr_mult,
+                    momentum_close_percent,
+                ):
+                    self._record_reject(symbol, "REJECT_MOMENTUM")
+                    return None
 
             # Structure confirmation: last completed structure bar must close beyond level by threshold
             struct_close = None
@@ -705,7 +764,7 @@ class PurePriceActionStrategy:
                         return None
 
             # Breakout window: only allow recent breakouts when structure confirmation is disabled
-            if not require_structure_conf:
+            if not require_structure_conf and not require_fresh_breakout:
                 breakout_age = self._find_breakout_age(
                     completed['close'],
                     breakout.level,
