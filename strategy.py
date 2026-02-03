@@ -940,9 +940,10 @@ class PurePriceActionStrategy:
             except Exception:
                 pass
 
+            rr_struct_str = f"{structure_rr:.2f}" if structure_rr is not None else "n/a"
             logger.info(
                 f"SIGNAL {symbol} {'BUY' if signal.type==0 else 'SELL'} @ {entry_eff:.5f} "
-                f"SL {sl:.5f} TP {tp:.5f} ({sl_pips:.1f}p, RR_struct={structure_rr:.2f}, RR_entry={actual_rr:.2f}) [Trend: {trend_dir}]"
+                f"SL {sl:.5f} TP {tp:.5f} ({sl_pips:.1f}p, RR_struct={rr_struct_str}, RR_entry={actual_rr:.2f}) [Trend: {trend_dir}]"
             )
             return signal
 
