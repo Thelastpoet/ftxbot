@@ -76,6 +76,8 @@ class BacktestConfig:
     # Expose commonly accessed attributes directly
     symbols: List[Dict] = field(default_factory=list)
     diagnostics: Any = None
+    data_dir: str = "historical_data"
+    data_source: str = "mt5"  # mt5 | csv | auto
 
     def __getattr__(self, name):
         """Delegate attribute access to live config for strategy settings."""
@@ -339,6 +341,7 @@ def load_csv_data(symbol: str, timeframe: str, data_dir: str = "historical_data"
     """Load historical data from CSV file."""
     filename = f"{data_dir}/{symbol}_{timeframe}.csv"
     if not os.path.exists(filename):
+        logger.warning(f"CSV not found: {filename}")
         return None
 
     try:
@@ -354,9 +357,29 @@ def load_csv_data(symbol: str, timeframe: str, data_dir: str = "historical_data"
 
 
 def load_data(symbol: str, timeframe: str, start: datetime, end: datetime,
-              data_dir: str = "historical_data") -> Optional[pd.DataFrame]:
+              data_dir: str = "historical_data",
+              source: str = "auto") -> Optional[pd.DataFrame]:
     """Load data from MT5 or CSV fallback."""
-    # Try MT5 first
+    source = (source or "auto").lower()
+    if source == "mt5":
+        if not MT5_AVAILABLE:
+            logger.error("MetaTrader5 module not available. Install it or use --data-source csv.")
+            return None
+        df = load_mt5_data(symbol, timeframe, start, end)
+        if df is None or df.empty:
+            try:
+                logger.error(f"MT5 returned no data for {symbol} {timeframe}. last_error={mt5.last_error()}")
+            except Exception:
+                logger.error(f"MT5 returned no data for {symbol} {timeframe}.")
+        return df
+    if source == "csv":
+        df = load_csv_data(symbol, timeframe, data_dir)
+        if df is not None:
+            mask = (df.index >= start) & (df.index <= end)
+            return df[mask]
+        return None
+
+    # auto: Try MT5 first
     df = load_mt5_data(symbol, timeframe, start, end)
     if df is not None:
         return df
@@ -485,7 +508,14 @@ class BacktestEngine:
             all_data[symbol] = {}
 
             for tf in [entry_tf, structure_tf, trend_tf]:
-                data = load_data(symbol, tf, data_start, self.config.end_date)
+                data = load_data(
+                    symbol,
+                    tf,
+                    data_start,
+                    self.config.end_date,
+                    data_dir=self.config.data_dir,
+                    source=self.config.data_source,
+                )
                 if data is not None and not data.empty:
                     all_data[symbol][tf] = data
                     logger.info(f"Loaded {len(data)} bars for {symbol} {tf}")
@@ -548,6 +578,10 @@ class BacktestEngine:
         trend_data = data.get(trend_tf, pd.DataFrame())
 
         if entry_data is None or entry_data.empty:
+            logger.error(
+                f"No entry timeframe data for {symbol} ({entry_tf}). "
+                "Check historical data availability or update config.json."
+            )
             return
 
         # Get pip size for this symbol
@@ -933,15 +967,15 @@ class BacktestResults:
 def calculate_results(trades: List[BacktestTrade], engine: BacktestEngine) -> BacktestResults:
     """Calculate backtest statistics from trade list."""
     results = BacktestResults()
+    results.initial_balance = engine.config.initial_balance
+    results.final_balance = engine.balance
+    results.return_pct = ((engine.balance - engine.config.initial_balance) / engine.config.initial_balance) * 100
+    results.max_drawdown_pct = engine.max_drawdown * 100
 
     if not trades:
         return results
 
     results.total_trades = len(trades)
-    results.initial_balance = engine.config.initial_balance
-    results.final_balance = engine.balance
-    results.return_pct = ((engine.balance - engine.config.initial_balance) / engine.config.initial_balance) * 100
-    results.max_drawdown_pct = engine.max_drawdown * 100
 
     winners = [t for t in trades if t.profit_money > 0]
     losers = [t for t in trades if t.profit_money <= 0]
@@ -1188,6 +1222,9 @@ def main():
     parser.add_argument('--slippage', type=float, help='Slippage in pips', default=0.5)
     parser.add_argument('--output', type=str, help='Output directory', default='backtester_results')
     parser.add_argument('--config', type=str, help='Config file path', default='config.json')
+    parser.add_argument('--data-dir', type=str, help='CSV data directory', default='historical_data')
+    parser.add_argument('--data-source', type=str, choices=['auto', 'mt5', 'csv'], default='mt5',
+                        help='Data source: mt5 only, csv only, or auto (mt5->csv)')
     parser.add_argument('-v', '--verbose', action='store_true', help='Verbose logging')
 
     args = parser.parse_args()
@@ -1209,8 +1246,13 @@ def main():
         end_date=end_date,
         initial_balance=args.balance,
         simulated_spread_pips=args.spread,
-        slippage_pips=args.slippage
+        slippage_pips=args.slippage,
+        data_dir=args.data_dir,
+        data_source=args.data_source,
     )
+
+    if config.data_source == "mt5" and not MT5_AVAILABLE:
+        raise SystemExit("MetaTrader5 module not available. Install it or use --data-source csv.")
 
     # Determine symbols
     symbols = [s['name'] for s in config.symbols]
@@ -1239,6 +1281,7 @@ def main():
     print(f"Symbols: {', '.join(symbols)}")
     print(f"Initial Balance: ${config.initial_balance:,.2f}")
     print(f"Spread: {config.simulated_spread_pips} pips | Slippage: {config.slippage_pips} pips")
+    print(f"Data Source: {config.data_source} | Data Dir: {config.data_dir}")
     print("=" * 60 + "\n")
 
     # Run backtest
