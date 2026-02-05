@@ -3,7 +3,9 @@ __pycache__/
 *$py.class
 .env
 venv/
-forex_bot.log
+.venv/
+.envrc
+.forex_bot.log
 trades.csv
 trades.json
 trades.log
@@ -22,3 +24,16 @@ backtest_results_r_logic_2023_2024/
 backtest_results_r_logic_2025/
 backtest_results_r_logic_all/
 backtester_results/
+
+# Pre-commit
+.pre-commit-config.yaml.swp
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
